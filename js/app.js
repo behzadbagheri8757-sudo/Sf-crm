@@ -2141,6 +2141,23 @@ function openInvoiceForm(cid, editInv){
     }
     if(chevronEl) chevronEl.style.display = prod ? 'none' : '';
     if(subEl) subEl.style.display = prod ? '' : 'none';
+    // Stage 3.1 Fix #1: keep the collapsed view in sync so a later collapse
+    // shows current qty × price and line amount. These elements live inside
+    // .inv-line-view-collapsed within the same row and carry no data-row
+    // attribute, so the [data-row] queries above never touch them. Pure DOM
+    // text updates — no renderSheet(), no innerHTML morph.
+    const rowEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
+    if(rowEl){
+      const calcEl = rowEl.querySelector('.inv-line-view-collapsed .inv-line-calc');
+      if(calcEl) calcEl.textContent = (r.qty||0) + ' × ' + toman(r.price||0) + ' ت';
+      const collapsedAmountEl = rowEl.querySelector('.inv-line-view-collapsed .inv-line-amount');
+      if(collapsedAmountEl) collapsedAmountEl.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
+    }
+  }
+      if(prod) amountEl.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
+    }
+    if(chevronEl) chevronEl.style.display = prod ? 'none' : '';
+    if(subEl) subEl.style.display = prod ? '' : 'none';
   }
 
   // Product selector state (one open at a time) — UI only
