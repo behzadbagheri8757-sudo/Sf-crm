@@ -2146,6 +2146,12 @@ function openInvoiceForm(cid, editInv){
   // Product selector state (one open at a time) — UI only
   let prodDropOpenRow = null;
   let prodDropOpening = false;
+  // Stage 3 — which row (if any) is currently expanded to its active/edit
+  // view. Populated rows render collapsed by default; an empty row (still
+  // awaiting a product) is always shown in its active form regardless of
+  // this value, since it has no collapsed summary to fall back to.
+  let activeRowIndex = rows.findIndex(r=>!r.productId);
+  if(activeRowIndex < 0) activeRowIndex = null;
 
   function productDropListHtml(idx, query){
     const q = (query||'').trim();
@@ -2179,24 +2185,74 @@ function openInvoiceForm(cid, editInv){
       const priceDisp = (typeof formatLiveAmount==='function' && r.price) ? formatLiveAmount(String(r.price)) : (r.price||'');
       const label = prod ? esc(prod.name) : '';
       const lineAmt = (r.qty||0) * (r.price||0);
+
+      // Stage 2 — Stable DOM scaffolding only. A populated row now carries
+      // BOTH the collapsed summary view and the active/edit view in the DOM
+      // from the start (real markup, not built later via outerHTML/innerHTML
+      // morph). No activeRowIndex exists yet, so `is-active` is applied
+      // unconditionally below to keep today's visible behavior identical —
+      // the active view stays the one shown, the collapsed view stays
+      // hidden. The new FIFO / line-total / market elements are real,
+      // data-backed markup but stay `hidden`: wiring them up (and removing
+      // "قیمت فروش (مرجع)" from the existing disclosure) is out of scope for
+      // Stage 2. None of the elements below carry a `data-row` attribute
+      // except where the existing code already queries one, so no existing
+      // selector picks up a second, ambiguous match.
+      let collapsedHtml = '';
+      let fifoHtml = '';
+      let lineTotalHtml = '';
+      let marketHtml = '';
+      if(prod){
+        const fifoCost = productFifoUnitCost(prod.id);
+        const lastAny = lastSaleAnyCustomer(prod.id);
+        const lastCust = lastSaleToCustomer(prod.id);
+        collapsedHtml = `
+        <div class="inv-line-view-collapsed">
+          <span class="inv-line-num">${idx+1}</span>
+          <div class="inv-line-body">
+            <span class="inv-line-name">${label}</span>
+            <span class="inv-line-calc">${r.qty||0} × ${toman(r.price||0)} ت</span>
+          </div>
+          <span class="inv-line-amount">${toman(lineAmt)} ت</span>
+        </div>`;
+        fifoHtml = `<div class="inv-line-fifo" hidden>خرید (FIFO) ${toman(fifoCost)} ت</div>`;
+        lineTotalHtml = `<div class="inv-line-line-total" hidden>${toman(lineAmt)} ت</div>`;
+        marketHtml = `
+        <details class="inv-line-market" hidden>
+          <summary>اطلاعات بازار</summary>
+          <div class="inv-price-info-row"><span class="k">آخرین فروش کلی</span><span class="v">${lastAny?`${toman(lastAny.price)} ت — ${faDate(lastAny.date)}`:'ثبت نشده'}</span></div>
+          <div class="inv-price-info-row"><span class="k">آخرین فروش به این مشتری</span><span class="v">${lastCust?`${toman(lastCust.price)} ت — ${faDate(lastCust.date)}`:'ثبت نشده'}</span></div>
+        </details>`;
+      }
+
+      // Stage 3 — real active/collapsed state. A populated row is only
+      // "active" when it matches activeRowIndex; an empty row has no
+      // collapsed view to show instead, so it stays active regardless.
+      const isRowActive = !prod || idx === activeRowIndex;
       return `
-      <div class="inv-line${prod?'':' inv-line-empty'}">
-        <div class="inv-line-main">
-          <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none">
-          <span class="inv-line-amount" data-row="${idx}" style="display:${prod?'':'none'}">${toman(lineAmt)} ت</span>
-          <span class="inv-line-chevron" data-row="${idx}" style="display:${prod?'none':''}" aria-hidden="true">›</span>
-          <div class="prod-drop" data-row="${idx}" hidden></div>
+      <div class="inv-line${prod?'':' inv-line-empty'}${isRowActive?' is-active':''}" data-row="${idx}">
+        ${collapsedHtml}
+        <div class="inv-line-view-active">
+          <div class="inv-line-main">
+            <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none">
+            <span class="inv-line-amount" data-row="${idx}" style="display:${prod?'':'none'}">${toman(lineAmt)} ت</span>
+            <span class="inv-line-chevron" data-row="${idx}" style="display:${prod?'none':''}" aria-hidden="true">›</span>
+            <div class="prod-drop" data-row="${idx}" hidden></div>
+          </div>
+          <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'':'none'}">
+            <span class="inv-line-qtyrate">
+              <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${r.qty}">
+              <span class="inv-line-x">×</span>
+              <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
+              <span class="inv-line-unit">ت</span>
+            </span>
+            ${rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
+          </div>
+          ${fifoHtml}
+          ${lineTotalHtml}
+          ${marketHtml}
+          <div class="row-info" data-row="${idx}">${rowInfoHtml(idx)}</div>
         </div>
-        <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'':'none'}">
-          <span class="inv-line-qtyrate">
-            <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${r.qty}">
-            <span class="inv-line-x">×</span>
-            <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
-            <span class="inv-line-unit">ت</span>
-          </span>
-          ${rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
-        </div>
-        <div class="row-info" data-row="${idx}">${rowInfoHtml(idx)}</div>
       </div>
     `;
     }).join('');
@@ -2412,10 +2468,12 @@ function openInvoiceForm(cid, editInv){
       // taps open its product picker instead of creating another blank row.
       const emptyIdx = rows.findIndex(r=>!r.productId);
       if(emptyIdx >= 0){
+        activeRowIndex = emptyIdx;
         openProductDrop(emptyIdx);
         return;
       }
       rows.push({productId:'', qty:1, price:0, discount:0});
+      activeRowIndex = rows.length-1;
       renderSheet();
       // Start the intended workflow immediately: Add Line → Product Search.
       setTimeout(()=>openProductDrop(rows.length-1), 0);
@@ -2423,6 +2481,16 @@ function openInvoiceForm(cid, editInv){
     document.querySelectorAll('.row-del').forEach(el=>el.addEventListener('click', e=>{
       const i = parseInt(e.currentTarget.dataset.row, 10);
       if(rows.length>1 && i>=0 && i<rows.length){
+        // Stage 3 — keep activeRowIndex valid across the splice: dropping
+        // the active row itself clears it (and its picker, if any); dropping
+        // a row before it shifts it down by one so it still points at the
+        // same logical row after renderSheet() rebuilds the list.
+        if(activeRowIndex === i){
+          activeRowIndex = null;
+          closeAllProductDrops();
+        }else if(activeRowIndex !== null && i < activeRowIndex){
+          activeRowIndex -= 1;
+        }
         rows.splice(i, 1);
         renderSheet();
       }
@@ -2438,6 +2506,36 @@ function openInvoiceForm(cid, editInv){
         d.style.top = d.style.bottom = d.style.maxHeight = d.style.left = d.style.right = '';
       });
     }
+    // Stage 3 — expand/collapse a row in place. Pure class toggle: no
+    // renderSheet(), no outerHTML/innerHTML morph. Rows with no collapsed
+    // view yet (still empty, awaiting a product) are left alone here — they
+    // are not part of the collapse/expand toggle at all (see itemsHtml()).
+    function setActiveRow(idx){
+      idx = parseInt(idx, 10);
+      if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
+      if(idx === activeRowIndex) return;
+      if(prodDropOpenRow !== null) closeAllProductDrops();
+      activeRowIndex = idx;
+      document.querySelectorAll('.inv-line.is-active').forEach(el=>{
+        if(!el.querySelector('.inv-line-view-collapsed')) return;
+        if(parseInt(el.getAttribute('data-row'), 10) !== idx) el.classList.remove('is-active');
+      });
+      const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
+      if(newActiveEl) newActiveEl.classList.add('is-active');
+    }
+    document.querySelectorAll('.inv-line-view-collapsed').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const line = el.closest('.inv-line');
+        if(!line) return;
+        const idx = parseInt(line.getAttribute('data-row'), 10);
+        if(idx === activeRowIndex) return;
+        setActiveRow(idx);
+        requestAnimationFrame(()=>{
+          const qtyInput = document.querySelector(`.inv-line[data-row="${idx}"] .row-qty`);
+          if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
+        });
+      });
+    });
     function positionProductDrop(dropEl, anchorEl){
       if(!dropEl || !anchorEl) return;
       const margin = 10;
@@ -2533,6 +2631,13 @@ function openInvoiceForm(cid, editInv){
           if(!remaining.length) card.style.display = 'none';
         }
       }catch(eNpr){ /* non-critical */ }
+      // Stage 3 — row stays active after picking a product; hand off
+      // straight to quantity entry (iOS Safari: wait a frame after the
+      // picker's DOM changes so focus isn't dropped).
+      requestAnimationFrame(()=>{
+        const qtyInput = document.querySelector(`.row-qty[data-row="${idx}"]`);
+        if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
+      });
     }
 
     // Single gesture open via pointerup (avoids focus+click double-open on mobile)
