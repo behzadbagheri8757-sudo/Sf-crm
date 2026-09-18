@@ -1960,6 +1960,84 @@ button.inv-header-save.btn{
   margin-top:6px;
 }
 
+/* Invoice V6 Stage 1 — inert scaffolding for a future stable-DOM item-row
+   architecture (collapsed vs. active view per line). No markup in
+   js/app.js references these classes yet, so none of this changes current
+   behavior or appearance; it only prepares the show/hide mechanics and
+   shared typography so a later stage can introduce the markup without a
+   second CSS pass. */
+.inv-line-view-collapsed{
+  display:block;
+}
+.inv-line-view-active{
+  display:none;
+}
+.inv-line.is-active .inv-line-view-collapsed{
+  display:none;
+}
+.inv-line.is-active .inv-line-view-active{
+  display:block;
+}
+
+/* Row index label — future collapsed-row prefix */
+.inv-line-num{
+  flex:0 0 auto;
+  font-size:.78rem;
+  font-weight:600;
+  color:#667085;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Compact qty × unit-price readout — future collapsed-row summary text */
+.inv-line-calc{
+  font-size:.8rem;
+  font-weight:500;
+  color:#667085;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Line total — future collapsed-row trailing amount; mirrors .inv-line-amount */
+.inv-line-line-total{
+  flex:0 0 auto;
+  font-size:1rem;
+  font-weight:700;
+  color:#1F2937;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Always-visible FIFO cost readout under unit price — future active-row.
+   .is-below is a visual-only hint (sale price under FIFO cost); it must
+   never block or confirm anything on its own. */
+.inv-line-fifo{
+  font-size:.72rem;
+  font-weight:500;
+  color:#667085;
+  margin-top:2px;
+}
+.inv-line-fifo.is-below{
+  color:var(--vg-color-danger);
+}
+
+/* Market-info block — future active-row container (replaces today's
+   .inv-price-info-panel disclosure once Stage 2 lands) */
+.inv-line-market{
+  margin-top:8px;
+  padding:4px 12px 6px;
+  border-radius:14px;
+  background:#F8FAFC;
+  border:1px solid rgba(15,23,42,.05);
+}
+
+/* Invoice-level profit summary block — future child of .inv-summary-section.
+   Scaffold only: no margin/percentage UI is implemented in this stage. */
+.inv-profit-summary{
+  margin-top:6px;
+  padding-top:10px;
+  border-top:1px dashed rgba(15,23,42,.1);
+  font-size:.8rem;
+  color:#667085;
+}
+
 /* Product picker panel (Invoice V6) — markup from openProductDrop; CSS was missing */
 .prod-drop{
   position:fixed;
