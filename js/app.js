@@ -2127,14 +2127,51 @@ function openInvoiceForm(cid, editInv){
   function updateRowInfo(idx){
     const el = document.querySelector(`.row-info[data-row="${idx}"]`);
     if(el) el.innerHTML = rowInfoHtml(idx);
-    // Presentation-only: keep the line's top-row amount/chevron and the
-    // qty×rate sub-row in sync with whether a product is selected, without
-    // a full re-render (selectProduct/qty/price handlers call this directly).
     const r = rows[idx];
+    if(!r) return;
     const prod = data.products.find(p=>p.id===r.productId);
-    const amountEl = document.querySelector(`.inv-line-amount[data-row="${idx}"]`);
-    const chevronEl = document.querySelector(`.inv-line-chevron[data-row="${idx}"]`);
-    const subEl = document.querySelector(`.inv-line-sub[data-row="${idx}"]`);
+    const line = document.querySelector(`.inv-line[data-row="${idx}"]`);
+    const amountEl = line ? line.querySelector('.inv-line-amount[data-row]') : null;
+    const chevronEl = line ? line.querySelector('.inv-line-chevron[data-row]') : null;
+    const subEl = line ? line.querySelector('.inv-line-sub[data-row]') : null;
+    if(prod && line && line.classList.contains('inv-line-empty')) line.classList.remove('inv-line-empty');
+    if(prod && line && !line.querySelector('.inv-line-view-collapsed')){
+      const view = document.createElement('div');
+      view.className = 'inv-line-view-collapsed';
+      const numEl = document.createElement('span');
+      numEl.className = 'inv-line-num';
+      numEl.textContent = String(idx+1);
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'inv-line-body';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'inv-line-name';
+      const calcEl = document.createElement('span');
+      calcEl.className = 'inv-line-calc';
+      bodyEl.append(nameEl, calcEl);
+      const collapsedAmount = document.createElement('span');
+      collapsedAmount.className = 'inv-line-amount';
+      view.append(numEl, bodyEl, collapsedAmount);
+      line.insertBefore(view, line.querySelector('.inv-line-view-active'));
+      view.addEventListener('click', ()=>{
+        if(idx === activeRowIndex) return;
+        setActiveRow(idx);
+        requestAnimationFrame(()=>{
+          const qtyInput = line.querySelector('.row-qty');
+          if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
+        });
+      });
+    }
+    if(prod && line){
+      const collapsed = line.querySelector('.inv-line-view-collapsed');
+      if(collapsed){
+        const nameEl = collapsed.querySelector('.inv-line-name');
+        const calcEl = collapsed.querySelector('.inv-line-calc');
+        const collapsedAmount = collapsed.querySelector('.inv-line-amount');
+        if(nameEl) nameEl.textContent = prod.name || '';
+        if(calcEl) calcEl.textContent = `${r.qty||0} × ${toman(r.price||0)} ت`;
+        if(collapsedAmount) collapsedAmount.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
+      }
+    }
     if(amountEl){
       amountEl.style.display = prod ? '' : 'none';
       if(prod) amountEl.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
@@ -2453,7 +2490,9 @@ function openInvoiceForm(cid, editInv){
       const genericClose = document.getElementById('closeX');
       if(genericClose) genericClose.style.display = 'none';
       const cancelBtn = document.getElementById('inv-cancel');
-      if(cancelBtn) cancelBtn.addEventListener('click', closeModal);
+      if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
+        if(await appConfirm('تغییرات ذخیره‌نشده از بین می‌روند. از فاکتور خارج می‌شوید؟')) closeModal();
+      });
     })();
     if(_prevScrollTop){
       const _newScrollEl = document.querySelector('.inv-body') || document.querySelector('.sheet');
@@ -2515,10 +2554,23 @@ function openInvoiceForm(cid, editInv){
       if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
       if(idx === activeRowIndex) return;
       if(prodDropOpenRow !== null) closeAllProductDrops();
+
+      // A transient empty row is always appended by Add Item. Remove that
+      // true empty row from both state and DOM when the user switches away,
+      // so Save can never validate an invisible empty item.
+      if(activeRowIndex !== null && rows[activeRowIndex] && !rows[activeRowIndex].productId && activeRowIndex !== idx){
+        const removedIdx = activeRowIndex;
+        const emptyEl = document.querySelector(`.inv-line[data-row="${removedIdx}"]`);
+        rows.splice(removedIdx, 1);
+        if(emptyEl) emptyEl.remove();
+        // Add Item appends the transient row, so populated row indexes remain stable.
+      }
+
       activeRowIndex = idx;
       document.querySelectorAll('.inv-line.is-active').forEach(el=>{
-        if(!el.querySelector('.inv-line-view-collapsed')) return;
-        if(parseInt(el.getAttribute('data-row'), 10) !== idx) el.classList.remove('is-active');
+        const rowIdx = parseInt(el.getAttribute('data-row'), 10);
+        if(rowIdx !== idx && rows[rowIdx] && rows[rowIdx].productId) el.classList.remove('is-active');
+        else if(rowIdx !== idx && (!rows[rowIdx] || !rows[rowIdx].productId)) el.classList.remove('is-active');
       });
       const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
       if(newActiveEl) newActiveEl.classList.add('is-active');
@@ -2871,6 +2923,11 @@ function openInvoiceForm(cid, editInv){
           creditFifo[pid] = invoiceReleasedFifoQty(editInv, pid);
         });
       }
+      const saveMessage = editInv
+        ? 'با ویرایش این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟'
+        : 'فاکتور ثبت شود؟ تغییرات فاکتور پس از تأیید ثبت خواهند شد.';
+      if(!(await appConfirm(saveMessage))){ btn.disabled = false; return; }
+
       const stockCheck = validateSaleAvailability(items, creditStock, creditFifo);
       if(!stockCheck.ok){
         showToast(stockCheck.error || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
@@ -2889,8 +2946,6 @@ function openInvoiceForm(cid, editInv){
           btn.disabled = false;
           return;
         }
-        if(!(await appConfirm('با ویرایش این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟'))){ btn.disabled = false; return; }
-
         // اسنپ‌شات کامل قبل از هر mutation — اگر saveData() در انتها شکست بخورد،
         // data در حافظه دقیقاً به همین حالت (قبل از هر تغییری) برمی‌گردد تا با
         // آخرین نسخه‌ی موفق در IndexedDB ناهماهنگ نماند.
