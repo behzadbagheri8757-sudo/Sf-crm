@@ -1830,108 +1830,189 @@ button.inv-header-save.btn{
   color:#667085;
 }
 .inv-line{
+  position:relative;
   margin:0!important;
-  padding:14px 16px 12px!important;
+  padding:0!important;
   border:0!important;
-  border-bottom:1px solid rgba(15,23,42,.06)!important;
   border-radius:0!important;
   background:transparent!important;
   box-shadow:none!important;
 }
-.inv-line:last-child{
-  border-bottom:1px solid rgba(15,23,42,.06)!important;
+.inv-line + .inv-line::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:14px;
+  right:14px;
+  height:1px;
+  background:rgba(15,23,42,.06);
 }
 .inv-line-empty{
-  padding:10px 16px 12px!important;
-  border-bottom:0!important;
+  padding:0!important;
 }
-.inv-line-main{
+.inv-line-view-active{
+  display:none;
+}
+.inv-line.is-active .inv-line-view-active{
+  display:block;
+}
+.inv-line.is-active .inv-line-collapsed{
+  display:none;
+}
+.inv-line-collapsed{
   display:flex;
   align-items:center;
-  gap:10px;
+  justify-content:space-between;
+  gap:14px;
+  min-height:56px;
+  padding:10px 14px;
+  box-sizing:border-box;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
 }
-.inv-line:not(.inv-line-empty) .inv-line-name{
+.inv-line-collapsed:focus{
+  outline:none;
+}
+.inv-line-body{
   flex:1 1 auto;
   min-width:0;
-  border:none!important;
-  background:none!important;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:2px;
+  text-align:right;
+}
+.inv-line-collapsed .inv-line-name{
+  display:block;
+  width:100%;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border:0!important;
+  background:transparent!important;
   padding:0!important;
   margin:0!important;
-  min-height:auto!important;
+  min-height:0!important;
   box-shadow:none!important;
   border-radius:0!important;
-  font-size:.98rem;
-  font-weight:700;
-  color:#1F2937;
+  color:#1F2937!important;
+  font-size:15px!important;
+  font-weight:600!important;
   line-height:1.35;
-  cursor:pointer;
 }
-.inv-line-amount{
+.inv-line-collapsed-meta{
+  width:100%;
+  text-align:left;
+}
+.inv-line-calc{
+  font-size:12.5px;
+  font-weight:500;
+  color:#667085;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.inv-line-collapsed .inv-line-amount{
   flex:0 0 auto;
-  font-size:1rem;
+  min-width:0;
+  text-align:left;
+  font-size:16px;
+  line-height:1.2;
   font-weight:700;
   color:#1F2937;
   font-variant-numeric:tabular-nums;
+  white-space:nowrap;
 }
-.inv-line-empty .inv-line-name{
-  flex:0 1 auto;
-  width:auto;
-  max-width:100%;
-  padding:8px 14px!important;
-  border:1px solid rgba(15,23,42,.08)!important;
-  border-radius:999px!important;
-  background:#F8FAFC!important;
-  color:#667085!important;
-  font-size:.8rem!important;
-  font-weight:600!important;
+.inv-line-main{
+  position:relative;
+  display:flex;
+  align-items:center;
+  min-width:0;
+  padding:12px 14px 4px;
+}
+.inv-line-view-active{
+  background:#FBFCFE;
+}
+.inv-line-view-active .row-product-search.inv-line-name{
+  flex:1 1 auto;
+  min-width:0;
+  width:100%;
+  padding:0 40px 0 34px!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
   box-shadow:none!important;
+  outline:none!important;
+  min-height:38px!important;
+  color:#1F2937!important;
+  font-size:15px!important;
+  font-weight:600!important;
+  line-height:1.4;
+  text-align:right;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+  -webkit-appearance:none;
+  appearance:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.inv-line-view-active .row-product-search.inv-line-name:focus{
+  outline:none!important;
+  box-shadow:none!important;
+  border-color:transparent!important;
 }
 .inv-line-chevron{
   color:#667085;
   font-size:1.05rem;
   opacity:.7;
+  position:absolute;
+  left:14px;
 }
 .inv-line-sub{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  margin-top:8px;
+  justify-content:flex-start;
+  padding:4px 14px 0;
 }
 .inv-line-qtyrate{
   display:flex;
   align-items:center;
-  gap:4px;
+  gap:6px;
+  direction:ltr;
   font-size:.8rem;
   color:#667085;
   font-weight:500;
 }
 .inv-mini-input{
   width:48px;
-  border:none;
-  border-bottom:1.5px solid rgba(15,23,42,.12);
-  background:transparent;
-  padding:2px;
-  font-size:.84rem;
+  min-width:48px;
+  height:40px;
+  box-sizing:border-box;
+  border:1px solid rgba(15,23,42,.12);
+  background:#FFFFFF;
+  padding:4px 5px;
+  font-size:14px;
   font-family:inherit;
   font-weight:600;
   color:#1F2937;
   text-align:center;
-  min-height:44px;
-  border-radius:0;
+  border-radius:9px;
   box-shadow:none;
   outline:none;
   -webkit-appearance:none;
   appearance:none;
 }
 .inv-mini-input-price{
-  width:90px;
+  width:96px;
+  min-width:96px;
 }
-/* Invoice V6 qty/price focus — scoped, keep visible focus without browser blue box */
 .sheet.inv-sheet-host .inv-mini-input:focus{
   outline:none;
-  border-bottom-color:#0070D2;
-  box-shadow:0 2px 0 0 rgba(0,112,210,.35);
+  border-color:rgba(15,23,42,.22);
+  box-shadow:0 0 0 2px rgba(15,23,42,.04);
 }
 .sheet.inv-sheet-host .inv-discount-block input:focus,
 .sheet.inv-sheet-host .inv-payment-panel > input:focus{
@@ -1945,97 +2026,113 @@ button.inv-header-save.btn{
   font-weight:500;
 }
 .inv-line-del{
+  position:absolute;
+  top:10px;
+  left:14px;
   width:28px;
   height:28px;
+  min-width:28px;
+  padding:0;
   border-radius:50%;
   border:0;
   background:rgba(31,41,55,.05);
   color:#D52B36;
   font-size:1rem;
+  line-height:28px;
+  text-align:center;
   cursor:pointer;
   flex:0 0 auto;
-  opacity:.85;
+  opacity:.9;
+  z-index:2;
+  -webkit-tap-highlight-color:transparent;
 }
-.inv-line .row-info{
-  margin-top:6px;
-}
-
-/* Invoice V6 Stage 1 — inert scaffolding for a future stable-DOM item-row
-   architecture (collapsed vs. active view per line). No markup in
-   js/app.js references these classes yet, so none of this changes current
-   behavior or appearance; it only prepares the show/hide mechanics and
-   shared typography so a later stage can introduce the markup without a
-   second CSS pass. */
-.inv-line-view-collapsed{
-  display:block;
-}
-.inv-line-view-active{
-  display:none;
-}
-.inv-line.is-active .inv-line-view-collapsed{
-  display:none;
-}
-.inv-line.is-active .inv-line-view-active{
-  display:block;
-}
-
-/* Row index label — future collapsed-row prefix */
-.inv-line-num{
-  flex:0 0 auto;
-  font-size:.78rem;
-  font-weight:600;
-  color:#667085;
-  font-variant-numeric:tabular-nums;
-}
-
-/* Compact qty × unit-price readout — future collapsed-row summary text */
-.inv-line-calc{
-  font-size:.8rem;
+.inv-line-avg-cost{
+  padding:3px 14px 0;
+  font-size:12.5px;
   font-weight:500;
   color:#667085;
+  line-height:1.4;
   font-variant-numeric:tabular-nums;
 }
-
-/* Line total — future collapsed-row trailing amount; mirrors .inv-line-amount */
-.inv-line-line-total{
-  flex:0 0 auto;
+.inv-line-avg-cost.is-below{
+  color:#D52B36;
+}
+.inv-line-market-details{
+  margin:4px 14px 12px;
+  padding:0;
+  color:#667085;
+  font-size:12.5px;
+}
+.inv-line-market-details summary{
+  list-style:none;
+  cursor:pointer;
+  padding:5px 0;
+  color:#475467;
+  font-weight:600;
+  -webkit-tap-highlight-color:transparent;
+}
+.inv-line-market-details summary::-webkit-details-marker{
+  display:none;
+}
+.inv-line-market-details summary::before{
+  content:'▸';
+  display:inline-block;
+  margin-inline-end:6px;
+  transition:transform .15s ease;
+}
+.inv-line-market-details[open] summary::before{
+  transform:rotate(90deg);
+}
+.inv-line-market-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  padding:6px 0;
+  border-top:1px solid rgba(15,23,42,.05);
+}
+.inv-line-market-row span{
+  color:#667085;
+  font-weight:500;
+}
+.inv-line-market-row strong{
+  color:#1F2937;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  text-align:left;
+  white-space:nowrap;
+}
+.inv-profit-summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:10px;
+  padding:13px 16px;
+  background:#FFFFFF;
+  border:1px solid rgba(15,23,42,.07);
+  border-radius:16px;
+  box-shadow:0 4px 16px rgba(15,23,42,.04);
+  font-size:.82rem;
+  color:#475467;
+}
+.inv-profit-summary .name{
+  font-weight:600;
+  color:#475467;
+}
+.inv-profit-summary .amount{
   font-size:1rem;
   font-weight:700;
-  color:#1F2937;
+  white-space:nowrap;
   font-variant-numeric:tabular-nums;
 }
-
-/* Always-visible FIFO cost readout under unit price — future active-row.
-   .is-below is a visual-only hint (sale price under FIFO cost); it must
-   never block or confirm anything on its own. */
-.inv-line-fifo{
-  font-size:.72rem;
-  font-weight:500;
-  color:#667085;
-  margin-top:2px;
-}
-.inv-line-fifo.is-below{
-  color:var(--vg-color-danger);
-}
-
-/* Market-info block — future active-row container (replaces today's
-   .inv-price-info-panel disclosure once Stage 2 lands) */
-.inv-line-market{
-  margin-top:8px;
-  padding:4px 12px 6px;
-  border-radius:14px;
-  background:#F8FAFC;
-  border:1px solid rgba(15,23,42,.05);
-}
-
-/* Invoice-level profit summary block — future child of .inv-summary-section.
-   Scaffold only: no margin/percentage UI is implemented in this stage. */
-.inv-profit-summary{
-  margin-top:6px;
-  padding-top:10px;
-  border-top:1px dashed rgba(15,23,42,.1);
-  font-size:.8rem;
-  color:#667085;
+@media(max-width:360px){
+  .inv-line-collapsed{padding-inline:12px;gap:10px;}
+  .inv-line-main,.inv-line-sub,.inv-line-avg-cost{padding-inline:12px;}
+  .inv-line-market-details{margin-inline:12px;}
+  .inv-mini-input{width:46px;min-width:46px;}
+  .inv-mini-input-price{width:88px;min-width:88px;}
+  .inv-line-del{left:12px;}
 }
 
 /* Product picker panel (Invoice V6) — markup from openProductDrop; CSS was missing */
@@ -2121,51 +2218,6 @@ button.inv-header-save.btn{
   color:#667085;
 }
 
-.inv-row-profit-line{
-  font-size:.72rem;
-  font-weight:500;
-  color:#667085;
-  opacity:.9;
-}
-.inv-price-info-btn{
-  background:none;
-  border:none;
-  padding:0;
-  margin-top:2px;
-  font-size:.72rem;
-  font-weight:500;
-  color:#0070D2;
-  cursor:pointer;
-}
-.inv-price-info-panel{
-  margin-top:8px;
-  padding:4px 12px 6px;
-  border-radius:14px;
-  background:#F8FAFC;
-  border:1px solid rgba(15,23,42,.05);
-}
-.inv-price-info-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:baseline;
-  gap:10px;
-  font-size:.76rem;
-  padding:7px 0;
-  border-bottom:1px solid rgba(15,23,42,.05);
-}
-.inv-price-info-row:last-child{
-  border-bottom:0;
-}
-.inv-price-info-row .k{
-  color:#667085;
-  font-weight:500;
-}
-.inv-price-info-row .v{
-  font-weight:700;
-  color:#1F2937;
-  font-variant-numeric:tabular-nums;
-  white-space:nowrap;
-}
 .inv-add-line{
   display:flex;
   align-items:center;
@@ -2354,7 +2406,7 @@ button.inv-header-save.btn{
 }
 .inv-summary-section{
   margin-top:8px;
-  margin-bottom:8px;
+  margin-bottom:0;
   padding:14px 16px 12px;
   background:#FFFFFF;
   border:1px solid rgba(15,23,42,.07);
@@ -2366,45 +2418,50 @@ button.inv-header-save.btn{
   justify-content:space-between;
   align-items:baseline;
   gap:10px;
-  padding:5px 0;
+  padding:6px 0;
   border-bottom:none;
   min-height:auto;
   cursor:default;
 }
 .inv-summary-section #calc-summary .ledger-row .name{
   font-weight:500;
-  color:inherit;
+  color:#475467;
 }
 .inv-summary-section #calc-summary .ledger-row .amount{
   font-weight:600;
   font-variant-numeric:tabular-nums;
   color:#1F2937;
+  white-space:nowrap;
 }
 .inv-summary-section #calc-summary .inv-total-row{
-  margin-top:8px;
-  padding-top:12px;
-  border-top:1px solid rgba(15,23,42,.08);
+  margin-top:3px;
+  padding-top:9px;
+  border-top:1px solid rgba(15,23,42,.06);
 }
 .inv-summary-section #calc-summary .inv-total-row .name,
 .inv-summary-section #calc-summary .inv-total-row .amount{
-  font-size:1.12rem;
+  font-size:1rem;
   font-weight:700;
   color:#1F2937;
 }
+.inv-summary-discount{
+  margin:-1px 0 4px;
+  padding-inline-start:2px;
+  font-size:11.5px;
+  color:#667085;
+  text-align:right;
+}
 .inv-summary-section #calc-summary .inv-remain-row{
-  padding:10px 0 4px;
-  border-top:0;
+  margin-top:4px;
+  padding:10px 0 2px;
+  border-top:1px solid rgba(15,23,42,.08);
 }
 .inv-summary-section #calc-summary .inv-remain-row .name,
 .inv-summary-section #calc-summary .inv-remain-row .amount{
-  font-size:1.02rem;
-  font-weight:700;
+  font-size:1.08rem;
+  font-weight:800;
 }
-.inv-summary-section #calc-summary .inv-sum-profit{
-  margin-top:6px;
-  padding-top:10px;
-  border-top:1px dashed rgba(15,23,42,.1);
-}
+
 /* Unique V4 compatibility radius */
 .sheet.inv-sheet-host .inv-section{
   border-radius:18px;
@@ -4338,73 +4395,6 @@ button#save-tx{
 }
 .ff-date-field.is-empty .shamsi-date-field{
   color:var(--vg-color-text-muted);
-}
-
-/* 22 — Invoice product selector: compact plain (empty state already pill; selected is plain) */
-.inv-line:not(.inv-line-empty) .inv-line-name{
-  font-size:.92rem;
-  font-weight:600;
-}
-
-/* 23 — Invoice profit privacy: blur by default, reveal on tap */
-.inv-row-profit-line{
-  cursor:pointer;
-  user-select:none;
-  -webkit-user-select:none;
-  margin-bottom:6px;
-}
-.inv-row-profit-line .inv-profit-private{
-  filter:blur(5px);
-  transition:filter .15s ease;
-}
-.inv-row-profit-line.is-revealed .inv-profit-private{
-  filter:none;
-}
-.inv-row-meta{
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:4px;
-  margin-top:4px;
-}
-
-/* 24 — Invoice qty × price × delete: stable narrow layout */
-.inv-line-sub{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  margin-top:8px;
-  flex-wrap:nowrap;
-}
-.inv-line-qtyrate{
-  display:flex;
-  align-items:center;
-  gap:4px;
-  flex:1 1 auto;
-  min-width:0;
-  flex-wrap:nowrap;
-}
-.inv-line-del{
-  flex:0 0 32px;
-  width:32px;
-  height:32px;
-  min-width:32px;
-  margin-inline-start:4px;
-}
-.inv-mini-input{
-  width:44px;
-  min-width:40px;
-  flex:0 0 auto;
-}
-.inv-mini-input-price{
-  width:84px;
-  min-width:72px;
-}
-@media(max-width:360px){
-  .inv-mini-input{ width:40px; }
-  .inv-mini-input-price{ width:72px; }
-  .inv-line-del{ width:30px; height:30px; min-width:30px; flex-basis:30px; }
 }
 
 /* ==========================================================================
