@@ -2094,90 +2094,76 @@ function openInvoiceForm(cid, editInv){
     return past[0] || null;
   }
 
-  function rowInfoHtml(idx){
-    const r = rows[idx];
-    const prod = data.products.find(p=>p.id===r.productId);
-    if(!prod) return '';
-    const fifoCost = productFifoUnitCost(prod.id);
-    const qty = r.qty||0;
-    const unitPrice = r.price||0;
-    const profitPerUnit = unitPrice - fifoCost;
-    const profitTotal = profitPerUnit*qty;
-    const pct = fifoCost ? Math.round((profitPerUnit/fifoCost)*100) : 0;
-    const profitColor = profitTotal<0 ? 'var(--rust)' : 'var(--olive-dark)';
-    const lastAny = lastSaleAnyCustomer(prod.id);
-    const lastCust = lastSaleToCustomer(prod.id);
-    const sellRef = (prod.retail!=null && prod.retail!=='') ? prod.retail : (prod.sell||0);
-    return `
-      <div class="inv-row-meta">
-        <div class="inv-row-profit-line" data-profit-toggle="1" style="color:${profitColor};">سود این قلم: <span class="inv-profit-private">${profitTotal<0?'−':''}${toman(Math.abs(profitTotal))} ت (${pct}٪)</span></div>
-        <button type="button" class="inv-price-info-btn" data-row="${idx}" aria-expanded="false">اطلاعات قیمت</button>
-        <div class="inv-price-info-panel" data-row="${idx}" hidden>
-          <div class="inv-price-info-grid">
-            <div class="inv-price-info-row"><span class="k">خرید (FIFO)</span><span class="v">${toman(fifoCost)} ت</span></div>
-            <div class="inv-price-info-row"><span class="k">قیمت فروش (مرجع)</span><span class="v">${toman(sellRef)} ت</span></div>
-            <div class="inv-price-info-row"><span class="k">آخرین فروش (کلی)</span><span class="v">${lastAny?`${toman(lastAny.price)} ت — ${faDate(lastAny.date)}`:'ثبت نشده'}</span></div>
-            <div class="inv-price-info-row"><span class="k">آخرین فروش به این مشتری</span><span class="v">${lastCust?`${toman(lastCust.price)} ت — ${faDate(lastCust.date)}`:'ثبت نشده'}</span></div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   function updateRowInfo(idx){
-    const el = document.querySelector(`.row-info[data-row="${idx}"]`);
-    if(el) el.innerHTML = rowInfoHtml(idx);
     const r = rows[idx];
     if(!r) return;
     const prod = data.products.find(p=>p.id===r.productId);
     const line = document.querySelector(`.inv-line[data-row="${idx}"]`);
-    const amountEl = line ? line.querySelector('.inv-line-amount[data-row]') : null;
-    const chevronEl = line ? line.querySelector('.inv-line-chevron[data-row]') : null;
-    const subEl = line ? line.querySelector('.inv-line-sub[data-row]') : null;
-    if(prod && line && line.classList.contains('inv-line-empty')) line.classList.remove('inv-line-empty');
-    if(prod && line && !line.querySelector('.inv-line-view-collapsed')){
+    if(!line) return;
+
+    if(prod && line.classList.contains('inv-line-empty')) line.classList.remove('inv-line-empty');
+
+    if(prod && !line.querySelector('.inv-line-collapsed')){
       const view = document.createElement('div');
-      view.className = 'inv-line-view-collapsed';
-      const numEl = document.createElement('span');
-      numEl.className = 'inv-line-num';
-      numEl.textContent = String(idx+1);
-      const bodyEl = document.createElement('div');
-      bodyEl.className = 'inv-line-body';
-      const nameEl = document.createElement('span');
-      nameEl.className = 'inv-line-name';
-      const calcEl = document.createElement('span');
-      calcEl.className = 'inv-line-calc';
-      bodyEl.append(nameEl, calcEl);
-      const collapsedAmount = document.createElement('span');
-      collapsedAmount.className = 'inv-line-amount';
-      view.append(numEl, bodyEl, collapsedAmount);
+      view.className = 'inv-line-collapsed';
+      view.setAttribute('role','button');
+      view.tabIndex = 0;
+      const body = document.createElement('div');
+      body.className = 'inv-line-body';
+      const name = document.createElement('span');
+      name.className = 'inv-line-name';
+      const meta = document.createElement('div');
+      meta.className = 'inv-line-collapsed-meta';
+      const calc = document.createElement('span');
+      calc.className = 'inv-line-calc';
+      meta.appendChild(calc);
+      body.append(name, meta);
+      const amount = document.createElement('span');
+      amount.className = 'inv-line-amount';
+      view.append(body, amount);
       line.insertBefore(view, line.querySelector('.inv-line-view-active'));
-      view.addEventListener('click', ()=>{
+      const activate = ()=>{
         if(idx === activeRowIndex) return;
         setActiveRow(idx);
-        requestAnimationFrame(()=>{
-          const qtyInput = line.querySelector('.row-qty');
-          if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
-        });
+        focusQtyForRow(idx);
+      };
+      view.addEventListener('click', activate);
+      view.addEventListener('keydown', e=>{
+        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activate(); }
       });
     }
-    if(prod && line){
-      const collapsed = line.querySelector('.inv-line-view-collapsed');
+
+    if(prod){
+      const collapsed = line.querySelector('.inv-line-collapsed');
       if(collapsed){
-        const nameEl = collapsed.querySelector('.inv-line-name');
-        const calcEl = collapsed.querySelector('.inv-line-calc');
-        const collapsedAmount = collapsed.querySelector('.inv-line-amount');
-        if(nameEl) nameEl.textContent = prod.name || '';
-        if(calcEl) calcEl.textContent = `${r.qty||0} × ${toman(r.price||0)} ت`;
-        if(collapsedAmount) collapsedAmount.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
+        const name = collapsed.querySelector('.inv-line-name');
+        const calc = collapsed.querySelector('.inv-line-calc');
+        const amount = collapsed.querySelector('.inv-line-amount');
+        if(name) name.textContent = prod.name || '';
+        if(calc) calc.textContent = `${enToFaDigits(fmtQtyDisplay(r.qty||0))} × ${toman(r.price||0)} ت`;
+        if(amount) amount.textContent = `${toman((r.qty||0)*(r.price||0))} ت`;
       }
+
+      const fifoCost = productFifoUnitCost(prod.id);
+      const subEl = line.querySelector('.inv-line-sub');
+      const chevronEl = line.querySelector('.inv-line-chevron');
+      const marketDetails = line.querySelector('.inv-line-market-details');
+      if(subEl) subEl.style.display = 'flex';
+      if(chevronEl) chevronEl.style.display = 'none';
+      if(marketDetails) marketDetails.hidden = false;
+      const avgCost = line.querySelector('.inv-line-avg-cost');
+      if(avgCost){
+        avgCost.style.display = 'block';
+        avgCost.textContent = `میانگین خرید: ${toman(fifoCost)} ت`;
+        avgCost.classList.toggle('is-below', (r.price||0) < fifoCost);
+      }
+      const lastAny = lastSaleAnyCustomer(prod.id);
+      const lastCust = lastSaleToCustomer(prod.id);
+      const marketAny = line.querySelector('[data-market="last-any"]');
+      const marketCust = line.querySelector('[data-market="last-customer"]');
+      if(marketAny) marketAny.textContent = lastAny ? `${toman(lastAny.price)} ت — ${faDate(lastAny.date)}` : 'ثبت نشده';
+      if(marketCust) marketCust.textContent = lastCust ? `${toman(lastCust.price)} ت — ${faDate(lastCust.date)}` : 'ثبت نشده';
     }
-    if(amountEl){
-      amountEl.style.display = prod ? '' : 'none';
-      if(prod) amountEl.textContent = toman((r.qty||0)*(r.price||0)) + ' ت';
-    }
-    if(chevronEl) chevronEl.style.display = prod ? 'none' : '';
-    if(subEl) subEl.style.display = prod ? '' : 'none';
   }
 
   // Product selector state (one open at a time) — UI only
@@ -2189,6 +2175,18 @@ function openInvoiceForm(cid, editInv){
   // this value, since it has no collapsed summary to fall back to.
   let activeRowIndex = rows.findIndex(r=>!r.productId);
   if(activeRowIndex < 0) activeRowIndex = null;
+  const qtyFocusPrevious = new Map();
+  function focusQtyForRow(idx){
+    const input = document.querySelector(`.inv-line[data-row="${idx}"] .row-qty`);
+    if(!input) return;
+    qtyFocusPrevious.set(String(idx), input.value);
+    requestAnimationFrame(()=>setTimeout(()=>{
+      if(!input.isConnected) return;
+      input.focus();
+      input.select();
+      if(input.selectionEnd - input.selectionStart === 0) input.value = '';
+    },0));
+  }
 
   function productDropListHtml(idx, query){
     const q = (query||'').trim();
@@ -2222,76 +2220,39 @@ function openInvoiceForm(cid, editInv){
       const priceDisp = (typeof formatLiveAmount==='function' && r.price) ? formatLiveAmount(String(r.price)) : (r.price||'');
       const label = prod ? esc(prod.name) : '';
       const lineAmt = (r.qty||0) * (r.price||0);
-
-      // Stage 2 — Stable DOM scaffolding only. A populated row now carries
-      // BOTH the collapsed summary view and the active/edit view in the DOM
-      // from the start (real markup, not built later via outerHTML/innerHTML
-      // morph). No activeRowIndex exists yet, so `is-active` is applied
-      // unconditionally below to keep today's visible behavior identical —
-      // the active view stays the one shown, the collapsed view stays
-      // hidden. The new FIFO / line-total / market elements are real,
-      // data-backed markup but stay `hidden`: wiring them up (and removing
-      // "قیمت فروش (مرجع)" from the existing disclosure) is out of scope for
-      // Stage 2. None of the elements below carry a `data-row` attribute
-      // except where the existing code already queries one, so no existing
-      // selector picks up a second, ambiguous match.
-      let collapsedHtml = '';
-      let fifoHtml = '';
-      let lineTotalHtml = '';
-      let marketHtml = '';
-      if(prod){
-        const fifoCost = productFifoUnitCost(prod.id);
-        const lastAny = lastSaleAnyCustomer(prod.id);
-        const lastCust = lastSaleToCustomer(prod.id);
-        collapsedHtml = `
-        <div class="inv-line-view-collapsed">
-          <span class="inv-line-num">${idx+1}</span>
-          <div class="inv-line-body">
-            <span class="inv-line-name">${label}</span>
-            <span class="inv-line-calc">${r.qty||0} × ${toman(r.price||0)} ت</span>
-          </div>
-          <span class="inv-line-amount">${toman(lineAmt)} ت</span>
-        </div>`;
-        fifoHtml = `<div class="inv-line-fifo" hidden>خرید (FIFO) ${toman(fifoCost)} ت</div>`;
-        lineTotalHtml = `<div class="inv-line-line-total" hidden>${toman(lineAmt)} ت</div>`;
-        marketHtml = `
-        <details class="inv-line-market" hidden>
+      let activeHtml = `
+        <div class="inv-line-main">
+          <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none" aria-label="${prod?'تغییر کالا':'انتخاب کالا'}">
+          ${prod && rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
+          <span class="inv-line-chevron" data-row="${idx}" aria-hidden="true" style="display:${prod?'none':''}">›</span>
+          <div class="prod-drop" data-row="${idx}" hidden></div>
+        </div>
+        <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'flex':'none'}">
+          <span class="inv-line-qtyrate">
+            <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${enToFaDigits(fmtQtyDisplay(r.qty||0))}">
+            <span class="inv-line-x">×</span>
+            <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
+            <span class="inv-line-unit">ت</span>
+          </span>
+        </div>
+        <div class="inv-line-avg-cost${prod && (r.price||0) < productFifoUnitCost(prod.id)?' is-below':''}" data-row="${idx}" style="display:${prod?'block':'none'}">${prod?`میانگین خرید: ${toman(productFifoUnitCost(prod.id))} ت`:''}</div>
+        <details class="inv-line-market-details" data-row="${idx}" ${prod?'':'hidden'}>
           <summary>اطلاعات بازار</summary>
-          <div class="inv-price-info-row"><span class="k">آخرین فروش کلی</span><span class="v">${lastAny?`${toman(lastAny.price)} ت — ${faDate(lastAny.date)}`:'ثبت نشده'}</span></div>
-          <div class="inv-price-info-row"><span class="k">آخرین فروش به این مشتری</span><span class="v">${lastCust?`${toman(lastCust.price)} ت — ${faDate(lastCust.date)}`:'ثبت نشده'}</span></div>
+          <div class="inv-line-market-row"><span>آخرین فروش کلی</span><strong data-market="last-any">${prod?(lastSaleAnyCustomer(prod.id)?`${toman(lastSaleAnyCustomer(prod.id).price)} ت — ${faDate(lastSaleAnyCustomer(prod.id).date)}`:'ثبت نشده'):''}</strong></div>
+          <div class="inv-line-market-row"><span>آخرین فروش به این مشتری</span><strong data-market="last-customer">${prod?(lastSaleToCustomer(prod.id)?`${toman(lastSaleToCustomer(prod.id).price)} ت — ${faDate(lastSaleToCustomer(prod.id).date)}`:'ثبت نشده'):''}</strong></div>
         </details>`;
-      }
-
-      // Stage 3 — real active/collapsed state. A populated row is only
-      // "active" when it matches activeRowIndex; an empty row has no
-      // collapsed view to show instead, so it stays active regardless.
       const isRowActive = !prod || idx === activeRowIndex;
       return `
       <div class="inv-line${prod?'':' inv-line-empty'}${isRowActive?' is-active':''}" data-row="${idx}">
-        ${collapsedHtml}
-        <div class="inv-line-view-active">
-          <div class="inv-line-main">
-            <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none">
-            <span class="inv-line-amount" data-row="${idx}" style="display:${prod?'':'none'}">${toman(lineAmt)} ت</span>
-            <span class="inv-line-chevron" data-row="${idx}" style="display:${prod?'none':''}" aria-hidden="true">›</span>
-            <div class="prod-drop" data-row="${idx}" hidden></div>
+        ${prod?`<div class="inv-line-collapsed" role="button" tabindex="0" aria-label="ویرایش ${label}">
+          <div class="inv-line-body">
+            <span class="inv-line-name">${label}</span>
+            <div class="inv-line-collapsed-meta"><span class="inv-line-calc">${enToFaDigits(fmtQtyDisplay(r.qty||0))} × ${toman(r.price||0)} ت</span></div>
           </div>
-          <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'':'none'}">
-            <span class="inv-line-qtyrate">
-              <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${r.qty}">
-              <span class="inv-line-x">×</span>
-              <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
-              <span class="inv-line-unit">ت</span>
-            </span>
-            ${rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
-          </div>
-          ${fifoHtml}
-          ${lineTotalHtml}
-          ${marketHtml}
-          <div class="row-info" data-row="${idx}">${rowInfoHtml(idx)}</div>
-        </div>
-      </div>
-    `;
+          <span class="inv-line-amount">${toman(lineAmt)} ت</span>
+        </div>`:''}
+        <div class="inv-line-view-active">${activeHtml}</div>
+      </div>`;
     }).join('');
   }
 
@@ -2319,20 +2280,20 @@ function openInvoiceForm(cid, editInv){
     const paid = cashPaid+cardPaid+transferPaid+checkAmount;
     const newBalance = prevBalance + total - paid;
     const profit = invoiceProfitEstimate();
-    const profitColor = profit<0 ? 'var(--rust)' : 'var(--olive-dark)';
+    const profitColor = profit<0 ? '#D52B36' : '#0F7A4A';
     const remainCls = newBalance>0 ? 'accent-rust' : 'accent-olive';
-    document.getElementById('calc-summary').innerHTML = `
+    const summaryEl = document.getElementById('calc-summary');
+    if(summaryEl) summaryEl.innerHTML = `
       <div class="ledger-row inv-sum-tertiary"><span class="name">مانده قبلی مشتری</span><span class="filler"></span><span class="amount">${toman(prevBalance)} ت</span></div>
-      <div class="ledger-row inv-sum-secondary"><span class="name">جمع اقلام</span><span class="filler"></span><span class="amount">${toman(subtotal)} ت</span></div>
-      <div class="ledger-row inv-sum-tertiary"><span class="name">تخفیف کلی فاکتور${discountType==='percent'?` (${toman(discount)}٪)`:''}</span><span class="filler"></span><span class="amount">${toman(discountAmount)} ت</span></div>
       <div class="ledger-row inv-total-row inv-sum-primary"><span class="name">جمع این فاکتور</span><span class="filler"></span><span class="amount">${toman(total)} ت</span></div>
-      <div class="ledger-row inv-sum-secondary"><span class="name">جمع دریافتی</span><span class="filler"></span><span class="amount">${toman(paid)} ت</span></div>
+      ${discountAmount>0?`<div class="inv-summary-discount">تخفیف کلی فاکتور: ${toman(discountAmount)} ت</div>`:''}
+      <div class="ledger-row inv-sum-secondary"><span class="name">پرداختی</span><span class="filler"></span><span class="amount">(${toman(paid)}) ت</span></div>
       <div class="ledger-row inv-remain-row inv-sum-primary"><span class="name ${remainCls}">مانده جدید</span><span class="filler"></span><span class="amount ${remainCls}">${toman(Math.abs(newBalance))} ت ${balanceStatusWord(newBalance)}</span></div>
-      <div class="ledger-row inv-sum-profit inv-sum-tertiary">
-        <span class="name">سود این فاکتور (بر اساس FIFO)</span><span class="filler"></span>
-        <span class="amount" style="color:${profitColor}">${profit<0?'−':''}${toman(Math.abs(profit))} ت</span>
-      </div>
     `;
+    const profitEl = document.getElementById('inv-profit-summary');
+    if(profitEl){
+      profitEl.innerHTML = `<span class="name">سود این فاکتور (بر اساس میانگین خرید)</span><strong class="amount" style="color:${profitColor}">${profit<0?'−':''}${toman(Math.abs(profit))} ت</strong>`;
+    }
   }
 
   function renderSheet(){
@@ -2473,6 +2434,7 @@ function openInvoiceForm(cid, editInv){
             <h2 class="inv-section-title">جمع‌بندی فاکتور</h2>
             <div id="calc-summary"></div>
           </div>
+          <div class="inv-profit-summary" id="inv-profit-summary" aria-label="سود این فاکتور"></div>
         </div>
       </div>
     `);
@@ -2501,6 +2463,31 @@ function openInvoiceForm(cid, editInv){
     updateSummary();
     // No-Purchase Reason chips (re-bound after every renderSheet rebuild)
     if(typeof bindNoPurchasePrompt === 'function') bindNoPurchasePrompt(cid);
+
+    document.querySelectorAll('.inv-line-collapsed').forEach(el=>{
+      const activate = ()=>{
+        const line = el.closest('.inv-line');
+        if(!line) return;
+        const idx = parseInt(line.getAttribute('data-row'), 10);
+        if(idx === activeRowIndex) return;
+        setActiveRow(idx);
+        focusQtyForRow(idx);
+      };
+      el.addEventListener('click', activate);
+      el.addEventListener('keydown', e=>{
+        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activate(); }
+      });
+    });
+    document.querySelectorAll('.row-qty').forEach(el=>el.addEventListener('blur', e=>{
+      const key = e.target.dataset.row;
+      if(e.target.value.trim()==='' && qtyFocusPrevious.has(String(key))){
+        e.target.value = qtyFocusPrevious.get(String(key));
+        rows[key].qty = parseFloat(faToEnDigits(e.target.value))||0;
+        updateRowInfo(key);
+        updateSummary();
+      }
+      qtyFocusPrevious.delete(String(key));
+    }));
 
     document.getElementById('add-row').addEventListener('click', ()=>{
       // One active empty line at a time: once a blank line exists, repeated
@@ -2575,19 +2562,7 @@ function openInvoiceForm(cid, editInv){
       const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
       if(newActiveEl) newActiveEl.classList.add('is-active');
     }
-    document.querySelectorAll('.inv-line-view-collapsed').forEach(el=>{
-      el.addEventListener('click', ()=>{
-        const line = el.closest('.inv-line');
-        if(!line) return;
-        const idx = parseInt(line.getAttribute('data-row'), 10);
-        if(idx === activeRowIndex) return;
-        setActiveRow(idx);
-        requestAnimationFrame(()=>{
-          const qtyInput = document.querySelector(`.inv-line[data-row="${idx}"] .row-qty`);
-          if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
-        });
-      });
-    });
+
     function positionProductDrop(dropEl, anchorEl){
       if(!dropEl || !anchorEl) return;
       const margin = 10;
@@ -2686,10 +2661,7 @@ function openInvoiceForm(cid, editInv){
       // Stage 3 — row stays active after picking a product; hand off
       // straight to quantity entry (iOS Safari: wait a frame after the
       // picker's DOM changes so focus isn't dropped).
-      requestAnimationFrame(()=>{
-        const qtyInput = document.querySelector(`.row-qty[data-row="${idx}"]`);
-        if(qtyInput){ qtyInput.focus(); qtyInput.select(); }
-      });
+      focusQtyForRow(idx);
     }
 
     // Single gesture open via pointerup (avoids focus+click double-open on mobile)
@@ -2740,35 +2712,6 @@ function openInvoiceForm(cid, editInv){
       }, true);
     }
 
-    // Price-info panel + profit privacy toggle: delegation survives updateRowInfo()
-    (function bindInvPriceInfoDelegation(){
-      const root = document.getElementById('modalRoot');
-      if(!root || root._invPriceInfoBound) return;
-      root._invPriceInfoBound = true;
-      root.addEventListener('click', function(e){
-        const profitLine = e.target.closest('.inv-row-profit-line');
-        if(profitLine && root.contains(profitLine)){
-          e.preventDefault();
-          e.stopPropagation();
-          profitLine.classList.toggle('is-revealed');
-          return;
-        }
-        const btn = e.target.closest('.inv-price-info-btn');
-        if(!btn || !root.contains(btn)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const i = btn.getAttribute('data-row');
-        const panel = root.querySelector(`.inv-price-info-panel[data-row="${i}"]`);
-        if(!panel) return;
-        const willOpen = panel.hasAttribute('hidden');
-        root.querySelectorAll('.inv-price-info-panel').forEach(p=>p.setAttribute('hidden',''));
-        root.querySelectorAll('.inv-price-info-btn').forEach(b=>b.setAttribute('aria-expanded','false'));
-        if(willOpen){
-          panel.removeAttribute('hidden');
-          btn.setAttribute('aria-expanded','true');
-        }
-      });
-    })();
     document.querySelectorAll('.row-qty').forEach(el=>el.addEventListener('input', e=>{
       const idx = e.target.dataset.row;
       rows[idx].qty = parseFloat(faToEnDigits(e.target.value))||0;
