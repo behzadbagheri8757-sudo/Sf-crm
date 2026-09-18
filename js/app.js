@@ -2070,6 +2070,7 @@ function openInvoiceForm(cid, editInv){
   let checkDue = existingCheck ? existingCheck.dueDate : todayISO();
   let discount = editInv ? (editInv.discount||0) : 0;
   let discountType = (editInv && editInv.discountType==='percent') ? 'percent' : 'fixed';
+  let invoiceDate = editInv ? (editInv.date || todayISO()) : todayISO();
   if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
 
   // "مانده قبلی": مانده مشتری بدون احتساب این فاکتور اصلاً — برای فاکتور جدید یعنی مانده فعلی،
@@ -2149,7 +2150,7 @@ function openInvoiceForm(cid, editInv){
       const chevronEl = line.querySelector('.inv-line-chevron');
       const marketDetails = line.querySelector('.inv-line-market-details');
       if(subEl) subEl.style.display = 'flex';
-      if(chevronEl) chevronEl.style.display = 'none';
+      if(chevronEl) chevronEl.style.display = 'block';
       if(marketDetails) marketDetails.hidden = false;
       const avgCost = line.querySelector('.inv-line-avg-cost');
       if(avgCost){
@@ -2183,8 +2184,8 @@ function openInvoiceForm(cid, editInv){
     requestAnimationFrame(()=>setTimeout(()=>{
       if(!input.isConnected) return;
       input.focus();
-      input.select();
-      if(input.selectionEnd - input.selectionStart === 0) input.value = '';
+      const end = input.value.length;
+      try{ input.setSelectionRange(end, end); }catch(_e){}
     },0));
   }
 
@@ -2224,7 +2225,7 @@ function openInvoiceForm(cid, editInv){
         <div class="inv-line-main">
           <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none" aria-label="${prod?'تغییر کالا':'انتخاب کالا'}">
           ${prod && rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
-          <span class="inv-line-chevron" data-row="${idx}" aria-hidden="true" style="display:${prod?'none':''}">›</span>
+          <span class="inv-line-chevron" data-row="${idx}" aria-hidden="true" style="display:block">›</span>
           <div class="prod-drop" data-row="${idx}" hidden></div>
         </div>
         <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'flex':'none'}">
@@ -2319,8 +2320,6 @@ function openInvoiceForm(cid, editInv){
     const custDisplay = cust
       ? (cust.ownerName ? (esc(cust.name)+' / '+esc(cust.ownerName)) : esc(cust.name||'—'))
       : '—';
-    const custInitial = esc((cust && cust.name ? cust.name.trim().charAt(0) : 'م') || 'م');
-
     openSheet(`
       <div class="inv-sheet-v2">
         <div class="inv-header">
@@ -2336,14 +2335,13 @@ function openInvoiceForm(cid, editInv){
           ${editInv?`<div class="inv-edit-notice">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
 
           <div class="inv-customer-context">
-            <div class="inv-customer-avatar" aria-hidden="true">${custInitial}</div>
             <div class="inv-customer-info">
               <div class="inv-customer-name">${custDisplay}</div>
               ${cust&&cust.phone?`<div class="inv-customer-meta">${esc(cust.phone)}</div>`:''}
             </div>
           </div>
 
-          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}</div>
+          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', invoiceDate)}</div>
 
           <div class="inv-section inv-items-section">
             <div class="inv-items-card-head">
@@ -2368,65 +2366,77 @@ function openInvoiceForm(cid, editInv){
                 <span class="inv-payment-action-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18M7 14h.01M11 14h3"/></svg>
                 </span>
-                <span>نقد</span>
+                <span class="inv-payment-action-label">نقد</span>
+                <strong class="inv-payment-action-amount" data-payment-amount="cash">${cashPaid?`${toman(cashPaid)} ت`:'ثبت نشده'}</strong>
               </button>
               <button type="button" class="inv-payment-action" data-payment-method="card" aria-expanded="false">
                 <span class="inv-payment-action-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg>
                 </span>
-                <span>کارت</span>
+                <span class="inv-payment-action-label">کارت</span>
+                <strong class="inv-payment-action-amount" data-payment-amount="card">${cardPaid?`${toman(cardPaid)} ت`:'ثبت نشده'}</strong>
               </button>
               <button type="button" class="inv-payment-action" data-payment-method="transfer" aria-expanded="false">
                 <span class="inv-payment-action-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h5M8 17h8"/></svg>
                 </span>
-                <span>بانکی</span>
+                <span class="inv-payment-action-label">انتقال</span>
+                <strong class="inv-payment-action-amount" data-payment-amount="transfer">${transferPaid?`${toman(transferPaid)} ت`:'ثبت نشده'}</strong>
               </button>
               <button type="button" class="inv-payment-action" data-payment-method="check" aria-expanded="false">
                 <span class="inv-payment-action-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
                 </span>
-                <span>چک</span>
+                <span class="inv-payment-action-label">چک</span>
+                <strong class="inv-payment-action-amount" data-payment-amount="check">${checkAmount?`${toman(checkAmount)} ت`:'ثبت نشده'}</strong>
               </button>
             </div>
 
             <div class="inv-payment-backdrop" data-payment-backdrop hidden></div>
 
             <div class="inv-payment-panel" data-payment-panel="cash" hidden>
-              <div class="inv-payment-panel-head"><span>دریافت نقدی</span><button type="button" class="inv-payment-close" data-payment-close="cash" aria-label="بستن">×</button></div>
+              <div class="inv-payment-panel-head"><div><strong>دریافت نقدی</strong><small>مبلغی که همین الان همراه فاکتور نقداً دریافت می‌کنید</small></div><button type="button" class="inv-payment-close" data-payment-close="cash" aria-label="بستن">×</button></div>
               <label for="f-cash">مبلغ نقدی</label>
               <input id="f-cash" type="text" inputmode="decimal" value="${cashPaid||''}" placeholder="مبلغ را وارد کنید">
+              <button type="button" class="btn inv-payment-confirm" data-payment-confirm="cash">تأیید دریافت نقدی</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="card" hidden>
-              <div class="inv-payment-panel-head"><span>دریافت با کارت</span><button type="button" class="inv-payment-close" data-payment-close="card" aria-label="بستن">×</button></div>
+              <div class="inv-payment-panel-head"><div><strong>دریافت با کارت</strong><small>مبلغی که با کارت همراه این فاکتور دریافت می‌کنید</small></div><button type="button" class="inv-payment-close" data-payment-close="card" aria-label="بستن">×</button></div>
               <label for="f-card">مبلغ کارت</label>
               <input id="f-card" type="text" inputmode="decimal" value="${cardPaid||''}" placeholder="مبلغ را وارد کنید">
+              <button type="button" class="btn inv-payment-confirm" data-payment-confirm="card">تأیید دریافت با کارت</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="transfer" hidden>
-              <div class="inv-payment-panel-head"><span>انتقال بانکی</span><button type="button" class="inv-payment-close" data-payment-close="transfer" aria-label="بستن">×</button></div>
+              <div class="inv-payment-panel-head"><div><strong>دریافت انتقالی</strong><small>مبلغی که از طریق انتقال بانکی دریافت می‌کنید</small></div><button type="button" class="inv-payment-close" data-payment-close="transfer" aria-label="بستن">×</button></div>
               <label for="f-transfer">مبلغ انتقال</label>
               <input id="f-transfer" type="text" inputmode="decimal" value="${transferPaid||''}" placeholder="مبلغ را وارد کنید">
+              <button type="button" class="btn inv-payment-confirm" data-payment-confirm="transfer">تأیید دریافت انتقالی</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="check" hidden>
-              <div class="inv-payment-panel-head"><span>دریافت چک</span><button type="button" class="inv-payment-close" data-payment-close="check" aria-label="بستن">×</button></div>
+              <div class="inv-payment-panel-head"><div><strong>دریافت چک</strong><small>مبلغ چکی که همراه این فاکتور دریافت می‌کنید</small></div><button type="button" class="inv-payment-close" data-payment-close="check" aria-label="بستن">×</button></div>
               <label for="f-check">مبلغ چک</label>
               <input id="f-check" type="text" inputmode="decimal" value="${checkAmount||''}" placeholder="مبلغ چک را وارد کنید">
               <div class="inv-payment-check-due" id="check-due-wrap" style="display:${checkAmount>0?'block':'none'};">
                 <label for="f-check-due">تاریخ سررسید چک</label>
                 ${shamsiDateInputHTML('f-check-due', checkDue)}
               </div>
+              <button type="button" class="btn inv-payment-confirm" data-payment-confirm="check">تأیید دریافت چک</button>
             </div>
 
             <div class="inv-discount-block">
-              <span class="inv-discount-label">تخفیف</span>
-              <select id="f-discount-type" aria-label="نوع تخفیف">
-                <option value="fixed" ${discountType==='fixed'?'selected':''}>مبلغ</option>
-                <option value="percent" ${discountType==='percent'?'selected':''}>درصد</option>
-              </select>
-              <input id="f-discount" type="text" inputmode="decimal" value="${discount||''}" placeholder="۰">
+              <div class="inv-discount-head">
+                <span class="inv-discount-label">تخفیف</span>
+                <div class="inv-discount-types" role="group" aria-label="نوع تخفیف">
+                  <button type="button" class="inv-discount-type${discountType==='fixed'?' is-selected':''}" data-discount-type="fixed" aria-pressed="${discountType==='fixed'?'true':'false'}">مبلغ</button>
+                  <button type="button" class="inv-discount-type${discountType==='percent'?' is-selected':''}" data-discount-type="percent" aria-pressed="${discountType==='percent'?'true':'false'}">درصد</button>
+                </div>
+              </div>
+              <div class="inv-discount-input-wrap">
+                <input id="f-discount" type="text" inputmode="decimal" value="${discount||''}" placeholder="۰" aria-label="مقدار تخفیف">
+              </div>
             </div>
           </div>
 
@@ -2593,7 +2603,10 @@ function openInvoiceForm(cid, editInv){
       // Already open for this row → do not rebuild
       if(prodDropOpenRow === idx){
         const existing = document.querySelector(`.prod-drop[data-row="${idx}"]`);
-        if(existing && existing.classList.contains('is-open') && !existing.hidden) return;
+        if(existing && existing.classList.contains('is-open') && !existing.hidden){
+          closeAllProductDrops();
+          return;
+        }
       }
       if(prodDropOpening) return;
       prodDropOpening = true;
@@ -2769,16 +2782,65 @@ function openInvoiceForm(cid, editInv){
         }
       });
     });
-    document.getElementById('f-cash').addEventListener('input', e=>{ cashPaid = parseFloat(faToEnDigits(e.target.value))||0; updateInvPaymentTotal(); updateSummary(); });
-    document.getElementById('f-card').addEventListener('input', e=>{ cardPaid = parseFloat(faToEnDigits(e.target.value))||0; updateInvPaymentTotal(); updateSummary(); });
-    document.getElementById('f-transfer').addEventListener('input', e=>{ transferPaid = parseFloat(faToEnDigits(e.target.value))||0; updateInvPaymentTotal(); updateSummary(); });
-    document.getElementById('f-check').addEventListener('input', e=>{
-      checkAmount = parseFloat(faToEnDigits(e.target.value))||0;
-      document.getElementById('check-due-wrap').style.display = checkAmount>0 ? 'block':'none';
+    document.getElementById('f-date').addEventListener('change', e=>{
+      invoiceDate = e.target.value || todayISO();
+    });
+    document.getElementById('f-date').addEventListener('input', e=>{
+      invoiceDate = e.target.value || todayISO();
+    });
+
+    // Payment entry is a two-step interaction: edit the draft amount, then
+    // explicitly confirm it. This prevents an unfinished amount from silently
+    // changing the invoice while also giving each method a visible confirmed state.
+    const paymentDraft = {
+      cash: { amount:cashPaid, due:null },
+      card: { amount:cardPaid, due:null },
+      transfer: { amount:transferPaid, due:null },
+      check: { amount:checkAmount, due:checkDue }
+    };
+    function updatePaymentCard(method, amount){
+      const el = document.querySelector(`[data-payment-amount="${method}"]`);
+      if(el) el.textContent = amount>0 ? `${toman(amount)} ت` : 'ثبت نشده';
+    }
+    function commitPayment(method){
+      const inputId = method==='cash' ? 'f-cash' : method==='card' ? 'f-card' : method==='transfer' ? 'f-transfer' : 'f-check';
+      const input = document.getElementById(inputId);
+      if(!input) return;
+      const amount = Math.max(0, parseFloat(faToEnDigits(input.value))||0);
+      if(method==='cash') cashPaid = amount;
+      else if(method==='card') cardPaid = amount;
+      else if(method==='transfer') transferPaid = amount;
+      else {
+        checkAmount = amount;
+        if(amount>0) checkDue = paymentDraft.check.due || checkDue || todayISO();
+      }
+      paymentDraft[method].amount = amount;
+      if(method==='check') paymentDraft.check.due = checkDue;
+      updatePaymentCard(method, amount);
       updateInvPaymentTotal();
       updateSummary();
+      closeInvPaymentPanels();
+    }
+    document.querySelectorAll('[data-payment-confirm]').forEach(btn=>{
+      btn.addEventListener('click', ()=>commitPayment(btn.getAttribute('data-payment-confirm')));
     });
-    document.getElementById('f-check-due').addEventListener('change', e=>{ checkDue = e.target.value; });
+    document.getElementById('f-cash').addEventListener('input', e=>{
+      paymentDraft.cash.amount = Math.max(0, parseFloat(faToEnDigits(e.target.value))||0);
+    });
+    document.getElementById('f-card').addEventListener('input', e=>{
+      paymentDraft.card.amount = Math.max(0, parseFloat(faToEnDigits(e.target.value))||0);
+    });
+    document.getElementById('f-transfer').addEventListener('input', e=>{
+      paymentDraft.transfer.amount = Math.max(0, parseFloat(faToEnDigits(e.target.value))||0);
+    });
+    document.getElementById('f-check').addEventListener('input', e=>{
+      paymentDraft.check.amount = Math.max(0, parseFloat(faToEnDigits(e.target.value))||0);
+      document.getElementById('check-due-wrap').style.display = paymentDraft.check.amount>0 ? 'block':'none';
+    });
+    document.getElementById('f-check-due').addEventListener('change', e=>{
+      paymentDraft.check.due = e.target.value;
+    });
+
     document.getElementById('f-discount').addEventListener('input', e=>{
       let v = parseFloat(faToEnDigits(e.target.value))||0;
       if(discountType==='percent'){
@@ -2788,10 +2850,14 @@ function openInvoiceForm(cid, editInv){
       discount = v;
       updateSummary();
     });
-    document.getElementById('f-discount-type').addEventListener('change', e=>{
-      discountType = e.target.value;
-      if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
-      renderSheet();
+    document.querySelectorAll('[data-discount-type]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const nextType = btn.getAttribute('data-discount-type');
+        if(nextType!== 'fixed' && nextType!=='percent') return;
+        discountType = nextType;
+        if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
+        renderSheet();
+      });
     });
 
     document.getElementById('save-invoice').addEventListener('click', async (e)=>{
