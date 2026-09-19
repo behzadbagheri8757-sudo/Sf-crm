@@ -62,12 +62,9 @@ input[placeholder*="جستجو"]{
   bottom:calc(10px + env(safe-area-inset-bottom,0px));
   z-index:40;
   box-sizing:border-box;
-  /* Keeps the jelly indicator's travel-time grow/stretch (see js/nav.js
-     _bnAnimateIndicatorToItem) confined to the capsule at every tab,
-     including the first/last where there's least padding to spare. Doesn't
-     clip the bar's own box-shadow (that's painted outside this element's
-     own border box, unaffected by its own overflow). */
-  overflow:hidden;
+  /* Keep the 48px jelly indicator from being clipped by the 46px minimized
+     bar; the bar's own box-shadow remains externally painted. */
+  overflow:visible;
 
   display:flex;
   align-items:stretch;
@@ -99,7 +96,9 @@ input[placeholder*="جستجو"]{
 
   /* Preserve final behavior: geometry is driven by JS progress. */
   transition:background-color 220ms ease,
-             box-shadow 220ms ease;
+             box-shadow 220ms ease,
+             min-height var(--bn-minimize-duration,180ms) cubic-bezier(.22,1,.36,1),
+             padding-block var(--bn-minimize-duration,180ms) cubic-bezier(.22,1,.36,1);
 }
 
 .bottom-nav-item{
@@ -139,13 +138,13 @@ input[placeholder*="جستجو"]{
   transition:color var(--ios-control) var(--ios-ease-out),
              transform var(--ios-touch) var(--ios-ease-out),
              opacity var(--ios-touch) ease,
-             min-height 180ms cubic-bezier(.22,1,.36,1),
-             padding-block 180ms cubic-bezier(.22,1,.36,1);
+             min-height var(--bn-minimize-duration,180ms) cubic-bezier(.22,1,.36,1),
+             padding-block var(--bn-minimize-duration,180ms) cubic-bezier(.22,1,.36,1);
 }
 
 /* AppIcons are monochrome by default across all views. Only the active Bottom Nav item is brand-blue. */
 .app-icon{
-  color:#1C1C1E;
+  color:inherit;
 }
 
 .bottom-nav-item .bn-ico{
@@ -154,7 +153,7 @@ input[placeholder*="جستجو"]{
   display:flex;
   align-items:center;
   justify-content:center;
-  color:#1C1C1E;
+  color:var(--vg-color-text);
 }
 
 .bottom-nav-item .bn-ico svg{
