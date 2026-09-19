@@ -138,23 +138,7 @@ function isMoreSectionActive(activeId){
 function pinBottomNav(){
   const el = document.getElementById('bottom-nav');
   if(!el) return;
-  try{
-    if(window.visualViewport){
-      const vv = window.visualViewport;
-      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      // Only apply inline positioning when keyboard is actually open
-      if(keyboardHeight > 80){
-        el.style.setProperty('bottom', keyboardHeight + 'px', 'important');
-      } else {
-        // Clear inline bottom so CSS safe-area rule takes over
-        el.style.removeProperty('bottom');
-      }
-    }else{
-      el.style.removeProperty('bottom');
-    }
-  }catch(e){
-    /* ignore — bar still uses CSS bottom:0 */
-  }
+  try{ el.style.removeProperty('bottom'); }catch(e){}
 }
 
 /* iOS 26-style tab-bar minimization: hide secondary labels while the user
@@ -258,10 +242,8 @@ function ensureBottomNavPinned(){
     });
   }
   window.addEventListener('resize', schedule, {passive:true});
-  window.addEventListener('scroll', schedule, {passive:true});
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', schedule, {passive:true});
-    window.visualViewport.addEventListener('scroll', schedule, {passive:true});
   }
   window.addEventListener('pageshow', schedule, {passive:true});
   window.addEventListener('orientationchange', function(){
@@ -458,6 +440,11 @@ function _bnEaseOutCubic(t){
   return 1 - u*u*u;
 }
 
+function _bnEaseOutQuad(t){
+  var u = 1 - (t < 0 ? 0 : (t > 1 ? 1 : t));
+  return 1 - u * u;
+}
+
 /* Reads the indicator's actual rendered transform (translate + scale)
    straight off its computed matrix. Used only when a travel animation is
    interrupted mid-flight by another tap: without this, the new travel would
@@ -534,7 +521,7 @@ function _bnAnimateIndicatorToItem(bar, item){
   /* Responsive first: just long enough for take-off/stretch/jump/landing to
      each register as part of one continuous event, not a slow-motion
      replay. */
-  var durationMs = Math.round(300 + 60 * distanceRatio);
+  var durationMs = Math.round(260 + 180 * distanceRatio);
 
   /* If this travel inherited a non-1.00 scale from an animation that was
      just interrupted, fold that discrepancy out smoothly over the first
@@ -547,7 +534,7 @@ function _bnAnimateIndicatorToItem(bar, item){
   var frames = [];
   for(var i=0;i<=N;i++){
     var t = i/N;
-    var pos = _bnEaseOutCubic(t);
+    var pos = _bnEaseOutQuad(t);
     var env = _bnJellyEnvelope(t);
     var liftY = _bnJumpArc(t);
     var fade = t >= fadeSpan ? 0 : (1 - _bnSmoothStep(t / fadeSpan));
@@ -620,18 +607,13 @@ function bindBottomNavIndicatorGestures(bar){
     var targetKey = _bnTargetKey(item);
     _bnIndicatorState.pointer = { id:e.pointerId, activeKey:activeKey, targetKey:targetKey };
 
-    if(targetKey && targetKey !== activeKey){
-      /* Switching tabs: _bnAnimateIndicatorToItem owns the transform channel
-         end to end, including its own take-off grow (see
-         _bnJellyEnvelope) — engaging the separate press-lift here would be
-         a second, competing transform source on the same element while
-         it's in flight. */
-      _bnAnimateIndicatorToItem(bar, item);
-    } else {
+    if(targetKey && targetKey === activeKey){
       /* Same-tab tap: no travel is happening, so the lightweight press
          acknowledgment (CSS `scale`, independent of `transform`) is safe. */
       _bnLiftIndicator(ind);
     }
+    /* Cross-tab pointerdown intentionally does not move the indicator.
+       Indicator moves after the actual route/render transition. */
   }, {passive:true});
 
   function release(e){
@@ -739,7 +721,8 @@ function renderBottomNav(activeId){
     const ico = navIcon(t.iconKey, active);
     let href = t.href;
     if (spa && t.spaPath) href = '#' + t.spaPath;
-    return `<a class="${cls}" href="${href}" data-spa-path="${t.spaPath || ''}">
+    const ariaCurrent = active ? ' aria-current="page"' : '';
+    return `<a class="${cls}" href="${href}" data-spa-path="${t.spaPath || ''}"${ariaCurrent}>
       <span class="bn-ico">${ico}</span>
       <span class="bn-label">${t.label}</span>
     </a>`;
