@@ -1410,7 +1410,7 @@ details[open] > .customer-behavior-summary::after{
   inset-inline-start:-11px;
   top:9px;
   bottom:9px;
-  width:2px;
+  width:3px;
   border-radius:2px;
   background:rgba(31,41,55,.08);
 }
