@@ -154,6 +154,8 @@ function bindBottomNavMinimizeOnScroll(){
   var ticking = false;
   var travel = 52;
   var directionThreshold = 1;
+  var navigationResyncPending = false;
+  var navigationResyncToken = 0;
   /* No automatic restore on scroll idle: the bar stays at its current
      scroll-linked progress until the user scrolls upward (or taps a tab). */
 
@@ -201,6 +203,33 @@ function bindBottomNavMinimizeOnScroll(){
     requestAnimationFrame(apply);
   }
 
+  /* Navigation can rebuild the bottom bar before router.js restores the
+     destination page's scroll position. A single rAF here is therefore too
+     early: renderBottomNav() queues first, router.scrollTo() queues second.
+     resetAfterNavigation uses a two-rAF settle point so the minimize state is
+     corrected only after that scroll restoration has actually landed. The
+     correction is intentionally coupled to the indicator reposition call in
+     renderBottomNav(), so the indicator never measures the old minimized
+     geometry and then gets corrected underneath its travel animation. */
+  function resetAfterNavigation(){
+    navigationResyncPending = true;
+    var token = ++navigationResyncToken;
+
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        if(token !== navigationResyncToken || !navigationResyncPending) return;
+        navigationResyncPending = false;
+
+        var y = window.scrollY || window.pageYOffset || 0;
+        lastY = y;
+        /* A route change is a fresh interaction context: always restore the
+           full navigation bar before the destination indicator is measured.
+           Subsequent user scrolling immediately resumes from the real y. */
+        setProgress(0, false);
+      });
+    });
+  }
+
   function expandFromInteraction(){
     setProgress(0, false);
   }
@@ -223,6 +252,7 @@ function bindBottomNavMinimizeOnScroll(){
   }, {passive:true});
 
   bindBottomNavMinimizeOnScroll.setProgress = setProgress;
+  bindBottomNavMinimizeOnScroll.resetAfterNavigation = resetAfterNavigation;
 }
 
 function ensureBottomNavPinned(){
@@ -484,9 +514,11 @@ function _bnAnimateIndicatorToItem(bar, item){
 
   var barRect = bar.getBoundingClientRect();
   var targetRect = item.getBoundingClientRect();
-  // PHASE 1 geometry — width equals the active item's real width, height 48px.
+  /* Use the destination item's live rendered box. During minimization this
+     is smaller than the rest-state box; hard-coding 48px makes the jelly jump
+     vertically when its container changes height. */
   var targetW = Math.round(targetRect.width);
-  var targetH = 48;
+  var targetH = Math.round(targetRect.height);
   var targetLeft = targetRect.left - barRect.left + (targetRect.width - targetW)/2;
   var targetTop = targetRect.top - barRect.top + (targetRect.height - targetH)/2;
 
@@ -654,9 +686,11 @@ function positionBnIndicator(bar, animate){
 
   var barRect = bar.getBoundingClientRect();
   var itemRect = active.getBoundingClientRect();
-  // PHASE 1 geometry — width equals the active item's real width, height 48px.
+  /* Geometry must follow the live item box. The item is scroll-linked and
+     changes height while the bar minimizes, so a fixed 48px indicator becomes
+     vertically misaligned during/after a scroll-linked resize. */
   var w = Math.round(itemRect.width);
-  var h = 48;
+  var h = Math.round(itemRect.height);
   var left = itemRect.left - barRect.left + (itemRect.width - w)/2;
   var top = itemRect.top - barRect.top + (itemRect.height - h)/2;
   var reduceMotion = _bnReduceMotion();
@@ -753,10 +787,20 @@ function renderBottomNav(activeId){
   bindBottomNavMinimizeOnScroll();
   pinBottomNav();
 
-  /* Position jelly indicator after layout. Animate only when tab actually changes. */
+  /* Route render happens before router.js queues its scrollTo(). Let the
+     navigation resync own the post-scroll settle point, and only then measure
+     the indicator. This prevents a minimized old page from producing a zero-
+     distance/incorrect-geometry travel on the destination tab. */
   var shouldAnimate = _bnIndicatorState.ready;
+  if(typeof bindBottomNavMinimizeOnScroll.resetAfterNavigation === 'function'){
+    bindBottomNavMinimizeOnScroll.resetAfterNavigation();
+  }
   requestAnimationFrame(function(){
-    positionBnIndicator(bar, shouldAnimate);
+    requestAnimationFrame(function(){
+      var current = document.getElementById('bottom-nav');
+      if(!current) return;
+      positionBnIndicator(current, shouldAnimate);
+    });
   });
 }
 
