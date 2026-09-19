@@ -612,8 +612,26 @@ function _bnAnimateIndicatorToItem(bar, item){
     var tx = offsetX * (1 - pos);
     var ty = offsetY * (1 - pos) + liftY;
 
+    /* Subtle dynamic depth cue, sampled on the exact same t used for the
+       geometry above so it is deterministic and locked to this travel's
+       own lifecycle: 0 at take-off (t=0) and 0 at arrival (t=1), peaking
+       at the travel's midpoint. Only the two OUTER shadow layers' alpha
+       and blur radius are perturbed; their y-offsets (1px / 5px) and every
+       inset layer stay exactly as authored in CSS and are never touched. */
+    var shadowT = _bnBump(t, 2, 2);
+    var nearAlpha = (0.10 + 0.06 * shadowT).toFixed(3);
+    var farAlpha = (0.08 + 0.06 * shadowT).toFixed(3);
+    var nearBlur = (2 + 2 * shadowT).toFixed(2);
+    var farBlur = (12 + 4 * shadowT).toFixed(2);
+    var shadow =
+      '0 1px ' + nearBlur + 'px rgba(15, 23, 42, ' + nearAlpha + '), ' +
+      '0 5px ' + farBlur + 'px rgba(15, 23, 42, ' + farAlpha + '), ' +
+      'inset 0 1px 0 rgba(255, 255, 255, 0.60), ' +
+      'inset 0 -1px 0 rgba(15, 23, 42, 0.06)';
+
     frames.push({
       transform:'translate3d(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px,0) scaleX(' + sx.toFixed(4) + ') scaleY(' + sy.toFixed(4) + ')',
+      boxShadow: shadow,
       offset:t
     });
   }
@@ -646,6 +664,11 @@ function _bnAnimateIndicatorToItem(bar, item){
     if(ind._bnAnim === anim) ind._bnAnim = null;
     ind.style.transform = 'translate3d(0,0,0) scaleX(1) scaleY(1)';
     ind.style.scale = '1';
+    /* The last sampled frame already equals the exact base shadow, but
+       commitStyles() just pinned that as an inline value; remove it so
+       control reverts to the normal CSS classes (is-settling, then idle)
+       instead of leaving a permanent inline box-shadow override. */
+    ind.style.removeProperty('box-shadow');
     ind.classList.remove('is-traveling');
     ind.classList.add('is-settling');
     if(ind._bnSettleTimer) clearTimeout(ind._bnSettleTimer);
@@ -657,6 +680,7 @@ function _bnAnimateIndicatorToItem(bar, item){
   };
   anim.oncancel = function(){
     if(ind._bnAnim === anim) ind._bnAnim = null;
+    ind.style.removeProperty('box-shadow');
     ind.classList.remove('is-traveling');
   };
 }
