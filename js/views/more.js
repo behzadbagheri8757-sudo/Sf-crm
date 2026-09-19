@@ -6,14 +6,14 @@
    hash router (js/router.js). No business logic, no data access,
    no modal/sheet, no scroll-lock, no financial calculation.
 
-   Approved information architecture (5 groups, 9 destinations):
-     1. عملیات میدانی       (2): ویزیت مشتریان، ارزیابی مغازه‌ها
+   Approved information architecture (5 groups, 10 destinations):
+     1. عملیات میدانی       (3): هشدارهای زودهنگام، ویزیت مشتریان، ارزیابی مغازه‌ها
      2. عملکرد فروش          (1): مرکز بازی فروش
      3. عملکرد مالی          (3): پرداخت‌ها، گزارش‌ها، چک‌ها
      4. مدیریت و پشتیبانی    (2): انبار، تأمین‌کنندگان
      5. تنظیمات              (1): پشتیبان‌گیری و تنظیمات
 
-   Rhythm: 2 → 1 → 3 → 2 → 1
+   Rhythm: 3 → 1 → 3 → 2 → 1
 */
 'use strict';
 
@@ -22,8 +22,9 @@
     {
       title: 'عملیات میدانی',
       items: [
-        { label: 'ویزیت مشتریان',   href: '#/visits',    iconKey: 'visit' },
-        { label: 'ارزیابی مغازه‌ها', href: '#/prospects', iconKey: 'buildingStorefront' },
+        { label: 'هشدارهای زودهنگام', href: '#/watches',   iconKey: 'checklist' },
+        { label: 'ویزیت مشتریان',    href: '#/visits',    iconKey: 'visit' },
+        { label: 'ارزیابی مغازه‌ها',  href: '#/prospects', iconKey: 'buildingStorefront' },
       ],
     },
     {
