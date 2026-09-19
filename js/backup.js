@@ -818,8 +818,27 @@ async function _recoverPendingRestoreJournal(){
   const rec=await dbGet(RESTORE_JOURNAL_KEY);
   if(!rec || !rec.value) return {ok:true, recovered:false};
   let journal;
-  try{ journal=JSON.parse(rec.value); }catch(e){ throw new Error('restore journal is corrupted'); }
-  if(!journal || ![2,3].includes(journal.version) || !journal.snapshot) throw new Error('restore journal is invalid');
+  try{ journal=JSON.parse(rec.value); }catch(e){
+    // BUGFIX (Audit #9): an unparseable journal can never be recovered by
+    // retrying — retaining it made loadData() throw the same error on
+    // every future boot (bootSpaShell's waitForCrmDataLoad retry, and
+    // bootPage's "reopen the page" message, both just call loadData()
+    // again), permanently blocking the app. Discard it and let boot
+    // proceed with whatever is already committed; this does not touch
+    // the "recovery attempt genuinely failed" path below, which still
+    // retains a structurally valid journal for retry.
+    console.error('Pending restore journal is corrupted (unparseable JSON); discarding to allow boot', e);
+    try{ await dbDelete(RESTORE_JOURNAL_KEY); }catch(_de){}
+    return {ok:true, recovered:false, discarded:true};
+  }
+  if(!journal || ![2,3].includes(journal.version) || !journal.snapshot){
+    // Same reasoning as above: a structurally invalid journal (bad/missing
+    // version, missing snapshot) has nothing usable to roll back to, so
+    // retaining it only guarantees the next boot fails identically.
+    console.error('Pending restore journal is structurally invalid; discarding to allow boot');
+    try{ await dbDelete(RESTORE_JOURNAL_KEY); }catch(_de){}
+    return {ok:true, recovered:false, discarded:true};
+  }
   try{
     if(!journal.snapshot.watchLifecycle){
       const wSnap=await dbGet(PRERESTORE_WATCH_KEY);
@@ -865,8 +884,18 @@ async function _restoreParsedBackup(parsed){
     data=nextData;
     if(typeof _lastPersistedData!=='undefined') _lastPersistedData=_deepClone(nextData);
     if(parsed.prospectScout){ if(!await restoreProspectScoutBundleStrict(parsed.prospectScout)) throw new Error('Prospect restore failed'); }
-    const restoredIntelligence = parsed.intelligence || {dbVersion:INTELLIGENCE_DB_VERSION, occurrences:[], seller_feedback:[], baseline_cache:[]};
-    if(!await restoreIntelligenceBundleStrict(restoredIntelligence)) throw new Error('Intelligence restore failed');
+    // BUGFIX (Audit #8): intelligence/watchLifecycle are optional/additive
+    // bundles (see validateBackupShape comments above) — an older or
+    // incomplete backup that omits them must leave the current, valid
+    // Intelligence/Watch data untouched, exactly like prospectScout and
+    // gameMeta/gameLedger already do below. The previous code substituted
+    // an EMPTY bundle and force-restored it whenever the field was absent,
+    // which clears the IndexedDB store (runIntelligenceRestoreTx / 
+    // restoreWatchLifecycleBundle both do store.clear()) — silently wiping
+    // real Intelligence/Watch history on a routine restore from any backup
+    // that simply predates these fields, or whose bundle was dropped by
+    // validateBackupShape for failing validation.
+    if(parsed.intelligence){ if(!await restoreIntelligenceBundleStrict(parsed.intelligence)) throw new Error('Intelligence restore failed'); }
     await _writeTargetValue(targetValue);
     if(parsed.gameMeta != null || parsed.gameLedger != null){
       if(!_validateGameState(parsed.gameMeta, parsed.gameLedger)) throw new Error('Game Center backup validation failed');
@@ -875,9 +904,8 @@ async function _restoreParsedBackup(parsed){
     const expectedGame = (parsed.gameMeta != null || parsed.gameLedger != null)
       ? {gameMeta:_deepClone(parsed.gameMeta), gameLedger:_deepClone(parsed.gameLedger)}
       : previous.game;
-    const restoredWatchLifecycle = parsed.watchLifecycle || {version:1, dbVersion:1, occurrences:[]};
-    const expected={data:_deepClone(nextData),prospect:parsed.prospectScout ? _deepClone(parsed.prospectScout) : previous.prospect,intelligence:_deepClone(restoredIntelligence),target:{value:targetValue,localRaw:String(targetValue),dbRaw:targetValue},game:expectedGame,watchLifecycle:_deepClone(restoredWatchLifecycle)};
-    if(!await restoreWatchLifecycleBundleForBackup(restoredWatchLifecycle)) throw new Error('Watch Lifecycle restore failed');
+    if(parsed.watchLifecycle){ if(!await restoreWatchLifecycleBundleForBackup(parsed.watchLifecycle)) throw new Error('Watch Lifecycle restore failed'); }
+    const expected={data:_deepClone(nextData),prospect:parsed.prospectScout ? _deepClone(parsed.prospectScout) : previous.prospect,intelligence:parsed.intelligence ? _deepClone(parsed.intelligence) : previous.intelligence,target:{value:targetValue,localRaw:String(targetValue),dbRaw:targetValue},game:expectedGame,watchLifecycle:parsed.watchLifecycle ? _deepClone(parsed.watchLifecycle) : previous.watchLifecycle};
     const actual=await _readCurrentSemanticState();
     if(!_semanticStateEqual(actual,expected)) throw new Error('post-commit verification failed');
     await dbDelete(RESTORE_JOURNAL_KEY);

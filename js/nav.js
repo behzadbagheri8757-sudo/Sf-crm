@@ -44,6 +44,7 @@ const BOTTOM_NAV_ITEMS = [
 
 /** Secondary destinations opened from «بیشتر». iconKey references js/icons.js. */
 const MORE_NAV_ITEMS = [
+  { id: 'watches',   href: '#/watches',   label: 'هشدارهای زودهنگام', spaPath: '/watches', iconKey: 'checklist' },
   { id: 'inventory', href: '#/inventory', label: 'انبار', spaPath: '/inventory', iconKey: 'warehouse' },
   { id: 'suppliers', href: '#/suppliers', label: 'تأمین‌کنندگان', spaPath: '/suppliers', iconKey: 'truck' },
   { id: 'payments',  href: '#/payments',  label: 'پرداخت‌ها', spaPath: '/payments', iconKey: 'banknotes' },
