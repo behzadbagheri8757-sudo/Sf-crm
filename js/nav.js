@@ -152,12 +152,18 @@ function bindBottomNavMinimizeOnScroll(){
   var lastY = window.scrollY || window.pageYOffset || 0;
   var progress = 0;
   var ticking = false;
-  var travel = 52;
-  var directionThreshold = 1;
+
+  /* Directional hysteresis: collapse needs a larger accumulated downward
+     movement than expansion needs upward movement. This makes the bar behave
+     like iOS 26 `onScrollDown`: once collapsed it re-opens from a deliberate
+     upward gesture, without reacting to small finger jitter. */
+  var collapseThreshold = 50;
+  var expandThreshold = 20;
+  var direction = 0;
+  var directionDistance = 0;
+
   var navigationResyncPending = false;
   var navigationResyncToken = 0;
-  /* No automatic restore on scroll idle: the bar stays at its current
-     scroll-linked progress until the user scrolls upward (or taps a tab). */
 
   function reduceMotion(){
     try{
@@ -167,6 +173,7 @@ function bindBottomNavMinimizeOnScroll(){
 
   function setProgress(next, immediate){
     progress = Math.max(0, Math.min(1, next));
+    if(progress === 0) directionDistance = 0;
     var bar = document.getElementById('bottom-nav');
     if(!bar) return;
     bar.style.setProperty('--bn-minimize-progress', progress.toFixed(3));
@@ -183,18 +190,47 @@ function bindBottomNavMinimizeOnScroll(){
     ticking = false;
     var bar = document.getElementById('bottom-nav');
     if(!bar) return;
+
     var y = window.scrollY || window.pageYOffset || 0;
     var dy = y - lastY;
+    lastY = y;
 
     if(y <= 8){
+      direction = 0;
+      directionDistance = 0;
       setProgress(0, false);
-    }else if(Math.abs(dy) >= directionThreshold){
-      /* Continuous scroll-linked collapse: unlike a binary class toggle,
-         every small scroll sample moves the bar toward/away from its
-         minimized state. This mirrors iOS 26's fluid content-first motion. */
-      setProgress(progress + (dy / travel), false);
+      return;
     }
-    lastY = y;
+
+    if(Math.abs(dy) < 1) return;
+
+    var nextDirection = dy > 0 ? 1 : -1;
+
+    /* A direction change starts a fresh hysteresis window. We deliberately
+       do not carry distance across the reversal: otherwise a few pixels of
+       opposite movement could consume the remainder of the old direction's
+       threshold and cause a visible flicker. */
+    if(nextDirection !== direction){
+      direction = nextDirection;
+      directionDistance = 0;
+    }
+
+    directionDistance += Math.abs(dy);
+
+    if(nextDirection > 0){
+      /* Downward scroll: collapse only after ~50px of accumulated travel. */
+      if(progress < 0.98 && directionDistance >= collapseThreshold){
+        directionDistance = 0;
+        setProgress(1, false);
+      }
+    }else{
+      /* Upward scroll: reopen after ~20px, regardless of how far down the
+         page is. This is the key onScrollDown direction-reversal behavior. */
+      if(progress > 0 && directionDistance >= expandThreshold){
+        directionDistance = 0;
+        setProgress(0, false);
+      }
+    }
   }
 
   function schedule(){
