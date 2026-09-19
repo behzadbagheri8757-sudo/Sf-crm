@@ -154,7 +154,7 @@ input[placeholder*="جستجو"]{
   display:flex;
   align-items:center;
   justify-content:center;
-  color:#1C1C1E;
+  color:var(--vg-color-icon,#1C1C1E);
 }
 
 .bottom-nav-item .bn-ico svg{
