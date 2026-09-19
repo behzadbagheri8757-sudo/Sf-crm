@@ -54,6 +54,7 @@ input[placeholder*="جستجو"]{
 
 .bottom-nav{
   --bn-minimize-progress:0;
+  --bn-minimize-duration:180ms;
 
   position:fixed!important;
   top:auto!important;
@@ -99,7 +100,9 @@ input[placeholder*="جستجو"]{
 
   /* Preserve final behavior: geometry is driven by JS progress. */
   transition:background-color 220ms ease,
-             box-shadow 220ms ease;
+             box-shadow 220ms ease,
+             min-height var(--bn-minimize-duration) cubic-bezier(.22,1,.36,1),
+             padding-block var(--bn-minimize-duration) cubic-bezier(.22,1,.36,1);
 }
 
 .bottom-nav-item{
@@ -807,7 +810,7 @@ a.ledger-row:active{
      rather than clean translucent glass. A single translucent tint plus a
      crisp rim and inset highlights is enough to read as a distinct glass
      pill without a second blur pass, and is cheaper to render. */
-background:rgba(45,49,57,.10);;
+background:rgba(45,49,57,.10);
   border:1px solid rgba(255,255,255,.58);
   -webkit-backdrop-filter:none;
   backdrop-filter:none;
