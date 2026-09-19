@@ -810,8 +810,8 @@ a.ledger-row:active{
      rather than clean translucent glass. A single translucent tint plus a
      crisp rim and inset highlights is enough to read as a distinct glass
      pill without a second blur pass, and is cheaper to render. */
-background:rgba(45,49,57,.10);
-  border:1px solid rgba(255,255,255,.58);
+background: rgba(45, 49, 57, 0.14);
+border: 1px solid rgba(15, 23, 42, 0.04);
   -webkit-backdrop-filter:none;
   backdrop-filter:none;
 
