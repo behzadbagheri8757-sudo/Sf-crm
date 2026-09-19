@@ -208,6 +208,32 @@
     return map;
   }
 
+  // BUGFIX (Audit #10): a manually dismissed Watch must stay dismissed
+  // while its underlying condition is still the same ongoing situation.
+  // reconcileWatchLifecycle only ever checked _activeByIdentity (status
+  // 'active') before deciding whether to create a new occurrence, so a
+  // dismissed occurrence — invisible to that lookup — offered no
+  // protection: the very next reconcile pass (dashboard load, watches
+  // list, customer page) re-detected the still-present condition and
+  // spawned a brand-new active occurrence for the same identity,
+  // effectively undoing the dismiss. This does not affect auto-resolved
+  // ('resolved') occurrences, whose existing "new condition = new id"
+  // behavior is intentional (see reconcileWatchLifecycle comment above).
+  function _dismissedByIdentity(customerId) {
+    var map = Object.create(null);
+    var rows = _allOccurrences();
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || r.status !== 'dismissed') continue;
+      if (customerId && String(r.customerId) !== String(customerId)) continue;
+      var k = _identityKey(r.customerId, r.watchCategory, r.productId);
+      if (!map[k] || String(r.lastEvaluatedAt || r.firstDetectedAt || '') > String(map[k].lastEvaluatedAt || map[k].firstDetectedAt || '')) {
+        map[k] = r;
+      }
+    }
+    return map;
+  }
+
   function _mkOccurrence(watch, now) {
     return {
       id: _uid(),
@@ -277,6 +303,7 @@
           }
 
           var activeMap = _activeByIdentity(cid);
+          var dismissedMap = _dismissedByIdentity(cid);
           var seenKeys = Object.create(null);
 
           for (var wi = 0; wi < watches.length; wi++) {
@@ -292,6 +319,10 @@
               if (w.productName != null) existing.productName = w.productName;
               _persist(existing);
               touched.push(existing);
+            } else if (dismissedMap[key]) {
+              // Same identity was manually dismissed and its condition is
+              // still present — respect the dismiss, do not resurrect it.
+              continue;
             } else {
               var created = _mkOccurrence(w, now);
               if (w.productName != null) created.productName = w.productName;
