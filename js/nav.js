@@ -144,7 +144,10 @@ function pinBottomNav(){
       const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       // Only apply inline positioning when keyboard is actually open
       if(keyboardHeight > 80){
-        el.style.setProperty('bottom', keyboardHeight + 'px', 'important');
+        /* Keyboard-open state is intentionally handled by CSS. Do not move
+           the hidden bar above the keyboard; that only creates conflicting
+           positioning work while body.keyboard-open hides it. */
+        el.style.removeProperty('bottom');
       } else {
         // Clear inline bottom so CSS safe-area rule takes over
         el.style.removeProperty('bottom');
@@ -258,10 +261,8 @@ function ensureBottomNavPinned(){
     });
   }
   window.addEventListener('resize', schedule, {passive:true});
-  window.addEventListener('scroll', schedule, {passive:true});
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', schedule, {passive:true});
-    window.visualViewport.addEventListener('scroll', schedule, {passive:true});
   }
   window.addEventListener('pageshow', schedule, {passive:true});
   window.addEventListener('orientationchange', function(){
@@ -620,16 +621,11 @@ function bindBottomNavIndicatorGestures(bar){
     var targetKey = _bnTargetKey(item);
     _bnIndicatorState.pointer = { id:e.pointerId, activeKey:activeKey, targetKey:targetKey };
 
-    if(targetKey && targetKey !== activeKey){
-      /* Switching tabs: _bnAnimateIndicatorToItem owns the transform channel
-         end to end, including its own take-off grow (see
-         _bnJellyEnvelope) — engaging the separate press-lift here would be
-         a second, competing transform source on the same element while
-         it's in flight. */
-      _bnAnimateIndicatorToItem(bar, item);
-    } else {
+    if(targetKey === activeKey){
       /* Same-tab tap: no travel is happening, so the lightweight press
-         acknowledgment (CSS `scale`, independent of `transform`) is safe. */
+         acknowledgment (CSS `scale`, independent of `transform`) is safe.
+         Cross-tab travel waits for the actual click/route change below;
+         pointerdown must never move the indicator ahead of the active route. */
       _bnLiftIndicator(ind);
     }
   }, {passive:true});
@@ -645,6 +641,14 @@ function bindBottomNavIndicatorGestures(bar){
   bar.addEventListener('pointerup', release, {passive:true});
   bar.addEventListener('pointercancel', release, {passive:true});
   bar.addEventListener('lostpointercapture', release, {passive:true});
+  bar.addEventListener('pointerleave', function(e){
+    /* A release outside the bar is not guaranteed to bubble back to the bar
+       without pointer capture. Clear only the local press state; route state
+       is still owned by the normal click/navigation path. */
+    if(_bnIndicatorState.pointer && _bnIndicatorState.pointer.id === e.pointerId){
+      release(e);
+    }
+  }, {passive:true});
 }
 
 function positionBnIndicator(bar, animate){
@@ -739,7 +743,8 @@ function renderBottomNav(activeId){
     const ico = navIcon(t.iconKey, active);
     let href = t.href;
     if (spa && t.spaPath) href = '#' + t.spaPath;
-    return `<a class="${cls}" href="${href}" data-spa-path="${t.spaPath || ''}">
+    const ariaCurrent = active ? ' aria-current="page"' : '';
+    return `<a class="${cls}" href="${href}" data-spa-path="${t.spaPath || ''}"${ariaCurrent}>
       <span class="bn-ico">${ico}</span>
       <span class="bn-label">${t.label}</span>
     </a>`;
