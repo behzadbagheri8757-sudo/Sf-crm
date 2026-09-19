@@ -603,7 +603,7 @@ function _bnAnimateIndicatorToItem(bar, item){
   var frames = [];
   for(var i=0;i<=N;i++){
     var t = i/N;
-    var pos = _bnEaseOutQuad(t);
+    var pos = _bnEaseOutCubic(t);
     var env = _bnJellyEnvelope(t);
     var liftY = _bnJumpArc(t);
     var fade = t >= fadeSpan ? 0 : (1 - _bnSmoothStep(t / fadeSpan));
