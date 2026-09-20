@@ -286,6 +286,8 @@ header.has-back .header-date{
 
 /* Main page frame (base mobile composition) */
 main{
+  position:relative;
+  z-index:1;
   max-width:720px;
   margin:0 auto;
   padding:14px 14px calc(88px + env(safe-area-inset-bottom,0px));
@@ -4031,15 +4033,34 @@ button.inv-header-save.btn{
    exactly one place it reads them from instead of redefining them here.
    ============================================================================ */
 
-/* Route changes: short, directional-feeling materialization rather than a fade-only flash. */
-main.route-transition{
-  animation:iosRouteEnter var(--ios-route) var(--ios-ease-out) both;
-  will-change:opacity,transform;
+/* Route changes (Navigation Motion Patch): restrained iOS-style horizontal
+   push/pop. #main is the incoming layer; .route-ghost is a static snapshot
+   of the outgoing page created by router.js, stacked above/below #main via
+   z-index depending on direction. Both animate on transform only. */
+main.route-push-enter,
+main.route-pop-enter{
+  will-change:transform;
+  transition:transform var(--ios-route) var(--ios-ease-out);
 }
-@keyframes iosRouteEnter{
-  from{opacity:.72;transform:translateY(5px) scale(.995);}
-  to{opacity:1;transform:translateY(0) scale(1);}
+main.route-push-enter{ transform:translateX(100%); }
+main.route-pop-enter{ transform:translateX(-27%); }
+main.route-push-enter.route-anim-run,
+main.route-pop-enter.route-anim-run{ transform:translateX(0); }
+
+.route-ghost{
+  position:fixed;
+  overflow:hidden;
+  pointer-events:none;
+  will-change:transform;
+  transform:translateX(0);
+  transition:transform var(--ios-route) var(--ios-ease-out);
 }
+/* PUSH: outgoing page stays underneath the incoming one, shifting subtly left. */
+.route-ghost-under{ z-index:0; }
+.route-ghost-under.route-anim-run{ transform:translateX(-27%); }
+/* POP: outgoing page stays on top, sliding fully off to the right. */
+.route-ghost-over{ z-index:2; }
+.route-ghost-over.route-anim-run{ transform:translateX(100%); }
 
 /* .bottom-nav / .bottom-nav-item stacking + material now live only in
    css/visual-grammar-components.css (single canonical definition). */
@@ -4231,10 +4252,15 @@ a.ledger-row:active,
   box-shadow:var(--vg-shadow-group);
 }
 
-/* Respect reduced-motion users; iOS does the same for motion-sensitive settings. */
+/* Respect reduced-motion users; iOS does the same for motion-sensitive settings.
+   router.js already skips the whole push/pop mechanism when this is set —
+   this is a defense-in-depth fallback in case a class is ever applied anyway. */
 @media (prefers-reduced-motion:reduce){
-  main.route-transition{
-    animation:none!important;
+  main.route-push-enter,
+  main.route-pop-enter,
+  .route-ghost{
+    transition:none!important;
+    transform:none!important;
   }
 }
 
