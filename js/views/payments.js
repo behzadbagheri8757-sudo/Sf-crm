@@ -266,10 +266,6 @@
     };
 
     root.innerHTML = `
-      <h2 class="section-title">
-        پرداخت‌ها / دریافت‌ها
-      </h2>
-
       <div class="field">
         <input
           id="payment-search"

@@ -467,6 +467,10 @@
       return;
     }
 
+    if (typeof setHeaderTitle === 'function') {
+      setHeaderTitle(c.name, { isRoot: false });
+    }
+
     const t = customerTotals(c.id);
     const profit = customerProfit(c.id);
     const word = balanceStatusWord(t.balance);

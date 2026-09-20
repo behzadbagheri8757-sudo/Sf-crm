@@ -84,6 +84,10 @@
       return;
     }
 
+    if (typeof setHeaderTitle === 'function') {
+      setHeaderTitle('#' + (inv.number || '—'), { isRoot: false });
+    }
+
     const cust = data.customers.find(c => c.id === inv.customerId);
     const paid = invoicePaidAmount(inv);
     const remain = invoiceRemain(inv);
@@ -188,10 +192,10 @@
         <summary>جزئیات پرداخت و سود</summary>
         <div class="cards" style="margin-top:10px;margin-bottom:8px;">
           ${inv.discount ? `<div class="card"><div class="label">تخفیف فاکتور${inv.discountType === 'percent' ? ' (%)' : ''}</div><div class="value">${toman(inv.discount)}${inv.discountType === 'percent' ? ' %' : ' ت'}</div></div>` : ''}
-          <div class="card"><div class="label">نقد</div><div class="value" style="font-size:1rem;">${inv.cashPaid ? toman(inv.cashPaid) + ' ت' : ''}</div></div>
-          <div class="card"><div class="label">کارت</div><div class="value" style="font-size:1rem;">${inv.cardPaid ? toman(inv.cardPaid) + ' ت' : ''}</div></div>
-          <div class="card"><div class="label">انتقال</div><div class="value" style="font-size:1rem;">${inv.transferPaid ? toman(inv.transferPaid) + ' ت' : ''}</div></div>
-          <div class="card"><div class="label">چک</div><div class="value" style="font-size:1rem;">${inv.checkPaid ? toman(inv.checkPaid) + ' ت' : ''}</div></div>
+          ${inv.cashPaid ? `<div class="card"><div class="label">نقد</div><div class="value" style="font-size:1rem;">${toman(inv.cashPaid)} ت</div></div>` : ''}
+          ${inv.cardPaid ? `<div class="card"><div class="label">کارت</div><div class="value" style="font-size:1rem;">${toman(inv.cardPaid)} ت</div></div>` : ''}
+          ${inv.transferPaid ? `<div class="card"><div class="label">انتقال</div><div class="value" style="font-size:1rem;">${toman(inv.transferPaid)} ت</div></div>` : ''}
+          ${inv.checkPaid ? `<div class="card"><div class="label">چک</div><div class="value" style="font-size:1rem;">${toman(inv.checkPaid)} ت</div></div>` : ''}
           ${hasSnapshot ? `
             <div class="card"><div class="label">مانده قبلی مشتری</div><div class="value" style="font-size:1rem;">${toman(inv.prevBalance)} ت</div></div>
             <div class="card"><div class="label">مانده بعد از فاکتور</div><div class="value" style="font-size:1rem;">${toman(Math.abs(inv.newBalance || 0))} ت ${balanceStatusWord(inv.newBalance || 0)}</div></div>
