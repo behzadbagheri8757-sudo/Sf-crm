@@ -4041,9 +4041,15 @@ main.route-push-enter,
 main.route-pop-enter{
   will-change:transform;
   transition:transform var(--ios-route) var(--ios-ease-out);
+  background-color:var(--vg-color-bg);
 }
-main.route-push-enter{ transform:translateX(100%); }
-main.route-pop-enter{ transform:translateX(-27%); }
+
+html.vg-canvas-white main.route-push-enter,
+html.vg-canvas-white main.route-pop-enter{
+  background-color:var(--vg-color-bg-system);
+}
+main.route-push-enter{ transform:translateX(-100%); }
+main.route-pop-enter{ transform:translateX(27%); }
 main.route-push-enter.route-anim-run,
 main.route-pop-enter.route-anim-run{ transform:translateX(0); }
 
