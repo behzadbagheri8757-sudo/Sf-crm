@@ -74,6 +74,7 @@
      source of truth for tokens, per this file's own header comment.
      Values unchanged — this is a location fix only, not a value change. */
   --ios-ease-out:               cubic-bezier(.22,1,.36,1);
+  --ios-route-ease:             cubic-bezier(0.32, 0.72, 0, 1);
   --ios-ease-spring:            cubic-bezier(.22,1.18,.36,1);
   --ios-touch:                  120ms;
   --ios-control:                180ms;

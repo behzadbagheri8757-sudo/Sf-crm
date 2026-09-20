@@ -4040,7 +4040,7 @@ button.inv-header-save.btn{
 main.route-push-enter,
 main.route-pop-enter{
   will-change:transform;
-  transition:transform var(--ios-route) var(--ios-ease-out);
+  transition:transform var(--ios-route) var(--ios-route-ease);
   background-color:var(--vg-color-bg);
 }
 
@@ -4059,7 +4059,7 @@ main.route-pop-enter.route-anim-run{ transform:translateX(0); }
   pointer-events:none;
   will-change:transform;
   transform:translateX(0);
-  transition:transform var(--ios-route) var(--ios-ease-out);
+  transition:transform var(--ios-route) var(--ios-route-ease);
 }
 /* PUSH: outgoing page shifts subtly right in RTL. */
 .route-ghost-under{ z-index:0; }
