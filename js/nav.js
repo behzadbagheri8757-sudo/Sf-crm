@@ -53,7 +53,7 @@ const MORE_NAV_ITEMS = [
   { id: 'prospects', href: '#/prospects', label: 'ارزیابی مغازه‌ها', spaPath: '/prospects', iconKey: 'buildingStorefront' },
   { id: 'game',      href: '#/game',      label: 'مرکز بازی فروش', spaPath: '/game', iconKey: 'trophy' },
   { id: 'reports',   href: '#/reports',   label: 'گزارش‌ها', spaPath: '/reports', iconKey: 'chartBar' },
-  { id: 'settings',  href: '#/settings',  label: 'تنظیمات و Backup', spaPath: '/settings', iconKey: 'cog' },
+  { id: 'settings',  href: '#/settings',  label: 'تنظیمات و پشتیبان', spaPath: '/settings', iconKey: 'cog' },
 ];
 
 /** Renders an icon by key via the central AppIcons registry, falling back to
@@ -1412,7 +1412,7 @@ async function bootSpaShell() {
       '/evaluation': 'ارزیابی مغازه',
       '/checks': 'چک‌ها',
       '/game': 'مرکز بازی فروش',
-      '/settings': 'تنظیمات و Backup',
+      '/settings': 'تنظیمات و پشتیبان',
       '/more': 'بیشتر',
       '/locations': 'مناطق و مسیرها',
       '/watches': 'واچ‌ها',
