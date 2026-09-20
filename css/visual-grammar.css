@@ -78,7 +78,7 @@
   --ios-ease-spring:            cubic-bezier(.22,1.18,.36,1);
   --ios-touch:                  120ms;
   --ios-control:                180ms;
-  --ios-route:                  240ms;
+  --ios-route:                  280ms;
   --ios-glass:                  rgba(255,255,255,.72);
   --ios-glass-border:           rgba(255,255,255,.58);
 }
