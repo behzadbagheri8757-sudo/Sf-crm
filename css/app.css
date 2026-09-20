@@ -237,9 +237,9 @@ header:not(.header-root){
 header:not(.header-root) h1{
   max-width:calc(100% - 12px);
   padding-inline:2px;
-  overflow-wrap:break-word;
-  word-break:normal;
-  text-wrap:balance;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 header.has-back{
   position:sticky;

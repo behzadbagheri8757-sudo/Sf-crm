@@ -15,7 +15,7 @@
 main{
   max-width:var(--vg-content-max);
   margin:0 auto;
-  padding:14px 14px calc(88px + env(safe-area-inset-bottom,0px));
+  padding:14px 14px calc(160px + env(safe-area-inset-bottom,0px));
 }
 
 main > *:first-child{margin-top:0;}
