@@ -975,6 +975,10 @@ function goAppBack(e){
     const path = cur && cur.path ? cur.path : '/dashboard';
     if(!isBackRoute(path)) return;
     const target = routeBackTarget(path, cur.params || {});
+    if(typeof AppRouter !== 'undefined' && AppRouter.navigateBack){
+      AppRouter.navigateBack(target.path, target.params || null);
+      return;
+    }
     if(typeof AppRouter !== 'undefined' && AppRouter.navigate){
       AppRouter.navigate(target.path, target.params || null);
       return;
