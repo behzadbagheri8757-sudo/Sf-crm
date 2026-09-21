@@ -2865,17 +2865,27 @@ function openInvoiceForm(cid, editInv){
       btn.disabled = true;
       const date = document.getElementById('f-date').value || todayISO();
 
-      // اعتبارسنجی: هر ردیف باید جنس مشخصی داشته باشه (چون فیلد جستجو دیگه پیش‌فرض نداره)
-      const noProductRow = rows.find(r=> !r.productId || !data.products.find(p=>p.id===r.productId));
-      if(noProductRow){
+      // A row with no productId is the empty draft input kept open for the
+      // next item after Add Item. It is UI state, not an invoice item.
+      // A row with a productId that no longer resolves is still invalid.
+      const unresolvedRow = rows.find(r=> r.productId && !data.products.find(p=>p.id===r.productId));
+      if(unresolvedRow){
         showToast('برای هر ردیف باید یک جنس از لیست انتخاب کنی.');
+        btn.disabled = false;
+        return;
+      }
+
+      // Only rows with a real, resolvable product are invoice items.
+      const filledRows = rows.filter(r=> r.productId && data.products.find(p=>p.id===r.productId));
+      if(filledRows.length===0){
+        showToast('حداقل یک قلم معتبر برای ثبت فاکتور لازم است.');
         btn.disabled = false;
         return;
       }
 
       // Business validation: discount invariants must hold before any stock/payment
       // mutation or persistence. UI clamping is not sufficient protection.
-      const invalidRow = rows.find(r=> {
+      const invalidRow = filledRows.find(r=> {
         const gross = (Number(r.qty)||0) * (Number(r.price)||0);
         const rowDiscount = Number(r.discount)||0;
         return !(r.qty>0) || r.price<0 || rowDiscount<0 || rowDiscount>gross;
@@ -2885,7 +2895,7 @@ function openInvoiceForm(cid, editInv){
         btn.disabled = false;
         return;
       }
-      const invoiceSubtotal = rows.reduce((s,r)=>s + (Number(r.qty)||0)*(Number(r.price)||0) - (Number(r.discount)||0), 0);
+      const invoiceSubtotal = filledRows.reduce((s,r)=>s + (Number(r.qty)||0)*(Number(r.price)||0) - (Number(r.discount)||0), 0);
       const normalizedDiscount = Number(discount);
       if(!Number.isFinite(normalizedDiscount) || normalizedDiscount<0){
         showToast('تخفیف کلی فاکتور نمی‌تواند منفی یا نامعتبر باشد.');
@@ -2915,7 +2925,7 @@ function openInvoiceForm(cid, editInv){
         return;
       }
 
-      const items = rows.map(r=>{
+      const items = filledRows.map(r=>{
         const prod = data.products.find(p=>p.id===r.productId);
         return { productId:r.productId, name:prod.name, qty:r.qty, price:r.price, buyPrice:(r.buyPrice!==undefined?r.buyPrice:prod.buy), discount:r.discount||0, weight:(prod.packageWeight||0)*r.qty };
       });
