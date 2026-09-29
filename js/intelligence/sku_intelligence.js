@@ -120,44 +120,111 @@
     return x;
   }
 
-  function _productName(productId) {
+  function _productName(productId, ctx) {
     if (typeof data === 'undefined' || !Array.isArray(data.products)) return productId || '';
-    var p = data.products.find(function (x) { return x && x.id === productId; });
+    var p = ctx && typeof ctx.productById === 'function'
+      ? ctx.productById(productId)
+      : data.products.find(function (x) { return x && x.id === productId; });
     return (p && p.name) ? p.name : (productId || '');
   }
 
-  function _productActive(productId) {
+  function _productActive(productId, ctx) {
     if (typeof data === 'undefined' || !Array.isArray(data.products)) return true;
-    var p = data.products.find(function (x) { return x && x.id === productId; });
+    var p = ctx && typeof ctx.productById === 'function'
+      ? ctx.productById(productId)
+      : data.products.find(function (x) { return x && x.id === productId; });
     if (!p) return true;
     return p.active !== false;
   }
 
-  function _productStock(productId) {
+  function _productStock(productId, ctx) {
     if (typeof data === 'undefined' || !Array.isArray(data.products)) return null;
-    var p = data.products.find(function (x) { return x && x.id === productId; });
+    var p = ctx && typeof ctx.productById === 'function'
+      ? ctx.productById(productId)
+      : data.products.find(function (x) { return x && x.id === productId; });
     if (!p) return null;
     return typeof p.stockQty === 'number' ? p.stockQty : null;
   }
 
   /* ---------------------------------------------------------
-     Stage 1 — Aggregation (fresh every call — F2)
+     Product Family identity (runtime only — NEVER persisted).
+       familyId = product.analysisGroupId || product.id
+     analysisGroupId is the single source of truth: same non-null
+     analysisGroupId => same Family; null/empty => the product alone.
+     No inference from name / weight / SKU / type / category.
+     resolveFamilyId is idempotent: passing a familyId (a group id, which
+     is never a product id) returns it unchanged, so callers may pass
+     either a productId or an already-resolved familyId.
      --------------------------------------------------------- */
-  function _aggregatePairMap(customerId) {
+  function _findProduct(productId, ctx) {
+    if (typeof data === 'undefined' || !Array.isArray(data.products)) return null;
+    if (ctx && typeof ctx.productById === 'function') return ctx.productById(productId) || null;
+    for (var i = 0; i < data.products.length; i++) {
+      var p = data.products[i];
+      if (p && p.id === productId) return p;
+    }
+    return null;
+  }
+
+  function resolveFamilyId(productId, ctx) {
+    if (productId == null || productId === '' || productId === 'multi') return null;
+    var p = _findProduct(productId, ctx);
+    return (p && p.analysisGroupId) ? p.analysisGroupId : productId;
+  }
+
+  // Per-call memoizing resolver (avoids repeated product lookups in loops).
+  function makeFamilyResolver(ctx) {
+    var memo = Object.create(null);
+    return function (productId) {
+      if (productId == null || productId === '' || productId === 'multi') return null;
+      var k = String(productId);
+      if (memo[k] === undefined) memo[k] = resolveFamilyId(productId, ctx);
+      return memo[k];
+    };
+  }
+
+  // True when productId is a member of the pair's Family (as seen in this
+  // customer's own history). Falls back to plain productId equality for
+  // pair objects built without a member set.
+  function _pairHasProduct(pair, productId) {
+    if (!productId) return false;
+    if (pair.memberSet) return pair.memberSet[productId] === true;
+    return productId === pair.productId;
+  }
+
+  /* ---------------------------------------------------------
+     Stage 1 — Aggregation (fresh every call — F2)
+     Family-level: key = customerId|familyId.
+     --------------------------------------------------------- */
+  function _aggregatePairMap(customerId, ctx) {
+    if (ctx && ctx.aggregatePairMapCache && ctx.aggregatePairMapCache[customerId]) {
+      return ctx.aggregatePairMapCache[customerId];
+    }
     var map = Object.create(null);
     if (typeof data === 'undefined') return map;
 
+    var famOf = makeFamilyResolver(ctx);
+
     function ensure(pid) {
-      var key = customerId + '|' + pid;
+      var fid = famOf(pid);
+      var key = customerId + '|' + fid;
       if (!map[key]) {
         map[key] = {
           customerId: customerId,
-          productId: pid,
+          familyId: fid,
+          productId: pid,          // representative SKU (display/context only) — finalized below
+          memberProductIds: [],
+          memberSet: Object.create(null),
           purchases: [],
           returns: []
         };
       }
-      return map[key];
+      var pr = map[key];
+      if (!pr.memberSet[pid]) {
+        pr.memberSet[pid] = true;
+        pr.memberProductIds.push(pid);
+      }
+      return pr;
     }
 
     var invoices = Array.isArray(data.invoices) ? data.invoices : [];
@@ -165,29 +232,45 @@
       var inv = invoices[i];
       if (!inv || inv.customerId !== customerId) continue;
       var items = inv.items || [];
-      // Merge duplicate SKU lines within same invoice
-      var byPid = Object.create(null);
+      // Merge duplicate lines within the same invoice at FAMILY level:
+      // one purchase event per invoice per Family (no frequency inflation).
+      var byFam = Object.create(null);
       for (var j = 0; j < items.length; j++) {
         var it = items[j];
         if (!it || !it.productId) continue; // V1 productId-only
         if (!(it.qty > 0)) continue; // Zero Quantity
-        if (!byPid[it.productId]) {
-          byPid[it.productId] = { qty: 0, revenue: 0 };
+        var fidI = famOf(it.productId);
+        if (!byFam[fidI]) {
+          byFam[fidI] = { qty: 0, revenue: 0, members: Object.create(null) };
         }
-        byPid[it.productId].qty += it.qty;
-        byPid[it.productId].revenue += (it.qty * (it.price || 0)) - (it.discount || 0);
+        byFam[fidI].qty += it.qty;
+        byFam[fidI].revenue += (it.qty * (it.price || 0)) - (it.discount || 0);
+        byFam[fidI].members[it.productId] = (byFam[fidI].members[it.productId] || 0) + it.qty;
       }
-      var pids = Object.keys(byPid);
-      for (var k = 0; k < pids.length; k++) {
-        var pid = pids[k];
-        var m = byPid[pid];
-        var pair = ensure(pid);
+      var fids = Object.keys(byFam);
+      for (var k = 0; k < fids.length; k++) {
+        var m = byFam[fids[k]];
+        // Dominant member of this invoice (largest qty; id tie-break) is the
+        // event's SKU — used only to pick a display representative.
+        var memberIds = Object.keys(m.members);
+        var domPid = memberIds[0];
+        for (var mi = 1; mi < memberIds.length; mi++) {
+          var cand = memberIds[mi];
+          if (m.members[cand] > m.members[domPid] ||
+              (m.members[cand] === m.members[domPid] && String(cand) < String(domPid))) {
+            domPid = cand;
+          }
+        }
+        var pair = ensure(domPid);
+        for (var mj = 0; mj < memberIds.length; mj++) ensure(memberIds[mj]);
         pair.purchases.push({
           date: inv.date,
           qty: m.qty,
           revenue: m.revenue,
           unitPrice: m.qty > 0 ? (m.revenue / m.qty) : null,
-          invoiceId: inv.id
+          invoiceId: inv.id,
+          productId: domPid,
+          members: m.members
         });
       }
     }
@@ -205,6 +288,7 @@
         var pairR = ensure(ret.productId);
         pairR.returns.push({
           date: pay.date,
+          productId: ret.productId,
           qty: ret.qty,
           price: ret.price || 0,
           invoiceId: pay.invoiceId || null
@@ -221,6 +305,15 @@
       map[keys[x]].returns.sort(function (a, b) {
         return String(a.date || '').localeCompare(String(b.date || ''));
       });
+      // Representative SKU = SKU of the most recent purchase event (display
+      // / context only; never used as Family identity).
+      var pr2 = map[keys[x]];
+      if (pr2.purchases.length) {
+        pr2.productId = pr2.purchases[pr2.purchases.length - 1].productId;
+      }
+    }
+    if (ctx && ctx.aggregatePairMapCache) {
+      ctx.aggregatePairMapCache[customerId] = map;
     }
     return map;
   }
@@ -307,7 +400,7 @@
     for (var h = 0; h < invs.length; h++) {
       var its = invs[h].items || [];
       for (var jj = 0; jj < its.length; jj++) {
-        if (its[jj] && its[jj].productId === pair.productId && its[jj].qty > 0) {
+        if (its[jj] && _pairHasProduct(pair, its[jj].productId) && its[jj].qty > 0) {
           histPresenceCount++;
           break;
         }
@@ -339,7 +432,7 @@
     for (var w = 0; w < windowInvs.length; w++) {
       var items = windowInvs[w].items || [];
       for (var ii = 0; ii < items.length; ii++) {
-        if (items[ii] && items[ii].productId === pair.productId && items[ii].qty > 0) {
+        if (items[ii] && _pairHasProduct(pair, items[ii].productId) && items[ii].qty > 0) {
           presenceCount++;
           break;
         }
@@ -362,7 +455,7 @@
   /* ---------------------------------------------------------
      Stage 6 — Importance (F5 profit weight redistribution)
      --------------------------------------------------------- */
-  function _computeImportance(pair, historical, customerId, totalCustomerRevenue, totalCustomerProfit, totalInvoices) {
+  function _computeImportance(pair, historical, customerId, totalCustomerRevenue, totalCustomerProfit, totalInvoices, ctx) {
     var skuRevenue = 0;
     for (var i = 0; i < pair.purchases.length; i++) skuRevenue += pair.purchases[i].revenue || 0;
 
@@ -371,11 +464,11 @@
     var basketShare = 0;
     if (totalInvoices > 0) {
       var present = 0;
-      var invs = (typeof customerInvoices === 'function') ? customerInvoices(customerId) : [];
+       var invs = (typeof customerInvoices === 'function') ? customerInvoices(customerId, ctx) : [];
       for (var j = 0; j < invs.length; j++) {
         var items = invs[j].items || [];
         for (var k = 0; k < items.length; k++) {
-          if (items[k] && items[k].productId === pair.productId && items[k].qty > 0) {
+          if (items[k] && _pairHasProduct(pair, items[k].productId) && items[k].qty > 0) {
             present++;
             break;
           }
@@ -388,19 +481,38 @@
     var profitAvailable = false;
     if (totalCustomerProfit != null && isFinite(totalCustomerProfit) && totalCustomerProfit > 0) {
       // Approximate SKU profit from purchase events if buyPrice present on products
+      // Family-level: cost is computed per member SKU (each member has its
+      // own buy price). If ANY member lacks a buy price, profit is treated
+      // as unavailable (same F5 fallback as a single SKU without buy price)
+      // instead of silently counting that member's cost as zero.
       var skuProfit = 0;
       var anyBuy = false;
-      var prod = (typeof data !== 'undefined' && Array.isArray(data.products))
-        ? data.products.find(function (x) { return x && x.id === pair.productId; })
-        : null;
-      var buy = prod ? (prod.buy || prod.buyPrice || 0) : 0;
-      if (buy > 0) {
-        anyBuy = true;
-        for (var p = 0; p < pair.purchases.length; p++) {
-          var ev = pair.purchases[p];
-          skuProfit += (ev.revenue || 0) - (buy * (ev.qty || 0));
+      var allBuy = true;
+      var memberBuy = Object.create(null);
+      function buyOf(pid) {
+        if (memberBuy[pid] === undefined) {
+          var pr = _findProduct(pid, ctx);
+          memberBuy[pid] = pr ? (pr.buy || pr.buyPrice || 0) : 0;
         }
+        return memberBuy[pid];
       }
+      for (var p = 0; p < pair.purchases.length && allBuy; p++) {
+        var ev = pair.purchases[p];
+        var evCost = 0;
+        var mem = ev.members;
+        if (!mem) {
+          mem = Object.create(null);
+          mem[ev.productId || pair.productId] = ev.qty || 0;
+        }
+        var mids = Object.keys(mem);
+        for (var mq = 0; mq < mids.length; mq++) {
+          var b = buyOf(mids[mq]);
+          if (!(b > 0)) { allBuy = false; break; }
+          evCost += b * (mem[mids[mq]] || 0);
+        }
+        if (allBuy) skuProfit += (ev.revenue || 0) - evCost;
+      }
+      anyBuy = allBuy && pair.purchases.length > 0;
       if (anyBuy) {
         profitShare = _clamp01(Math.max(0, skuProfit) / totalCustomerProfit);
         profitAvailable = true;
@@ -540,14 +652,63 @@
     return false;
   }
 
-  function _accountWideDecline(customerId) {
+  // familyId -> { productId: true } for products bought (qty>0) in the late
+  // half of the customer's invoice history. Same split calc.js uses for
+  // decliningProducts (date, then invoice number; mid = floor(count/2)).
+  function _lateFamilyMembers(customerId, ctx, famOf) {
+    var out = Object.create(null);
+    if (typeof customerInvoices !== 'function') return out;
+    var invs = customerInvoices(customerId, ctx).slice().sort(function (a, b) {
+      return String(a.date || '').localeCompare(String(b.date || ''))
+        || String(a.number || '').localeCompare(String(b.number || ''));
+    });
+    var late = invs.slice(Math.floor(invs.length / 2));
+    for (var i = 0; i < late.length; i++) {
+      var items = late[i].items || [];
+      for (var j = 0; j < items.length; j++) {
+        var it = items[j];
+        if (!it || !it.productId || !(it.qty > 0)) continue;
+        var fid = famOf(it.productId);
+        if (!out[fid]) out[fid] = Object.create(null);
+        out[fid][it.productId] = true;
+      }
+    }
+    return out;
+  }
+
+  function _accountWideDecline(customerId, ctx) {
     if (typeof customerBehavior !== 'function') return false;
     try {
-      var b = customerBehavior(customerId);
+      var b = customerBehavior(customerId, ctx);
       if (!b) return false;
       if (b.amountTrend === 'down') return true;
       var declining = Array.isArray(b.decliningProducts) ? b.decliningProducts : [];
-      if (declining.length >= SKU_PARAMS.minSkuCountForAccountSignal) return true;
+      // calc.js decliningProducts is SKU-level (untouched). Normalize to
+      // Family-level here, in the Intelligence layer only: (a) a declining
+      // SKU whose Family is retained by another member bought in the late
+      // half is a same-family switch, not a decline; (b) several declining
+      // SKUs of one Family count once.
+      var famOf = makeFamilyResolver(ctx);
+      var lateFamilies = _lateFamilyMembers(customerId, ctx, famOf);
+      var seenFam = Object.create(null);
+      var famCount = 0;
+      for (var di = 0; di < declining.length; di++) {
+        var dp = declining[di];
+        if (!dp || !dp.productId) continue;
+        var dfid = famOf(dp.productId);
+        var lateMembers = lateFamilies[dfid];
+        if (lateMembers) {
+          var retained = false;
+          for (var lm in lateMembers) {
+            if (lm !== dp.productId) { retained = true; break; }
+          }
+          if (retained) continue;
+        }
+        if (seenFam[dfid]) continue;
+        seenFam[dfid] = true;
+        famCount++;
+      }
+      if (famCount >= SKU_PARAMS.minSkuCountForAccountSignal) return true;
       return false;
     } catch (e) {
       return false;
@@ -578,9 +739,10 @@
     var importance = opts.importance != null ? opts.importance : 0;
     var conf = opts.confidence != null ? opts.confidence : 0.5;
     return {
-      id: 'sig_' + opts.customerId + '_sku_' + opts.productId + '_' + opts.category,
+      id: 'sig_' + opts.customerId + '_sku_' + (opts.familyId != null ? opts.familyId : opts.productId) + '_' + opts.category,
       customerId: opts.customerId,
       productId: opts.productId,
+      familyId: opts.familyId != null ? opts.familyId : null, // runtime only — never persisted
       productName: opts.productName || _productName(opts.productId),
       type: opts.type || 'risk',
       category: opts.category,
@@ -603,7 +765,7 @@
   /* ---------------------------------------------------------
      Stage 9–11 — Eligibility, combination, signal build
      --------------------------------------------------------- */
-  function _analyzePair(pair, customerId, custInvs, totalRev, totalProfit, accountDecline) {
+  function _analyzePair(pair, customerId, custInvs, totalRev, totalProfit, accountDecline, ctx) {
     var historical = _computeBaseline(pair.purchases, null);
     if (historical.purchaseCount < 1) return null;
 
@@ -612,12 +774,12 @@
     // typicalCycle / typicalQuantity for the established baseline is managed.
     if (typeof updateBaselineIfShifted === 'function') {
       try {
-        updateBaselineIfShifted(customerId, pair.productId, pair.purchases);
+        updateBaselineIfShifted(customerId, pair.familyId, pair.purchases, pair.productId);
       } catch (eBaseUp) { /* fail-open */ }
     }
     if (typeof getBaseline === 'function') {
       try {
-        var managed = getBaseline(customerId, pair.productId);
+        var managed = getBaseline(customerId, pair.familyId);
         if (managed) {
           if (managed.typicalCycle != null && isFinite(managed.typicalCycle) && managed.typicalCycle > 0) {
             historical.typicalCycle = managed.typicalCycle;
@@ -631,14 +793,14 @@
 
     var recent = _computeBaseline(pair.purchases, SKU_PARAMS.recentWindowSize);
     var current = _computeCurrent(pair, historical, recent, custInvs);
-    var importance = _computeImportance(pair, historical, customerId, totalRev, totalProfit, custInvs.length);
+    var importance = _computeImportance(pair, historical, customerId, totalRev, totalProfit, custInvs.length, ctx);
     var confidence = _computeConfidence(historical, recent, pair);
     var trend = _trendClass(historical, recent);
-    var stockQty = _productStock(pair.productId);
+    var stockQty = _productStock(pair.productId, ctx);
     var stockOut = (stockQty != null && stockQty <= 0);
-    var productName = _productName(pair.productId);
+    var productName = _productName(pair.productId, ctx);
 
-    if (!_productActive(pair.productId)) return null;
+    if (!_productActive(pair.productId, ctx)) return null;
 
     var candidates = [];
 
@@ -695,8 +857,7 @@
       var qtyRatio = compareQty / historical.typicalQuantity;
       // Also consider median recent event qty
       var eventRatio = recent.typicalQuantity / historical.typicalQuantity;
-      var effectiveRatio = Math.max(qtyRatio, eventRatio); // conservative: use less severe
-      // Actually for drop detection use the lower of the two (more drop) only if returns don't neutralize
+      // For drop detection use the lower of the two (more drop) only if returns don't neutralize.
       // BUGFIX (proven by runtime repro): "returnsExplain" never actually
       // checked whether any return exists for this SKU — it only compared
       // ratios. That meant a single large outlier order in the recent
@@ -868,6 +1029,7 @@
       signal: _mkSkuSignal({
         customerId: customerId,
         productId: pair.productId,
+        familyId: pair.familyId,
         productName: productName,
         category: category,
         severity: severity,
@@ -882,9 +1044,13 @@
           accountDecline: !!accountDecline,
           returns: pair.returns.length > 0
         },
-        evidence: evidence
+        evidence: (function () {
+          evidence.memberProductIds = pair.memberProductIds ? pair.memberProductIds.slice() : [pair.productId];
+          return evidence;
+        })()
       }),
       productId: pair.productId,
+      familyId: pair.familyId,
       dims: uniqueDims,
       strength: maxStrength
     };
@@ -893,38 +1059,44 @@
   /* ---------------------------------------------------------
      Public entry: extractSkuSignals (F2 freshness)
      --------------------------------------------------------- */
-  function extractSkuSignals(customerId) {
+  function extractSkuSignals(customerId, ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('skuSignals', customerId, function () {
+        return extractSkuSignals(customerId, ctx, true);
+      });
+    }
     var out = [];
     if (!customerId) return out;
     if (typeof data === 'undefined') return out;
 
-    // F2: rebuild aggregation from current data every call
-    var map = _aggregatePairMap(customerId);
+    // F2: rebuild aggregation from current data every call, unless a caller
+    // in the same execution cycle already computed it (see ctx.aggregatePairMapCache).
+    var map = _aggregatePairMap(customerId, ctx);
     var keys = Object.keys(map);
     if (!keys.length) return out;
 
-    var custInvs = (typeof customerInvoices === 'function') ? customerInvoices(customerId) : [];
+    var custInvs = (typeof customerInvoices === 'function') ? customerInvoices(customerId, ctx) : [];
     var totalRev = 0;
     try {
       if (typeof customerTotals === 'function') {
-        var t = customerTotals(customerId);
+        var t = customerTotals(customerId, ctx);
         if (t && typeof t.invTotal === 'number') totalRev = t.invTotal;
       }
     } catch (e) {}
     var totalProfit = null;
     try {
       if (typeof customerProfit === 'function') {
-        totalProfit = customerProfit(customerId);
+        totalProfit = customerProfit(customerId, ctx);
       }
     } catch (e2) {}
 
-    var accountDecline = _accountWideDecline(customerId);
+    var accountDecline = _accountWideDecline(customerId, ctx);
     var pairResults = [];
 
     for (var i = 0; i < keys.length; i++) {
       var pair = map[keys[i]];
       if (!pair.purchases.length) continue;
-      var result = _analyzePair(pair, customerId, custInvs, totalRev, totalProfit, accountDecline);
+      var result = _analyzePair(pair, customerId, custInvs, totalRev, totalProfit, accountDecline, ctx);
       if (result && result.signal) pairResults.push(result);
     }
 
@@ -971,12 +1143,28 @@
           reason: 'کاهش خرید در چند محصول (' + names.join('، ') + ') همراه با افت کلی حساب',
           actionHint: 'Manager Review',
           contextFlags: { accountDecline: true },
-          evidence: { affectedProductIds: qtyLike.map(function (r) { return r.productId; }) }
+          evidence: {
+            // representative SKUs (legacy shape) + every member SKU of each
+            // affected Family, so SKU-level account signals of any member
+            // are recognised as already covered.
+            affectedProductIds: (function () {
+              var ids = [];
+              var seenIds = Object.create(null);
+              qtyLike.forEach(function (r) {
+                var mem = (r.signal.evidence && r.signal.evidence.memberProductIds) || [r.productId];
+                [r.productId].concat(mem).forEach(function (id) {
+                  if (id != null && !seenIds[id]) { seenIds[id] = true; ids.push(id); }
+                });
+              });
+              return ids;
+            })(),
+            affectedFamilyIds: qtyLike.map(function (r) { return r.familyId; })
+          }
         });
-        // Suppress individuals that were grouped
+        // Suppress individuals that were grouped (Family identity)
         var groupedIds = Object.create(null);
-        for (var g = 0; g < qtyLike.length; g++) groupedIds[qtyLike[g].productId] = true;
-        pairResults = pairResults.filter(function (r) { return !groupedIds[r.productId]; });
+        for (var g = 0; g < qtyLike.length; g++) groupedIds[qtyLike[g].familyId] = true;
+        pairResults = pairResults.filter(function (r) { return !groupedIds[r.familyId]; });
         out.push(multi);
       }
     }
@@ -989,6 +1177,10 @@
 
   global.extractSkuSignals = extractSkuSignals;
   global.SKU_PARAMS = SKU_PARAMS;
+  // Runtime Family identity helpers (shared by all Intelligence modules;
+  // resolved at call time, so script load order does not matter).
+  global.resolveFamilyId = resolveFamilyId;
+  global.makeFamilyResolver = makeFamilyResolver;
 
   /* ============================================================
      WATCH / EARLY WARNING LAYER — SKU side (frozen spec §7-9).
@@ -1010,13 +1202,18 @@
      each rule's minimum-purchase-count gate (spec §8), and the contract
      does not forbid additional fields. Reported explicitly, not guessed
      silently. */
-  function _extractSkuRawMetrics(customerId) {
+  function _extractSkuRawMetrics(customerId, ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('skuRawMetrics', customerId, function () {
+        return _extractSkuRawMetrics(customerId, ctx, true);
+      });
+    }
     var out = [];
     if (!customerId || typeof data === 'undefined') return out;
-    var map = _aggregatePairMap(customerId);
+    var map = _aggregatePairMap(customerId, ctx);
     var keys = Object.keys(map);
     if (!keys.length) return out;
-    var custInvs = (typeof customerInvoices === 'function') ? customerInvoices(customerId) : [];
+    var custInvs = (typeof customerInvoices === 'function') ? customerInvoices(customerId, ctx) : [];
 
     for (var i = 0; i < keys.length; i++) {
       var pair = map[keys[i]];
@@ -1026,7 +1223,7 @@
       // Confirmed SKU Intelligence (_analyzePair, line ~619). A product the
       // business no longer carries must not generate a Watch — the
       // underlying "delay"/"drop" would never be able to resolve.
-      if (!_productActive(pair.productId)) continue;
+      if (!_productActive(pair.productId, ctx)) continue;
 
       var historical = _computeBaseline(pair.purchases, null);
       if (historical.purchaseCount < 1) continue;
@@ -1035,7 +1232,7 @@
       // Same stock-context semantics as Confirmed: only used to suppress
       // timing/quantity-style dims below, never a full exclusion (unlike
       // the active gate above).
-      var stockQty = _productStock(pair.productId);
+      var stockQty = _productStock(pair.productId, ctx);
       var stockOut = (stockQty != null && stockQty <= 0);
 
       var eventRatio = null;
@@ -1059,7 +1256,9 @@
 
       out.push({
         productId: pair.productId,
-        productName: _productName(pair.productId),
+        familyId: pair.familyId,
+        memberProductIds: pair.memberProductIds ? pair.memberProductIds.slice() : [pair.productId],
+        productName: _productName(pair.productId, ctx),
         typicalCycle: historical.typicalCycle,
         currentGap: current.currentGap,
         eventRatio: eventRatio,
@@ -1080,11 +1279,16 @@
   }
 
   /* SKU Watch rules (spec §8) + Combined SKU Watch collapsing (spec §9). */
-  function extractSkuWatchObservations(customerId) {
+  function extractSkuWatchObservations(customerId, ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('skuWatchObservations', customerId, function () {
+        return extractSkuWatchObservations(customerId, ctx, true);
+      });
+    }
     var out = [];
     if (!customerId) return out;
     var raw;
-    try { raw = _extractSkuRawMetrics(customerId) || []; } catch (eRaw) { raw = []; }
+    try { raw = _extractSkuRawMetrics(customerId, ctx) || []; } catch (eRaw) { raw = []; }
     if (!raw.length) return out;
 
     for (var i = 0; i < raw.length; i++) {
@@ -1174,6 +1378,7 @@
         out.push({
           customerId: customerId,
           productId: m.productId,
+          familyId: m.familyId,
           productName: m.productName,
           category: 'COMBINED_SKU_WATCH',
           level: level,
@@ -1187,6 +1392,7 @@
         out.push({
           customerId: customerId,
           productId: m.productId,
+          familyId: m.familyId,
           productName: m.productName,
           category: comp.category,
           level: comp.level,

@@ -98,7 +98,10 @@
      Rank among active customers → map to score:
        top 20% → 100, mid 60% → 60, bottom 20% → 30, unknown → 50.
      Same idea as action.js impact map — no invented commercial data. */
-  function _economicScore(cid) {
+  function _economicScore(cid, precomputedRankMap, ctx) {
+    if (precomputedRankMap) {
+      return precomputedRankMap[cid] != null ? precomputedRankMap[cid] : 50;
+    }
     if (typeof data === 'undefined' || !Array.isArray(data.customers)) return 50;
     if (typeof customerTotals !== 'function') return 50;
 
@@ -108,7 +111,7 @@
       if (!c || c.active === false) continue;
       var invTotal = null;
       try {
-        var t = customerTotals(c.id);
+        var t = customerTotals(c.id, ctx);
         if (t && typeof t.invTotal === 'number' && isFinite(t.invTotal)) invTotal = t.invTotal;
       } catch (e) { /* ignore */ }
       rows.push({ id: c.id, invTotal: invTotal });
@@ -133,6 +136,45 @@
     return 60;
   }
 
+  /* Batch version of _economicScore's ranking, computed once instead of
+     once per customer (was O(N^2) across calculateAllCustomerPriorities /
+     calculateAllActions). Produces the exact same per-customer score as
+     calling _economicScore(cid) individually, for a fixed data snapshot. */
+  function _buildEconomicRankMap(ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('economicRankMap', 'all', function () {
+        return _buildEconomicRankMap(ctx, true);
+      });
+    }
+    var map = Object.create(null);
+    if (typeof data === 'undefined' || !Array.isArray(data.customers)) return map;
+    if (typeof customerTotals !== 'function') return map;
+
+    var rows = [];
+    for (var i = 0; i < data.customers.length; i++) {
+      var c = data.customers[i];
+      if (!c || c.active === false) continue;
+      var invTotal = null;
+      try {
+        var t = customerTotals(c.id, ctx);
+        if (t && typeof t.invTotal === 'number' && isFinite(t.invTotal)) invTotal = t.invTotal;
+      } catch (e) { /* ignore */ }
+      rows.push({ id: c.id, invTotal: invTotal });
+    }
+
+    var ranked = rows.filter(function (r) { return r.invTotal != null; })
+      .sort(function (a, b) { return (b.invTotal || 0) - (a.invTotal || 0); });
+
+    var n = ranked.length;
+    var band = Math.max(1, Math.ceil(n * 0.2));
+    ranked.forEach(function (r, idx) {
+      if (idx < band) map[r.id] = 100;
+      else if (idx >= n - band) map[r.id] = 30;
+      else map[r.id] = 60;
+    });
+    return map;
+  }
+
   /* ---- Opportunity (0..100) ----
      Max points among type==='opportunity' signals.
      Opportunity is not a risk driver; P-02 active gate applies to Risk
@@ -154,18 +196,18 @@
      Prefer visitOverdueDays(cid) when available.
      Fallback: customerBehavior.lastVisit + daysAgo.
      Mapping: 0 overdue → 10 baseline; >7 → 50; >14 → 80; >30 → 100. */
-  function _timingScore(cid) {
+  function _timingScore(cid, ctx) {
     var overdue = null;
     if (typeof visitOverdueDays === 'function') {
       try {
-        var v = visitOverdueDays(cid);
+        var v = visitOverdueDays(cid, ctx);
         if (v != null && isFinite(v)) overdue = v;
       } catch (e) { /* ignore */ }
     }
 
     if (overdue == null && typeof customerBehavior === 'function') {
       try {
-        var b = customerBehavior(cid);
+        var b = customerBehavior(cid, ctx);
         if (b && b.lastVisit && b.lastVisit.date && typeof daysAgo === 'function') {
           var d = daysAgo(b.lastVisit.date);
           if (d != null && isFinite(d) && d !== Infinity) overdue = d;
@@ -223,16 +265,23 @@
     return pool.slice(0, 2).map(function (s) { return s.reason; }).join(' + ');
   }
 
-  function calculateCustomerPriority(cid) {
+  function calculateCustomerPriority(cid, opts, skipMemo) {
+    opts = opts || {};
+    var ctx = opts.ctx || null;
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('customerPriority', cid, function () {
+        return calculateCustomerPriority(cid, opts, true);
+      });
+    }
     var risk = (typeof calculateCustomerRisk === 'function')
-      ? calculateCustomerRisk(cid)
+      ? calculateCustomerRisk(cid, ctx)
       : { customerId: cid, score: 0, level: 'low', signals: [] };
 
     var signals = risk.signals || [];
     var riskComponent = (typeof risk.score === 'number' && isFinite(risk.score)) ? risk.score : 0;
-    var economicComponent = _economicScore(cid);
+    var economicComponent = _economicScore(cid, opts.economicRankMap, ctx);
     var opportunityComponent = _opportunityScore(signals);
-    var timingComponent = _timingScore(cid);
+    var timingComponent = _timingScore(cid, ctx);
 
     var weighted =
       W_RISK * riskComponent +
@@ -257,7 +306,7 @@
     var customerStory = null;
     if (typeof buildCustomerStory === 'function') {
       try {
-        customerStory = buildCustomerStory(cid);
+        customerStory = buildCustomerStory(cid, ctx);
       } catch (eStory) {
         customerStory = null;
       }
@@ -289,12 +338,18 @@
     };
   }
 
-  function calculateAllCustomerPriorities() {
+  function calculateAllCustomerPriorities(ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('allCustomerPriorities', 'all', function () {
+        return calculateAllCustomerPriorities(ctx, true);
+      });
+    }
     if (typeof data === 'undefined' || !Array.isArray(data.customers)) return [];
 
+    var economicRankMap = _buildEconomicRankMap(ctx);
     var customers = data.customers.filter(function (c) { return c && c.active !== false; });
     var results = customers.map(function (c) {
-      return calculateCustomerPriority(c.id);
+      return calculateCustomerPriority(c.id, { economicRankMap: economicRankMap, ctx: ctx });
     });
 
     results.sort(function (a, b) {
@@ -309,5 +364,6 @@
 
   global.calculateCustomerPriority = calculateCustomerPriority;
   global.calculateAllCustomerPriorities = calculateAllCustomerPriorities;
+  global._buildEconomicRankMap = _buildEconomicRankMap;
 
 })(typeof window !== 'undefined' ? window : this);

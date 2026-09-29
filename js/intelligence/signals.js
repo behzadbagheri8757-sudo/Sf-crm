@@ -96,7 +96,85 @@
       actionable: opts.actionable !== false,
       source: opts.source || 'customerBehavior',
       sourceLevel: opts.sourceLevel || _sourceLevelForCategory(category),
+      evidence: opts.evidence || null,
     };
+  }
+
+  /* ---------------------------------------------------------
+     Product Analysis Group (surgical addition — see models.js/db.js
+     data.analysisGroups + product.analysisGroupId).
+     Distinguishes "SKU واقعاً از دست رفته" from "SKU افت کرده ولی مشتری
+     SKU دیگری از همان گروه تحلیلی را خریده" — Intelligence-layer only,
+     no financial/inventory/FIFO/invoice behavior touched.
+     --------------------------------------------------------- */
+
+  /** Map productId -> product object, built once per extraction call. */
+  function _buildProductsByIdMap() {
+    var map = Object.create(null);
+    var list = (typeof data !== 'undefined' && Array.isArray(data.products)) ? data.products : [];
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (p && p.id) map[p.id] = p;
+    }
+    return map;
+  }
+
+  function _analysisGroupNameById(gid) {
+    if (!gid || typeof data === 'undefined' || !Array.isArray(data.analysisGroups)) return '';
+    var g = data.analysisGroups.find(function (x) { return x && x.id === gid; });
+    return g ? (g.name || '') : '';
+  }
+
+  /**
+   * Set of productIds purchased (qty > 0) in the "late half" of the customer's
+   * invoice history, using the EXACT same time split calc.js uses for
+   * decliningProducts (customerBehavior): sort by date, invoice number as
+   * tie-breaker, mid = Math.floor(count/2), late = second half.
+   * No new threshold invented — same split, no invoiceCount gate beyond what
+   * the split itself implies (an empty/short history naturally yields an
+   * empty or trivial late-set).
+   * Computed ONCE per extraction call (extractCustomerSignals /
+   * extractWatchObservations) and passed down — never re-scanned per signal.
+   */
+  function _getConfirmedLateProductIds(cid, ctx) {
+    var ids = Object.create(null);
+    if (typeof customerInvoices !== 'function') return ids;
+    var invs = customerInvoices(cid, ctx).slice().sort(function (a, b) {
+      return String(a.date || '').localeCompare(String(b.date || ''))
+        || String(a.number || '').localeCompare(String(b.number || ''));
+    });
+    var count = invs.length;
+    var mid = Math.floor(count / 2);
+    var late = invs.slice(mid);
+    for (var i = 0; i < late.length; i++) {
+      var items = late[i].items || [];
+      for (var j = 0; j < items.length; j++) {
+        var it = items[j];
+        if (it && it.productId && it.qty > 0) ids[it.productId] = true;
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Group Retention rule (exact, no fuzzy matching):
+   * A declined + A.analysisGroupId exists + some B in lateProductIds shares
+   * that analysisGroupId + B !== A  =>  true. Any missing piece => false.
+   */
+  function _isGroupRetained(productIdA, productsById, lateProductIds) {
+    if (!productIdA || !productsById || !lateProductIds) return false;
+    var prodA = productsById[productIdA];
+    var groupId = prodA ? (prodA.analysisGroupId || null) : null;
+    if (!groupId) return false;
+    var lateIds = Object.keys(lateProductIds);
+    for (var i = 0; i < lateIds.length; i++) {
+      var pidB = lateIds[i];
+      if (pidB === productIdA) continue;
+      var prodB = productsById[pidB];
+      var groupB = prodB ? (prodB.analysisGroupId || null) : null;
+      if (groupB && groupB === groupId) return true;
+    }
+    return false;
   }
 
   /* ---------------------------------------------------------
@@ -178,16 +256,22 @@
   /* ---------------------------------------------------------
      6: BASKET_SHRINK
      --------------------------------------------------------- */
-  function _basketShrinkSignal(cid, b, out) {
+  function _basketShrinkSignal(cid, b, out, productsById, lateProductIds) {
     if (!(b.invoiceCount >= 4)) return;
     const declining = Array.isArray(b.decliningProducts) ? b.decliningProducts : [];
     if (!(declining.length >= 1)) return;
+    // Product Analysis Group: a decline that's actually a same-group SKU
+    // switch isn't a meaningful basket shrink — filter it out before counting.
+    const meaningful = declining.filter(function (p) {
+      return !(p && _isGroupRetained(p.productId, productsById, lateProductIds));
+    });
+    if (!(meaningful.length >= 1)) return;
     out.push(_mkSignal(cid, 'BASKET_SHRINK', {
       type: 'risk',
       severity: 'medium',
-      value: declining.length,
+      value: meaningful.length,
       unit: 'count',
-      reason: 'تنوع سبد خرید کاهش یافته است',
+      reason: 'تعدادی از کالاهای سبد خرید کاهش یافته‌اند',
       confidence: 0.75,
     }));
   }
@@ -200,12 +284,23 @@
      decliningProducts with earlyQty > 0 (i.e. it was actually
      purchased in the earlier half of the customer's history).
      --------------------------------------------------------- */
-  function _keyProductLostSignal(cid, b, out) {
+  function _keyProductLostSignal(cid, b, out, productsById, lateProductIds) {
     const declining = Array.isArray(b.decliningProducts) ? b.decliningProducts : [];
     const lost = declining.filter(function (p) {
       return p && p.earlyQty >= 5 && p.lateQty === 0;
     });
     if (!lost.length) return;
+
+    // Product Analysis Group split: a "lost" SKU whose analysis group is
+    // retained via a substitute SKU is not the same signal as a genuinely
+    // abandoned product line — see spec §4.4. Existing earlyQty/lateQty
+    // threshold above is untouched.
+    const hardLost = [];
+    const retainedLost = [];
+    lost.forEach(function (p) {
+      if (_isGroupRetained(p.productId, productsById, lateProductIds)) retainedLost.push(p);
+      else hardLost.push(p);
+    });
 
     // decliningProducts (from calc.js) doesn't carry invoice-level
     // presence counts, only aggregated early/late qty — so the
@@ -213,27 +308,50 @@
     // the spec cannot be computed from the data actually available.
     // Per instructions ("اگر ساختار کافی نیست، حدس نزن")، این بخش
     // پیاده‌سازی نشد و confidence بر همان مبنای earlyQty/lateQty ثابت می‌ماند.
-    const names = lost.map(function (p) { return p.name; }).filter(Boolean);
-    const reason = names.length === 1
-      ? 'محصول کلیدی «' + names[0] + '» دیگر خریداری نمی‌شود'
-      : 'محصولات کلیدی (' + names.join('، ') + ') دیگر خریداری نمی‌شوند';
+    if (hardLost.length > 0) {
+      const names = hardLost.map(function (p) { return p.name; }).filter(Boolean);
+      const reason = names.length === 1
+        ? 'محصول کلیدی «' + names[0] + '» دیگر خریداری نمی‌شود'
+        : 'محصولات کلیدی (' + names.join('، ') + ') دیگر خریداری نمی‌شوند';
 
-    out.push(_mkSignal(cid, 'KEY_PRODUCT_LOST', {
-      type: 'risk',
-      severity: 'high',
-      value: lost.length,
-      unit: 'count',
-      reason: reason,
-      confidence: 0.8,
-    }));
+      out.push(_mkSignal(cid, 'KEY_PRODUCT_LOST', {
+        type: 'risk',
+        severity: 'high',
+        value: hardLost.length,
+        unit: 'count',
+        reason: reason,
+        confidence: 0.8,
+        evidence: { hardLost: hardLost, retainedLost: retainedLost },
+      }));
+      return;
+    }
+
+    if (retainedLost.length > 0) {
+      const retainedReason = retainedLost.map(function (p) {
+        const prod = productsById ? productsById[p.productId] : null;
+        const groupName = _analysisGroupNameById(prod ? prod.analysisGroupId : null);
+        return 'محصول «' + (p.name || '') + '» دیگر خریداری نمی‌شود، اما گروه تحلیلی «'
+          + (groupName || '') + '» با محصول جایگزین حفظ شده است';
+      }).join(' — ');
+
+      out.push(_mkSignal(cid, 'KEY_PRODUCT_LOST', {
+        type: 'risk',
+        severity: 'low',
+        value: retainedLost.length,
+        unit: 'count',
+        reason: retainedReason,
+        confidence: 0.7,
+        evidence: { hardLost: hardLost, retainedLost: retainedLost },
+      }));
+    }
   }
 
   /* ---------------------------------------------------------
      8: LONG_NO_VISIT
      --------------------------------------------------------- */
-  function _longNoVisitSignal(cid, b, out) {
+  function _longNoVisitSignal(cid, b, out, ctx) {
     // Fallback only when visit cadence is unavailable.
-    if (typeof visitCadence === 'function' && visitCadence(cid)) return;
+    if (typeof visitCadence === 'function' && visitCadence(cid, ctx)) return;
     if (!b.lastVisit) return;
     if (b.invoiceCount < 2) return;
 
@@ -260,9 +378,9 @@
      Buffer = min(7, cadence * 0.5). Does not replace LONG_NO_VISIT
      fallback for customers without cadence.
      --------------------------------------------------------- */
-  function _visitOverdueSignal(cid, b, out) {
+  function _visitOverdueSignal(cid, b, out, ctx) {
     if (typeof visitCadence !== 'function') return;
-    const cadence = visitCadence(cid);
+    const cadence = visitCadence(cid, ctx);
     if (!cadence) return;
 
     let daysSince = null;
@@ -270,8 +388,12 @@
       daysSince = (typeof daysAgo === 'function') ? daysAgo(b.lastVisit.date) : null;
     }
     if (daysSince == null || !isFinite(daysSince)) {
-      if (typeof data !== 'undefined' && Array.isArray(data.customers)) {
-        const cust = data.customers.find(function (c) { return c && c.id === cid; });
+      const cust = (ctx && typeof ctx.customerById === 'function')
+        ? ctx.customerById(cid)
+        : (typeof data !== 'undefined' && Array.isArray(data.customers)
+            ? data.customers.find(function (c) { return c && c.id === cid; })
+            : null);
+      if (cust) {
         const visits = (cust && Array.isArray(cust.visits)) ? cust.visits.slice() : [];
         if (visits.length) {
           visits.sort(function (a, b2) {
@@ -328,12 +450,14 @@
      and is non-empty. Uses data.checks + data.customers directly
      (as explicitly allowed by the spec), never mutated.
      --------------------------------------------------------- */
-  function _paymentSignals(cid, out) {
+  function _paymentSignals(cid, out, ctx) {
     if (typeof data === 'undefined' || !Array.isArray(data.checks) || data.checks.length === 0) {
       return;
     }
     const today = (typeof todayISO === 'function') ? todayISO() : new Date().toISOString().slice(0, 10);
-    const custChecks = data.checks.filter(function (c) { return c && c.customerId === cid; });
+    const custChecks = (typeof customerChecks === 'function')
+      ? customerChecks(cid, ctx)
+      : data.checks.filter(function (c) { return c && c.customerId === cid; });
     if (!custChecks.length) return;
 
     const bounced = custChecks.filter(function (c) { return c.status === 'bounced'; });
@@ -372,13 +496,23 @@
   /* ---------------------------------------------------------
      Main entry point
      --------------------------------------------------------- */
-  function extractCustomerSignals(cid) {
+  function extractCustomerSignals(cid, ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      return ctx.memo('customerSignals', cid, function () {
+        return extractCustomerSignals(cid, ctx, true);
+      });
+    }
     const out = [];
     if (!cid) return out;
     if (typeof customerBehavior !== 'function') return out;
 
-    const b = customerBehavior(cid);
+    const b = customerBehavior(cid, ctx);
     if (!b) return out;
+
+    // Product Analysis Group: computed ONCE here and reused by both
+    // consumer functions below — never re-scans invoice history per signal.
+    const productsById = _buildProductsByIdMap();
+    const lateProductIds = _getConfirmedLateProductIds(cid, ctx);
 
     // Signals 1-3 require at least a comparable previous-30-day baseline;
     // customerBehavior() itself returns 0 (not null) when there's no data,
@@ -386,16 +520,16 @@
     _purchaseTrendSignals(cid, b, out);
     _behindPatternSignal(cid, b, out);
     _consecutiveNoOrderSignal(cid, b, out);
-    _basketShrinkSignal(cid, b, out);
-    _keyProductLostSignal(cid, b, out);
-    _visitOverdueSignal(cid, b, out);
-    _longNoVisitSignal(cid, b, out);
+    _basketShrinkSignal(cid, b, out, productsById, lateProductIds);
+    _keyProductLostSignal(cid, b, out, productsById, lateProductIds);
+    _visitOverdueSignal(cid, b, out, ctx);
+    _longNoVisitSignal(cid, b, out, ctx);
     _visitConversionLowSignal(cid, b, out);
 
     // openingBalance is intentionally never inspected here — signals are
     // based only on actual recorded behavior (invoices/visits/checks),
     // never on the pre-existing opening balance itself (spec #7).
-    _paymentSignals(cid, out);
+    _paymentSignals(cid, out, ctx);
 
     // ------------------------------------------------------------------
     // PATCH: Product Gap ≠ Account Risk by default.
@@ -438,13 +572,13 @@
     var skuSignals = [];
     if (typeof extractSkuSignals === 'function') {
       try {
-        skuSignals = extractSkuSignals(cid) || [];
+        skuSignals = extractSkuSignals(cid, ctx) || [];
       } catch (eSku) {
         skuSignals = [];
       }
     }
     if (skuSignals.length) {
-      _dedupeSkuAgainstAccountSignals(out, skuSignals);
+        _dedupeSkuAgainstAccountSignals(out, skuSignals, ctx);
       for (var si = 0; si < skuSignals.length; si++) {
         if (skuSignals[si]) {
           // P-01: guarantee sourceLevel on SKU-origin signals (sku_intelligence
@@ -454,6 +588,21 @@
           }
           out.push(skuSignals[si]);
         }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Family identity (runtime only): every product-level signal carries
+    //   signal.familyId = analysisGroupId || productId
+    // productId is preserved for display/context. familyId is never
+    // persisted (it only feeds the persistence KEY string).
+    // ------------------------------------------------------------------
+    if (typeof resolveFamilyId === 'function') {
+      for (var fmi = 0; fmi < out.length; fmi++) {
+        var fs = out[fmi];
+        if (!fs || fs.familyId != null) continue;
+        if (fs.productId == null || fs.productId === '' || fs.productId === 'multi') continue;
+        try { fs.familyId = resolveFamilyId(fs.productId, ctx); } catch (eFam) { /* fail-open */ }
       }
     }
 
@@ -492,7 +641,7 @@
     if (typeof adjustSignalForSeasonality === 'function') {
       try {
         for (var sei = 0; sei < out.length; sei++) {
-          if (out[sei]) adjustSignalForSeasonality(out[sei]);
+          if (out[sei]) adjustSignalForSeasonality(out[sei], ctx);
         }
       } catch (eSea) { /* fail-open */ }
     }
@@ -503,15 +652,31 @@
   /* F4 — KEY_PRODUCT_LOST / BASKET_SHRINK deduplication against SKU signals.
      Mutates accountSignals in place; may filter skuSignals array length by
      leaving suppressed account signals removed from accountSignals. */
-  function _dedupeSkuAgainstAccountSignals(accountSignals, skuSignals) {
+  function _dedupeSkuAgainstAccountSignals(accountSignals, skuSignals, ctx) {
     if (!accountSignals || !skuSignals || !skuSignals.length) return;
 
     var skuProductIds = Object.create(null);
+    var famOfD = (typeof makeFamilyResolver === 'function')
+      ? makeFamilyResolver(ctx)
+      : function (pid) { return pid; };
+    var skuFamilyIds = Object.create(null);
     var hasLineDropSku = false;
     for (var i = 0; i < skuSignals.length; i++) {
       var ss = skuSignals[i];
       if (!ss) continue;
       if (ss.productId && ss.productId !== 'multi') skuProductIds[ss.productId] = true;
+      if (ss.familyId != null && ss.familyId !== '') skuFamilyIds[ss.familyId] = true;
+      // Family-level SKU signals cover EVERY member SKU of the Family.
+      if (ss.evidence && Array.isArray(ss.evidence.memberProductIds)) {
+        for (var mm = 0; mm < ss.evidence.memberProductIds.length; mm++) {
+          skuProductIds[ss.evidence.memberProductIds[mm]] = true;
+        }
+      }
+      if (ss.evidence && Array.isArray(ss.evidence.affectedFamilyIds)) {
+        for (var af = 0; af < ss.evidence.affectedFamilyIds.length; af++) {
+          skuFamilyIds[ss.evidence.affectedFamilyIds[af]] = true;
+        }
+      }
       if (ss.evidence && Array.isArray(ss.evidence.affectedProductIds)) {
         for (var a = 0; a < ss.evidence.affectedProductIds.length; a++) {
           skuProductIds[ss.evidence.affectedProductIds[a]] = true;
@@ -541,16 +706,33 @@
         // time. Re-derive from customerBehavior so F4 can remove matched SKUs.
         var remainingNames = [];
         var remainingCount = 0;
-        if (typeof customerBehavior === 'function') {
+        var retainedRemaining = [];
+        if (s.evidence && Array.isArray(s.evidence.retainedLost)) {
+          retainedRemaining = s.evidence.retainedLost.slice();
+        }
+        if (s.evidence && Array.isArray(s.evidence.hardLost)) {
+          var hardLost = s.evidence.hardLost;
+          for (var hli = 0; hli < hardLost.length; hli++) {
+            var hardPid = hardLost[hli] && hardLost[hli].productId;
+            if (hardPid && (skuProductIds[hardPid] || skuFamilyIds[famOfD(hardPid)])) continue; // removed by SKU-level signal
+            remainingNames.push((hardLost[hli] && hardLost[hli].name) || hardPid || '');
+            remainingCount++;
+          }
+        } else if (typeof customerBehavior === 'function') {
           try {
-            var b = customerBehavior(s.customerId);
+            var b = customerBehavior(s.customerId, ctx);
             var declining = (b && Array.isArray(b.decliningProducts)) ? b.decliningProducts : [];
+            var retainedIds = Object.create(null);
+            for(var rli=0; rli<retainedRemaining.length; rli++){
+              var retainedPid = retainedRemaining[rli] && retainedRemaining[rli].productId;
+              if(retainedPid) retainedIds[retainedPid] = true;
+            }
             var lost = declining.filter(function (p) {
-              return p && p.earlyQty >= 5 && p.lateQty === 0;
+              return p && p.earlyQty >= 5 && p.lateQty === 0 && !retainedIds[p.productId];
             });
             for (var k = 0; k < lost.length; k++) {
               var pid = lost[k].productId;
-              if (pid && skuProductIds[pid]) continue; // removed by SKU-level signal
+              if (pid && (skuProductIds[pid] || skuFamilyIds[famOfD(pid)])) continue; // removed by SKU-level signal
               remainingNames.push(lost[k].name || pid || '');
               remainingCount++;
             }
@@ -562,13 +744,27 @@
           remainingCount = s.value || 0;
         }
 
-        if (remainingCount <= 0) {
-          accountSignals.splice(j, 1);
-        } else if (remainingNames.length) {
+        if (remainingCount > 0) {
           s.value = remainingCount;
-          s.reason = remainingNames.length === 1
-            ? 'محصول کلیدی «' + remainingNames[0] + '» دیگر خریداری نمی‌شود'
-            : 'محصولات کلیدی (' + remainingNames.join('، ') + ') دیگر خریداری نمی‌شوند';
+          s.severity = 'high';
+          if (remainingNames.length) {
+            s.reason = remainingNames.length === 1
+              ? 'محصول کلیدی «' + remainingNames[0] + '» دیگر خریداری نمی‌شود'
+              : 'محصولات کلیدی (' + remainingNames.join('، ') + ') دیگر خریداری نمی‌شوند';
+          }
+        } else if (retainedRemaining.length > 0) {
+          var retainedNames = retainedRemaining.map(function (p) {
+            var prod = (typeof data !== 'undefined' && Array.isArray(data.products))
+              ? data.products.find(function(x){ return x && x.id === p.productId; }) : null;
+            var groupName = _analysisGroupNameById(prod ? prod.analysisGroupId : null);
+            return 'محصول «' + ((p && p.name) || '') + '» دیگر خریداری نمی‌شود، اما گروه تحلیلی «'
+              + (groupName || '') + '» با محصول جایگزین حفظ شده است';
+          }).filter(Boolean);
+          s.value = retainedRemaining.length;
+          s.severity = 'low';
+          s.reason = retainedNames.join(' — ');
+        } else {
+          accountSignals.splice(j, 1);
         }
       }
     }
@@ -617,9 +813,9 @@
     return (p && p.name) ? p.name : (pid || '');
   }
 
-  function _watchRawInvoiceSplit(cid) {
+  function _watchRawInvoiceSplit(cid, ctx) {
     if (typeof customerInvoices !== 'function') return null;
-    var invs = customerInvoices(cid).slice().sort(function (a, b) {
+    var invs = customerInvoices(cid, ctx).slice().sort(function (a, b) {
       return String(a.date || '').localeCompare(String(b.date || ''));
     });
     var count = invs.length;
@@ -696,16 +892,22 @@
      "Meaningful decline" per product: earlyQty >= 2 and lateQty <= earlyQty*0.5
      — chosen independently of calc.js's decliningProducts thresholds
      (which require invoiceCount>=4, earlyQty>=2, lateQty<earlyQty*0.6). */
-  function _basketShrinkWatch(cid, out) {
-    var split = _watchRawInvoiceSplit(cid);
+  function _basketShrinkWatch(cid, out, ctx, productsById, lateProductIds) {
+    var split = _watchRawInvoiceSplit(cid, ctx);
     if (!split) return;
     var earlyKeys = Object.keys(split.early);
     var decliningCount = 0;
     for (var i = 0; i < earlyKeys.length; i++) {
-      var e = split.early[earlyKeys[i]];
-      var l = split.late[earlyKeys[i]];
+      var pid = earlyKeys[i];
+      var e = split.early[pid];
+      var l = split.late[pid];
       var lateQty = l ? l.qty : 0;
-      if (e.qty >= 2 && lateQty <= e.qty * 0.5) decliningCount++;
+      if (e.qty >= 2 && lateQty <= e.qty * 0.5) {
+        // Product Analysis Group: a same-group substitute means this SKU's
+        // decline is not a "hard" decline — don't count it (spec §4.7).
+        if (_isGroupRetained(pid, productsById, lateProductIds)) continue;
+        decliningCount++;
+      }
     }
     if (decliningCount < 1) return;
     var level = decliningCount >= 2 ? 'medium' : 'low';
@@ -722,16 +924,22 @@
      given by spec: earlyQty >= 3, lateQty === 0.
      ASSUMPTION (spec gives no level bands for this rule — reported,
      not guessed silently): same medium/low convention as 6C above. */
-  function _keyProductLostWatch(cid, out) {
-    var split = _watchRawInvoiceSplit(cid);
+  function _keyProductLostWatch(cid, out, ctx, productsById, lateProductIds) {
+    var split = _watchRawInvoiceSplit(cid, ctx);
     if (!split) return;
     var earlyKeys = Object.keys(split.early);
     var lostCount = 0;
     for (var i = 0; i < earlyKeys.length; i++) {
-      var e = split.early[earlyKeys[i]];
-      var l = split.late[earlyKeys[i]];
+      var pid = earlyKeys[i];
+      var e = split.early[pid];
+      var l = split.late[pid];
       var lateQty = l ? l.qty : 0;
-      if (e.qty >= 3 && lateQty === 0) lostCount++;
+      if (e.qty >= 3 && lateQty === 0) {
+        // Product Analysis Group: retained-by-group SKU never becomes a
+        // hard-lost Watch item (spec §4.6). Watch lifecycle untouched otherwise.
+        if (_isGroupRetained(pid, productsById, lateProductIds)) continue;
+        lostCount++;
+      }
     }
     if (lostCount < 1) return;
     var level = lostCount >= 2 ? 'medium' : 'low';
@@ -749,12 +957,19 @@
   function _isWatchSuppressedByConfirmed(watch, confirmedSignals) {
     var superseded = WATCH_SUPERSESSION_MAP[watch.category];
     if (!superseded || !superseded.length || !confirmedSignals || !confirmedSignals.length) return false;
-    var wantPid = (watch.productId != null && watch.productId !== '') ? watch.productId : null;
+    // Identity = customerId + FAMILY (analysisGroupId||productId, runtime).
+    // For products without a group this equals the legacy productId match.
+    function _wid(pid, fid) {
+      if (pid == null || pid === '' || pid === 'multi') return null;
+      if (fid != null && fid !== '') return fid;
+      return (typeof resolveFamilyId === 'function') ? resolveFamilyId(pid) : pid;
+    }
+    var wantPid = _wid(watch.productId, watch.familyId);
     for (var i = 0; i < confirmedSignals.length; i++) {
       var s = confirmedSignals[i];
       if (!s || s.status !== 'active') continue;
       if (superseded.indexOf(s.category) === -1) continue;
-      var sPid = (s.productId != null && s.productId !== '' && s.productId !== 'multi') ? s.productId : null;
+      var sPid = _wid(s.productId, s.familyId);
       if (sPid === wantPid) return true;
     }
     return false;
@@ -765,21 +980,36 @@
      computed extractCustomerSignals(cid) this render cycle (e.g.
      customer.js, which must call both per spec §15) pass it in to
      avoid a redundant recomputation. When omitted, computed internally. */
-  function extractWatchObservations(cid, confirmedSignalsOverride) {
+  function extractWatchObservations(cid, confirmedSignalsOverride, ctx, skipMemo) {
+    if (ctx && typeof ctx.memo === 'function' && !skipMemo) {
+      // The optional confirmedSignalsOverride is part of the function input.
+      // Keep override and self-computed results in separate memo slots so a
+      // prior call cannot silently satisfy a later call with a different
+      // input shape.
+      var watchMemoKey = String(cid) + ':' + (Array.isArray(confirmedSignalsOverride) ? 'override' : 'self');
+      return ctx.memo('watchObservations', watchMemoKey, function () {
+        return extractWatchObservations(cid, confirmedSignalsOverride, ctx, true);
+      });
+    }
     var out = [];
     if (!cid) return out;
     if (typeof customerBehavior !== 'function') return out;
-    var b = customerBehavior(cid);
+    var b = customerBehavior(cid, ctx);
     if (!b) return out;
+
+    // Product Analysis Group: computed ONCE here and reused by both
+    // consumer Watch functions below — never re-scans invoice history per Watch.
+    var productsById = _buildProductsByIdMap();
+    var lateProductIds = _getConfirmedLateProductIds(cid, ctx);
 
     _purchaseDeclineWatch(cid, b, out);
     _behindPatternWatch(cid, b, out);
-    _basketShrinkWatch(cid, out);
-    _keyProductLostWatch(cid, out);
+    _basketShrinkWatch(cid, out, ctx, productsById, lateProductIds);
+    _keyProductLostWatch(cid, out, ctx, productsById, lateProductIds);
 
     if (typeof extractSkuWatchObservations === 'function') {
       try {
-        var skuW = extractSkuWatchObservations(cid) || [];
+        var skuW = extractSkuWatchObservations(cid, ctx) || [];
         for (var i = 0; i < skuW.length; i++) {
           if (skuW[i]) out.push(skuW[i]);
         }
@@ -792,7 +1022,7 @@
     } else {
       confirmed = [];
       if (typeof extractCustomerSignals === 'function') {
-        try { confirmed = extractCustomerSignals(cid) || []; } catch (eConf) { confirmed = []; }
+        try { confirmed = extractCustomerSignals(cid, ctx) || []; } catch (eConf) { confirmed = []; }
       }
     }
 
