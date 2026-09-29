@@ -1,45 +1,17 @@
 /* app.js — screens, forms, navigation, init, QA
-   Phase 0 extract: no logic changes. Depends on models/db/calc/stock/backup/ui.
+   Phase 0 extract: no logic changes. Depends on models/db/calc/stock/payments/backup/ui.
 */
 // ---------- submit guard (double-tap on mobile) ----------
 /** Disable mutation button for one run; re-enable only on failure/validation abort. */
-function focusValidationControl(btn){
-  if(!btn) return;
-  const id = btn.id || '';
-  const root = btn.closest('.sheet') || document;
-  let selectors = [];
-  if(id === 'save-customer') selectors = ['#f-name'];
-  else if(id === 'save-check') selectors = ['#f-amount'];
-  else if(id === 'save-tx') selectors = ['#f-amount','#f-return-invoice','.ret-qty'];
-  else if(id === 'ep-save') selectors = ['#ep-amount'];
-  else if(id === 'save-suppay') selectors = ['#f-amount'];
-  else if(id === 'save-purchase') selectors = ['#f-amount','#f-product','#mi-product','#mi-qty','#mi-price'];
-  else if(id === 'save-return') selectors = ['#f-ret-qty','#f-ret-amount','.ret-item-qty'];
-  else if(id === 'save-product') selectors = ['#f-name'];
-  else if(id === 'save-invoice') selectors = ['.row-product-search','.row-qty','.row-price','#f-discount'];
-  else if(id === 'save-visit' || id === 'save-visit-invoice') selectors = ['[data-vgroup]'];
-  for(const sel of selectors){
-    const el = root.querySelector(sel);
-    if(el && !el.disabled && el.offsetParent !== null){
-      try{ el.setAttribute('aria-invalid','true'); el.focus({preventScroll:true}); el.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_e){ try{ el.focus(); }catch(__e){} }
-      return;
-    }
-  }
-}
-
 async function withSubmitGuard(btn, fn){
   if(!btn){ await fn(); return; }
   if(btn.disabled) return;
   btn.disabled = true;
-  window.__sheetSaveInFlight = (window.__sheetSaveInFlight || 0) + 1;
   try{
     await fn();
   }catch(e){
     console.error(e);
-    if(e && e.message === 'validation') focusValidationControl(btn);
     try{ btn.disabled = false; }catch(_e){}
-  }finally{
-    window.__sheetSaveInFlight = Math.max(0, (window.__sheetSaveInFlight || 1) - 1);
   }
 }
 
@@ -130,7 +102,7 @@ function renderProducts(main){
     wrap.innerHTML = list.map(p=>{
       const low = (p.minStock||0)>0 && (p.stockQty||0)<=p.minStock;
       const isOff = p.active===false;
-      return `<div class="ledger-row" data-edit-product="${esc(p.id)}" style="${isOff?'opacity:.45;':''}">
+      return `<div class="ledger-row" data-edit-product="${p.id}" style="${isOff?'opacity:.45;':''}">
         <span class="name">${esc(p.name)}${p.category?` <span class="sub" style="display:inline;">(${esc(p.category)})</span>`:''}${isOff?' <span class="badge pending">غیرفعال</span>':''}</span>
         <span class="filler"></span>
         <span class="amount">موجودی: ${p.stockQty||0} ${low?'<span class="badge low">کم</span>':''}
@@ -187,7 +159,7 @@ function renderCustomers(main){
       const status = customerStatus(c.id);
       const statusLabel = {new:'جدید', active:'فعال', inactive:'بدون خرید اخیر', lost:'از دست رفته'}[status];
       const isOff = c.active===false;
-      return `<div class="ledger-row" data-open-customer="${esc(c.id)}" style="${isOff?'opacity:.45;':''}">
+      return `<div class="ledger-row" data-open-customer="${c.id}" style="${isOff?'opacity:.45;':''}">
         <span class="name">${esc(c.name)}${c.region?` <span class="sub" style="display:inline;">(${esc(c.region)}${c.route?' — '+esc(c.route):''})</span>`:''}${isOff?' <span class="badge pending">غیرفعال</span>':''}</span>
         <span class="filler"></span>
         <span class="amount" style="color:${color}">
@@ -233,19 +205,19 @@ function renderReports(main){
 
     <h2 class="section-title">بهترین مشتریان</h2>
     ${tc.length===0?`<div class="empty">هنوز فروشی ثبت نشده</div>`:tc.map(x=>`
-      <div class="ledger-row" data-open-customer="${esc(x.c.id)}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
+      <div class="ledger-row" data-open-customer="${x.c.id}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
       <span class="amount">${toman(x.t.invTotal)} ت</span></div>
     `).join('')}
 
     <h2 class="section-title">مشتریان بدهکار (به ترتیب بدهی)</h2>
     ${debtors.length===0?`<div class="empty">بدهکاری ثبت نشده</div>`:debtors.map(x=>`
-      <div class="ledger-row" data-open-customer="${esc(x.c.id)}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
+      <div class="ledger-row" data-open-customer="${x.c.id}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
       <span class="amount accent-rust">${toman(x.t.balance)} ت</span></div>
     `).join('')}
 
     <h2 class="section-title">مشتریان بدون خرید اخیر / از دست رفته</h2>
     ${inactives.length===0?`<div class="empty">همه‌ی مشتریان اخیراً خرید داشته‌اند</div>`:inactives.map(x=>`
-      <div class="ledger-row" data-open-customer="${esc(x.c.id)}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
+      <div class="ledger-row" data-open-customer="${x.c.id}"><span class="name">${esc(x.c.name)}</span><span class="filler"></span>
       <span class="amount">${isFinite(x.st.daysSinceLast)? x.st.daysSinceLast+' روز پیش' : 'هرگز'}</span></div>
     `).join('')}
 
@@ -295,10 +267,10 @@ function renderBackup(main){
   document.getElementById('export-json').addEventListener('click', exportBackupJSON);
   document.getElementById('export-excel').addEventListener('click', exportExcel);
   document.getElementById('undo-import').addEventListener('click', undoLastRestore);
-  document.getElementById('do-import').addEventListener('click', async ()=>{
+  document.getElementById('do-import').addEventListener('click', ()=>{
     const inp = document.getElementById('import-file');
     if(!inp.files || !inp.files[0]){ showToast('اول یه فایل انتخاب کن'); return; }
-    if(!(await appConfirm('مطمئنی؟ اطلاعات فعلی با فایل بکاپ جایگزین می‌شه.'))) return;
+    if(!confirm('مطمئنی؟ اطلاعات فعلی با فایل بکاپ جایگزین می‌شه.')) return;
     importBackupJSON(inp.files[0]);
   });
 
@@ -307,10 +279,10 @@ function renderBackup(main){
     if(!wrap) return; // کاربر قبل از رسیدن جواب، تب رو عوض کرده
     if(!list.length){ wrap.innerHTML = `<div class="empty">هنوز نسخه‌ی خودکاری گرفته نشده</div>`; return; }
     wrap.innerHTML = list.slice().reverse().map(item=>`
-      <div class="ledger-row" data-restore-auto="${esc(item.key)}">
+      <div class="ledger-row" data-restore-auto="${item.key}">
         <span class="name">${new Date(item.ts).toLocaleString('fa-IR')}</span>
         <span class="filler"></span>
-        <span class="amount"><button class="btn small secondary" data-restore-auto-btn="${esc(item.key)}">بازیابی</button></span>
+        <span class="amount"><button class="btn small secondary" data-restore-auto-btn="${item.key}">بازیابی</button></span>
       </div>
     `).join('');
     wrap.querySelectorAll('[data-restore-auto-btn]').forEach(btn=>{
@@ -330,7 +302,7 @@ function renderSuppliers(main){
   }
   main.innerHTML = data.suppliers.map(s=>{
     const t = supplierTotals(s.id);
-    return `<div class="ledger-row" data-open-supplier="${esc(s.id)}">
+    return `<div class="ledger-row" data-open-supplier="${s.id}">
       <span class="name">${esc(s.name)}</span>
       <span class="filler"></span>
       <span class="amount" style="color:${t.balance>0?'var(--red)':'var(--olive-dark)'}">
@@ -684,7 +656,6 @@ async function exportInvoiceImage(invId){
 // ---------- products / inventory ----------
 function openAddProduct(editId){
   const p = editId ? data.products.find(x=>x.id===editId) : null;
-  const productId = editId || null;
   const history = (p && p.priceHistory) ? [...p.priceHistory].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6) : [];
   const stockLog = (p && p.stockLog) ? [...p.stockLog].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8) : [];
   const profitPct = p && p.buy ? Math.round(((p.retail-p.buy)/p.buy)*100) : null;
@@ -700,12 +671,12 @@ function openAddProduct(editId){
 
     <div class="field"><label>تاریخ این تغییر قیمت</label>${shamsiDateInputHTML('f-pdate', todayISO())}</div>
     <div class="field" style="display:flex;gap:8px;">
-      <div style="flex:1;"><label>قیمت خرید</label><input id="f-buy" type="text" inputmode="decimal" value="${(typeof formatLiveAmount==='function' && p && p.buy) ? formatLiveAmount(String(p.buy)) : (p?p.buy:'')}"></div>
-      <div style="flex:1;"><label>قیمت عمده</label><input id="f-wholesale" type="text" inputmode="decimal" value="${(typeof formatLiveAmount==='function' && p && p.wholesale) ? formatLiveAmount(String(p.wholesale)) : (p?p.wholesale:'')}"></div>
-      <div style="flex:1;"><label>قیمت مصرف‌کننده</label><input id="f-retail" type="text" inputmode="decimal" value="${(typeof formatLiveAmount==='function' && p && p.retail) ? formatLiveAmount(String(p.retail)) : (p?p.retail:'')}"></div>
+      <div style="flex:1;"><label>قیمت خرید</label><input id="f-buy" type="text" inputmode="decimal" value="${p?p.buy:''}"></div>
+      <div style="flex:1;"><label>قیمت عمده</label><input id="f-wholesale" type="text" inputmode="decimal" value="${p?p.wholesale:''}"></div>
+      <div style="flex:1;"><label>قیمت مصرف‌کننده</label><input id="f-retail" type="text" inputmode="decimal" value="${p?p.retail:''}"></div>
     </div>
-    ${profitPct!==null?`<div class="product-profit-pct">درصد سود تقریبی: <b>${profitPct}٪</b></div>`:''}
-    ${p?`<div class="empty form-hint" style="padding:0 0 8px;text-align:right;font-size:.78rem;">قیمت خرید واقعی به روش FIFO الان: <b>${toman(productFifoUnitCost(p.id))} ت</b> (میانگین وزنی لایه‌های موجود در انبار — «قیمت خرید» بالا فقط مبنای پیش‌فرض برای خریدهای بدون قیمت مشخص است) — ارزش این کالا در انبار: <b>${toman(productInventoryValue(p.id))} ت</b></div>`:''}
+    ${profitPct!==null?`<div class="empty" style="padding:0 0 8px;text-align:right;font-size:.8rem;">درصد سود تقریبی (نسبت به قیمت مصرف‌کننده): ${profitPct}٪</div>`:''}
+    ${p?`<div class="empty" style="padding:0 0 8px;text-align:right;font-size:.78rem;">قیمت خرید واقعی به روش FIFO الان: <b>${toman(productFifoUnitCost(p.id))} ت</b> (میانگین وزنی لایه‌های موجود در انبار — «قیمت خرید» بالا فقط مبنای پیش‌فرض برای خریدهای بدون قیمت مشخص است) — ارزش این کالا در انبار: <b>${toman(productInventoryValue(p.id))} ت</b></div>`:''}
 
     <h2 class="section-title">موجودی انبار</h2>
     <div class="field" style="display:flex;gap:8px;">
@@ -726,7 +697,6 @@ function openAddProduct(editId){
     </div>
     ${history.length?`
       <h2 class="section-title">تاریخچه قیمت</h2>
-      <div class="product-price-history">
       ${history.map(h=>`
         <div class="ledger-row">
           <span class="name">${faDate(h.date)}</span>
@@ -734,7 +704,6 @@ function openAddProduct(editId){
           <span class="amount">خرید ${toman(h.buy)} / عمده ${toman(h.wholesale!==undefined?h.wholesale:h.sell)} / مصرف‌کننده ${toman(h.retail!==undefined?h.retail:h.sell)}</span>
         </div>
       `).join('')}
-      </div>
     `:''}
     ${stockLog.length?`
       <h2 class="section-title">تاریخچه موجودی</h2>
@@ -749,7 +718,6 @@ function openAddProduct(editId){
   `);
 
   async function persist(){
-    const liveProduct = productId ? data.products.find(x=>x.id===productId) : null;
     const name = document.getElementById('f-name').value.trim();
     const category = document.getElementById('f-cat').value.trim();
     const packageWeight = numVal(document.getElementById('f-pkgw'));
@@ -760,8 +728,7 @@ function openAddProduct(editId){
     const stockQty = numVal(document.getElementById('f-stock'));
     const minStock = numVal(document.getElementById('f-minstock'));
     if(!name){ showToast('نام جنس رو وارد کن'); return null; }
-    if(liveProduct){
-      const p = liveProduct;
+    if(p){
       // Stock adjust first (may block). On failure leave other fields untouched and do not save.
       if(stockQty !== p.stockQty){
         const adj = manualStockAdjustAbsolute(p.id, stockQty, 'ویرایش دستی موجودی');
@@ -799,11 +766,9 @@ function openAddProduct(editId){
   if(p){
     document.getElementById('toggle-product-active').addEventListener('click', async (e)=>{
       await withSubmitGuard(e.currentTarget, async ()=>{
-        const liveProduct = productId ? data.products.find(x=>x.id===productId) : null;
-        if(!liveProduct) throw new Error('validation');
-        liveProduct.active = (liveProduct.active===false) ? true : false;
+        p.active = (p.active===false) ? true : false;
         await saveData(); closeModal(); render();
-        showToast(liveProduct.active===false ? 'جنس غیرفعال شد' : 'جنس فعال شد');
+        showToast(p.active===false ? 'جنس غیرفعال شد' : 'جنس فعال شد');
       });
     });
     document.getElementById('stock-in').addEventListener('click', async (e)=>{
@@ -832,7 +797,6 @@ function openAddProduct(editId){
 // ---------- customers ----------
 function openAddCustomer(editId){
   const c = editId ? data.customers.find(x=>x.id===editId) : null;
-  const customerId = editId || null;
   openSheet(`
     <h3>${c?'ویرایش مشتری':'مشتری جدید'}</h3>
     <div class="field"><label>نام فروشگاه</label><input id="f-name" value="${c?esc(c.name):''}"></div>
@@ -870,11 +834,10 @@ function openAddCustomer(editId){
       const address = document.getElementById('f-address').value.trim();
       const note = document.getElementById('f-note').value.trim();
       const openingBalance = numVal(document.getElementById('f-opening'));
-      const liveCustomer = customerId ? data.customers.find(x=>x.id===customerId) : null;
-      if(liveCustomer){ liveCustomer.ownerName=ownerName; liveCustomer.name=name; liveCustomer.phone=phone; liveCustomer.region=region; liveCustomer.route=route; liveCustomer.address=address; liveCustomer.note=note; liveCustomer.openingBalance=openingBalance; }
+      if(c){ c.ownerName=ownerName; c.name=name; c.phone=phone; c.region=region; c.route=route; c.address=address; c.note=note; c.openingBalance=openingBalance; }
       else{ data.customers.push({id:uid(), name, ownerName, phone, region, route, address, note, openingBalance, visits:[], active:true}); }
       await saveData(); closeModal(); render();
-      if(liveCustomer) openCustomerDetail(liveCustomer.id);
+      if(c) openCustomerDetail(c.id);
       showToast('ذخیره شد');
     });
   });
@@ -1145,7 +1108,7 @@ function openAddTransaction(cid){
 
           const expectedReturnAmount = returnItems.reduce((s,ri)=>s+(ri.qty*(ri.price||0)),0);
           if(expectedReturnAmount>0 && Math.abs(expectedReturnAmount-amount)>1){
-            const proceedAmount = await appConfirm('⚠️ مبلغ واردشده با «مقدار × قیمت واحد» کالاهای برگشتی هم‌خوانی ندارد.\n\nمبلغ واردشده: '+toman(amount)+' تومان\nمبلغ منطقی طبق کالاها: '+toman(expectedReturnAmount)+' تومان\n\nمطمئنی می‌خوای همینطور ثبت کنی؟');
+            const proceedAmount = confirm('⚠️ مبلغ واردشده با «مقدار × قیمت واحد» کالاهای برگشتی هم‌خوانی ندارد.\n\nمبلغ واردشده: '+toman(amount)+' تومان\nمبلغ منطقی طبق کالاها: '+toman(expectedReturnAmount)+' تومان\n\nمطمئنی می‌خوای همینطور ثبت کنی؟');
             if(!proceedAmount) throw new Error('validation');
           }
         }
@@ -1164,7 +1127,7 @@ function openAddTransaction(cid){
           }
           await saveData();
         }catch(err){
-          restoreDataInPlace(previousData);
+          data = previousData;
           throw err;
         }
         // Game Center hook (derived only — never rolls back CRM)
@@ -1175,7 +1138,6 @@ function openAddTransaction(cid){
             console.warn('Game hook failed:', e);
           }
         }
-        closeModal();
         openCustomerDetail(cid); render(); showToast('ثبت شد');
       });
     });
@@ -1214,23 +1176,20 @@ function openEditStandalonePayment(cid, paymentId){
       if(amount<=0){ showToast('مبلغ باید بیشتر از صفر باشد'); throw new Error('validation'); }
       const previousData=JSON.parse(JSON.stringify(data));
       try{
-        const livePayment = (data.payments||[]).find(x=>x.id===paymentId && x.customerId===cid);
-        if(!livePayment) throw new Error('validation');
-        livePayment.method=method; livePayment.date=dateStr||todayISO(); livePayment.amount=amount; livePayment.note=(noteStr||'').trim();
+        p.method=method; p.date=dateStr||todayISO(); p.amount=amount; p.note=(noteStr||'').trim();
         await saveData();
-      }catch(err){ restoreDataInPlace(previousData); throw err; }
-      closeModal();
+      }catch(err){ data=previousData; throw err; }
       openCustomerDetail(cid); render(); showToast('دریافت ویرایش شد');
     });
   });
   document.getElementById('ep-delete').addEventListener('click', async e=>{
     await withSubmitGuard(e.currentTarget, async()=>{
-      if(!(await appConfirm('این دریافت از حساب مشتری حذف شود؟'))) throw new Error('validation');
+      if(!confirm('این دریافت از حساب مشتری حذف شود؟')) throw new Error('validation');
       const previousData=JSON.parse(JSON.stringify(data));
       try{
         data.payments=data.payments.filter(x=>x.id!==paymentId);
         await saveData();
-      }catch(err){ restoreDataInPlace(previousData); throw err; }
+      }catch(err){ data=previousData; throw err; }
       if (typeof gameOnPaymentDeleted === 'function') {
         try {
           await gameOnPaymentDeleted(paymentId);
@@ -1238,7 +1197,6 @@ function openEditStandalonePayment(cid, paymentId){
           console.warn('Game hook failed:', e);
         }
       }
-      closeModal();
       openCustomerDetail(cid); render(); showToast('دریافت حذف شد');
     });
   });
@@ -1259,7 +1217,7 @@ function openAddCheck(cid){
       const checkNumber = document.getElementById('f-num').value.trim();
       if(amount<=0){ showToast('مبلغ رو وارد کن'); throw new Error('validation'); }
       data.checks.push({id:uid(), customerId:cid, amount, dueDate, checkNumber, status:'pending'});
-      await saveData(); closeModal(); openCustomerDetail(cid); render(); showToast('چک ثبت شد');
+      await saveData(); openCustomerDetail(cid); render(); showToast('چک ثبت شد');
     });
   });
 }
@@ -1350,7 +1308,7 @@ function noPurchasePromptHtml(candidates, source, introText){
       ? ((data.products.find(function(p){ return p && p.id === s.productId; }) || {}).name || s.productId)
       : s.productId);
     return '<div class="npr-product" style="margin:8px 0 4px;">' +
-      '<div style="font-weight:500;margin-bottom:4px;">' + esc(name) + '</div>' +
+      '<div style="font-weight:600;margin-bottom:4px;">' + esc(name) + '</div>' +
       '<div class="chip-wrap">' + noPurchaseReasonChipsHtml(s.productId, s.category, source) + '</div>' +
       '</div>';
   }).join('');
@@ -1549,7 +1507,7 @@ function openAddVisit(cid){
         '<div class="visit-card visit-card-enter" data-visit-step="product">' +
           '<div class="q-title">چه محصولی پیشنهاد/بررسی شد؟</div>' +
           (avail.length
-            ? '<div class="visit-product-grid chip-wrap">' + avail.map(function (p) {
+            ? '<div class="chip-wrap">' + avail.map(function (p) {
                 return chipBtn('product', p.id, p.name || '—');
               }).join('') + '</div>'
             : '<div class="empty" style="padding:12px 0;">همه محصولات فعال قبلاً ثبت شدند یا کالایی نیست.</div>') +
@@ -1557,7 +1515,7 @@ function openAddVisit(cid){
     } else if (step === 'reaction') {
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="reaction">' +
-          '<div class="q-title">واکنش مشتری؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
+          '<div class="q-title">واکنش مشتری؟ <span class="sub" style="display:inline;font-weight:500;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
           '<div class="chip-wrap">' + REACTION_CHIPS.map(function (o) {
             return chipBtn('reaction', o.value, o.label);
           }).join('') + '</div>' +
@@ -1565,7 +1523,7 @@ function openAddVisit(cid){
     } else if (step === 'rejectReason') {
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="rejectReason">' +
-          '<div class="q-title">چرا نخرید؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
+          '<div class="q-title">چرا نخرید؟ <span class="sub" style="display:inline;font-weight:500;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
           '<div class="chip-wrap">' + REJECTION_REASON_CHIPS.map(function (o) {
             return chipBtn('rejectReason', o.value, o.label);
           }).join('') + '</div>' +
@@ -1573,7 +1531,7 @@ function openAddVisit(cid){
     } else if (step === 'stockSource') {
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="stockSource">' +
-          '<div class="q-title">این موجودی از کجا بود؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
+          '<div class="q-title">این موجودی از کجا بود؟ <span class="sub" style="display:inline;font-weight:500;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
           '<div class="chip-wrap">' + STOCK_SOURCE_CHIPS.map(function (o) {
             return chipBtn('stockSource', o.value, o.label);
           }).join('') + '</div>' +
@@ -1823,7 +1781,7 @@ function openCustomerDetail(cid){
 
     <h2 class="section-title">فاکتورها</h2>
     ${invs.length===0?`<div class="empty">فاکتوری ثبت نشده</div>`:invs.map(i=>`
-      <div class="ledger-row" data-open-invoice="${esc(i.id)}">
+      <div class="ledger-row" data-open-invoice="${i.id}">
         <span class="name">#${i.number||'—'} — ${faDate(i.date)}</span>
         <span class="filler"></span>
         <span class="amount">${toman(i.total)} ت</span>
@@ -1838,7 +1796,7 @@ function openCustomerDetail(cid){
 
     <h2 class="section-title">چک‌ها</h2>
     ${checks.length===0?`<div class="empty">چکی ثبت نشده</div>`:checks.map(c2=>`
-      <div class="ledger-row" data-toggle-check="${esc(c2.id)}">
+      <div class="ledger-row" data-toggle-check="${c2.id}">
         <span class="name">سررسید ${faDate(c2.dueDate)} ${c2.checkNumber?`<span class="sub">شماره: ${esc(c2.checkNumber)}</span>`:''}</span>
         <span class="filler"></span>
         <span class="amount">${toman(c2.amount)} ت <span class="badge ${c2.status==='cleared'?'cleared':'pending'}">${c2.status==='cleared'?'وصول شده':'در جریان'}</span></span>
@@ -1876,9 +1834,9 @@ function openCustomerDetail(cid){
       await withSubmitGuard(e.currentTarget, async()=>{
         const p=data.payments.find(x=>x.id===btn.dataset.deleteStandalonePayment && x.customerId===cid);
         if(!p || p.invoiceId || p.method==='return') return;
-        if(!(await appConfirm('این دریافت از حساب مشتری حذف شود؟'))) throw new Error('validation');
+        if(!confirm('این دریافت از حساب مشتری حذف شود؟')) throw new Error('validation');
         const previousData=JSON.parse(JSON.stringify(data));
-        try{ data.payments=data.payments.filter(x=>x.id!==p.id); await saveData(); }catch(err){ restoreDataInPlace(previousData); throw err; }
+        try{ data.payments=data.payments.filter(x=>x.id!==p.id); await saveData(); }catch(err){ data=previousData; throw err; }
         if (typeof gameOnPaymentDeleted === 'function') {
           try {
             await gameOnPaymentDeleted(p.id);
@@ -1886,72 +1844,17 @@ function openCustomerDetail(cid){
             console.warn('Game hook failed:', e);
           }
         }
-        closeModal();
-      openCustomerDetail(cid); render(); showToast('دریافت حذف شد');
+        openCustomerDetail(cid); render(); showToast('دریافت حذف شد');
       });
     });
   });
   document.querySelectorAll('[data-toggle-check]').forEach(row=>{
     row.addEventListener('click', async ()=>{
       const chk = data.checks.find(x=>x.id===row.dataset.toggleCheck);
-      if(!chk) return;
-      if(!(await appConfirm(chk.status === 'cleared' ? 'وضعیت این چک به «در جریان» برگردد؟' : 'این چک به‌عنوان «وصول‌شده» ثبت شود؟'))) return;
-      const prev = chk.status;
-      try{
-        chk.status = chk.status==='cleared' ? 'pending' : 'cleared';
-        await saveData(); openCustomerDetail(cid); render();
-      }catch(err){
-        chk.status = prev;
-        throw err;
-      }
+      chk.status = chk.status==='cleared' ? 'pending' : 'cleared';
+      await saveData(); openCustomerDetail(cid); render();
     });
   });
-}
-
-/* Invoice-linked payment/check persistence helpers.
-   These are the single source of truth for the payment records created by
-   Invoice V6.  They intentionally live with the invoice workflow because
-   invoice creation/edit/delete all depend on the same linkage contract. */
-function pushInvoicePayments(cid, inv, cashPaid, cardPaid, transferPaid, checkPaid, checkDue, checkMeta){
-  if(!inv || !inv.id || !cid) return;
-  data.payments = data.payments || [];
-  data.checks = data.checks || [];
-  const date = inv.date || todayISO();
-  const addPayment = function(method, amount){
-    amount = Number(amount)||0;
-    if(amount<=0) return;
-    data.payments.push({
-      id: uid(),
-      customerId: cid,
-      date,
-      amount,
-      method,
-      note: 'دریافت همراه فاکتور #'+(inv.number || '—'),
-      invoiceId: inv.id,
-    });
-  };
-  addPayment('cash', cashPaid);
-  addPayment('card', cardPaid);
-  addPayment('transfer', transferPaid);
-
-  const checkAmount = Number(checkPaid)||0;
-  if(checkAmount>0){
-    data.checks.push({
-      id: uid(),
-      customerId: cid,
-      amount: checkAmount,
-      dueDate: checkDue || date,
-      checkNumber: checkMeta && checkMeta.checkNumber ? checkMeta.checkNumber : '',
-      status: checkMeta && checkMeta.status ? checkMeta.status : 'pending',
-      invoiceId: inv.id,
-    });
-  }
-}
-
-function revertInvoicePayments(inv){
-  if(!inv || !inv.id) return;
-  data.payments = (data.payments||[]).filter(function(p){ return p.invoiceId !== inv.id; });
-  data.checks = (data.checks||[]).filter(function(c){ return c.invoiceId !== inv.id; });
 }
 
 function openInvoiceDetail(invId, cid){
@@ -2012,7 +1915,7 @@ function openInvoiceDetail(invId, cid){
         showToast('این فاکتور دارای برگشت از فروش است و برای حفظ یکپارچگی موجودی قابل حذف نیست');
         throw new Error('validation');
       }
-      if(!(await appConfirm('با حذف این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟'))) throw new Error('validation');
+      if(!confirm('با حذف این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟')) throw new Error('validation');
       // اسنپ‌شات کامل قبل از هر mutation — همان الگوی ثبت/ویرایش فاکتور —
       // تا اگر saveData() شکست بخورد، data در حافظه دقیقاً به حالت قبل از
       // حذف برگردد و با آخرین نسخه‌ی موفق در IndexedDB ناهماهنگ نماند.
@@ -2023,7 +1926,7 @@ function openInvoiceDetail(invId, cid){
       try{
         await saveData();
       }catch(saveErr){
-        restoreDataInPlace(previousData);
+        data = previousData;
         throw saveErr;
       }
       // Game Center: reverse invoice XP if previously claimed (never affects CRM)
@@ -2061,14 +1964,12 @@ function openInvoiceForm(cid, editInv){
   let rows = editInv
     ? editInv.items.map(it=>({productId:it.productId, qty:it.qty, price:it.price, discount:it.discount||0, buyPrice:it.buyPrice}))
     : [{productId:'', qty:1, price:0, discount:0}];
-  const cust = data.customers.find(c=>c.id===cid); // presentation only: Customer Context header
   const existingCheck = editInv ? data.checks.find(c=>c.invoiceId===editInv.id) : null;
   let cashPaid = editInv ? (editInv.cashPaid||0) : 0;
   let cardPaid = editInv ? (editInv.cardPaid||0) : 0;
   let transferPaid = editInv ? (editInv.transferPaid||0) : 0;
   let checkAmount = editInv ? (editInv.checkPaid||0) : 0;
   let checkDue = existingCheck ? existingCheck.dueDate : todayISO();
-  const pendingPayment = { cash: cashPaid, card: cardPaid, transfer: transferPaid, check: checkAmount, checkDue };
   let discount = editInv ? (editInv.discount||0) : 0;
   let discountType = (editInv && editInv.discountType==='percent') ? 'percent' : 'fixed';
   if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
@@ -2095,97 +1996,46 @@ function openInvoiceForm(cid, editInv){
     return past[0] || null;
   }
 
-  function updateRowInfo(idx){
+  function rowInfoHtml(idx){
     const r = rows[idx];
-    if(!r) return;
     const prod = data.products.find(p=>p.id===r.productId);
-    const line = document.querySelector(`.inv-line[data-row="${idx}"]`);
-    if(!line) return;
+    if(!prod) return '';
+    const fifoCost = productFifoUnitCost(prod.id);
+    const qty = r.qty||0;
+    const unitPrice = r.price||0;
+    const lineAmt = qty * unitPrice;
+    const profitPerUnit = unitPrice - fifoCost;
+    const profitTotal = profitPerUnit*qty;
+    const pct = fifoCost ? Math.round((profitPerUnit/fifoCost)*100) : 0;
+    const profitColor = profitTotal<0 ? 'var(--rust)' : 'var(--olive-dark)';
+    const lastAny = lastSaleAnyCustomer(prod.id);
+    const lastCust = lastSaleToCustomer(prod.id);
+    const sellRef = (prod.retail!=null && prod.retail!=='') ? prod.retail : (prod.sell||0);
+    return `
+      <div class="inv-row-meta">
+        <div class="inv-row-line-total">${esc(String(qty))} × ${toman(unitPrice)} = <strong>${toman(lineAmt)} ت</strong></div>
+        <div class="inv-row-profit-line" style="color:${profitColor};">سود این قلم: ${profitTotal<0?'−':''}${toman(Math.abs(profitTotal))} ت (${pct}٪)</div>
+        <button type="button" class="inv-price-info-btn" data-row="${idx}" aria-expanded="false">اطلاعات قیمت</button>
+        <div class="inv-price-info-panel" data-row="${idx}" hidden>
+          <div class="inv-price-info-grid">
+            <div class="inv-price-info-row"><span class="k">خرید (FIFO)</span><span class="v">${toman(fifoCost)} ت</span></div>
+            <div class="inv-price-info-row"><span class="k">قیمت فروش (مرجع)</span><span class="v">${toman(sellRef)} ت</span></div>
+            <div class="inv-price-info-row"><span class="k">آخرین فروش (کلی)</span><span class="v">${lastAny?`${toman(lastAny.price)} ت — ${faDate(lastAny.date)}`:'ثبت نشده'}</span></div>
+            <div class="inv-price-info-row"><span class="k">آخرین فروش به این مشتری</span><span class="v">${lastCust?`${toman(lastCust.price)} ت — ${faDate(lastCust.date)}`:'ثبت نشده'}</span></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
-    if(prod && line.classList.contains('inv-line-empty')) line.classList.remove('inv-line-empty');
-
-    if(prod && !line.querySelector('.inv-line-collapsed')){
-      const view = document.createElement('div');
-      view.className = 'inv-line-collapsed';
-      view.setAttribute('role','button');
-      view.tabIndex = 0;
-      const body = document.createElement('div');
-      body.className = 'inv-line-body';
-      const name = document.createElement('span');
-      name.className = 'inv-line-name';
-      const meta = document.createElement('div');
-      meta.className = 'inv-line-collapsed-meta';
-      const calc = document.createElement('span');
-      calc.className = 'inv-line-calc';
-      meta.appendChild(calc);
-      body.append(name, meta);
-      const amount = document.createElement('span');
-      amount.className = 'inv-line-amount';
-      view.append(body, amount);
-      line.insertBefore(view, line.querySelector('.inv-line-view-active'));
-      const activate = ()=>{
-        if(idx === activeRowIndex) return;
-        setActiveRow(idx);
-        focusQtyForRow(idx);
-      };
-      view.addEventListener('click', activate);
-      view.addEventListener('keydown', e=>{
-        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activate(); }
-      });
-    }
-
-    if(prod){
-      const collapsed = line.querySelector('.inv-line-collapsed');
-      if(collapsed){
-        const name = collapsed.querySelector('.inv-line-name');
-        const calc = collapsed.querySelector('.inv-line-calc');
-        const amount = collapsed.querySelector('.inv-line-amount');
-        if(name) name.textContent = prod.name || '';
-        if(calc) calc.textContent = `${enToFaDigits(fmtQtyDisplay(r.qty||0))} × ${toman(r.price||0)} ت`;
-        if(amount) amount.textContent = `${toman((r.qty||0)*(r.price||0))} ت`;
-      }
-
-      const fifoCost = productFifoUnitCost(prod.id);
-      const subEl = line.querySelector('.inv-line-sub');
-      const chevronEl = line.querySelector('.inv-line-chevron');
-      const marketDetails = line.querySelector('.inv-line-market-details');
-      if(subEl) subEl.style.display = 'flex';
-      if(chevronEl) chevronEl.style.display = 'none';
-      if(marketDetails) marketDetails.hidden = false;
-      const avgCost = line.querySelector('.inv-line-avg-cost');
-      if(avgCost){
-        avgCost.style.display = 'block';
-        avgCost.textContent = `میانگین خرید: ${toman(fifoCost)} ت`;
-        avgCost.classList.toggle('is-below', (r.price||0) < fifoCost);
-      }
-      const lastAny = lastSaleAnyCustomer(prod.id);
-      const lastCust = lastSaleToCustomer(prod.id);
-      const marketAny = line.querySelector('[data-market="last-any"]');
-      const marketCust = line.querySelector('[data-market="last-customer"]');
-      if(marketAny) marketAny.textContent = lastAny ? `${toman(lastAny.price)} ت — ${faDate(lastAny.date)}` : 'ثبت نشده';
-      if(marketCust) marketCust.textContent = lastCust ? `${toman(lastCust.price)} ت — ${faDate(lastCust.date)}` : 'ثبت نشده';
-    }
+  function updateRowInfo(idx){
+    const el = document.querySelector(`.row-info[data-row="${idx}"]`);
+    if(el) el.innerHTML = rowInfoHtml(idx);
   }
 
   // Product selector state (one open at a time) — UI only
   let prodDropOpenRow = null;
   let prodDropOpening = false;
-  // Stage 3 — which row (if any) is currently expanded to its active/edit
-  // view. Populated rows render collapsed by default; an empty row (still
-  // awaiting a product) is always shown in its active form regardless of
-  // this value, since it has no collapsed summary to fall back to.
-  let activeRowIndex = rows.findIndex(r=>!r.productId);
-  if(activeRowIndex < 0) activeRowIndex = null;
-  const qtyFocusPrevious = new Map();
-  function focusQtyForRow(idx){
-    const input = document.querySelector(`.inv-line[data-row="${idx}"] .row-qty`);
-    if(!input) return;
-    qtyFocusPrevious.set(String(idx), input.value);
-    requestAnimationFrame(()=>setTimeout(()=>{
-      if(!input.isConnected) return;
-      input.focus();
-    },0));
-  }
 
   function productDropListHtml(idx, query){
     const q = (query||'').trim();
@@ -2194,11 +2044,9 @@ function openInvoiceForm(cid, editInv){
     const list = (q ? activeOnly.filter(p=>(p.name||'').includes(q)) : activeOnly).slice(0, 40);
     if(!list.length) return `<div class="prod-drop-empty">کالایی پیدا نشد</div>`;
     return list.map(p=>`
-      <div class="prod-drop-item" data-row="${idx}" data-pid="${esc(p.id)}" role="button" tabindex="0">
-        <span class="prod-drop-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg></span>
+      <div class="prod-drop-item" data-row="${idx}" data-pid="${esc(p.id)}">
         <span class="prod-drop-name">${esc(p.name)}</span>
-        <span class="prod-drop-stock">${enToFaDigits(String(p.stockQty||0))}</span>
-        <span class="prod-drop-chevron" aria-hidden="true">›</span>
+        <span class="prod-drop-stock">موجودی: ${p.stockQty||0}</span>
       </div>
     `).join('');
   }
@@ -2220,40 +2068,28 @@ function openInvoiceForm(cid, editInv){
       const prod = data.products.find(p=>p.id===r.productId);
       const priceDisp = (typeof formatLiveAmount==='function' && r.price) ? formatLiveAmount(String(r.price)) : (r.price||'');
       const label = prod ? esc(prod.name) : '';
-      const lineAmt = (r.qty||0) * (r.price||0);
-      let activeHtml = `
-        <div class="inv-line-main">
-          <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none" aria-label="${prod?'تغییر کالا':'انتخاب کالا'}">
-          ${prod && rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
-          <span class="inv-line-chevron" data-row="${idx}" aria-hidden="true" style="display:${prod?'none':''}">›</span>
+      return `
+      <div class="field inv-item-row">
+        <div class="inv-item-product">
+          <label>جنس</label>
+          <input type="text" class="row-product-search" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none">
           <div class="prod-drop" data-row="${idx}" hidden></div>
         </div>
-        <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'flex':'none'}">
-          <span class="inv-line-qtyrate">
-            <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${enToFaDigits(fmtQtyDisplay(r.qty||0))}">
-            <span class="inv-line-x">×</span>
-            <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
-            <span class="inv-line-unit">ت</span>
-          </span>
+        <div class="inv-item-qty">
+          <label>تعداد</label>
+          <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty" value="${r.qty}">
         </div>
-        <div class="inv-line-avg-cost${prod && (r.price||0) < productFifoUnitCost(prod.id)?' is-below':''}" data-row="${idx}" style="display:${prod?'block':'none'}">${prod?`میانگین خرید: ${toman(productFifoUnitCost(prod.id))} ت`:''}</div>
-        <details class="inv-line-market-details" data-row="${idx}" ${prod?'':'hidden'}>
-          <summary>اطلاعات بازار</summary>
-          <div class="inv-line-market-row"><span>آخرین فروش کلی</span><strong data-market="last-any">${prod?(lastSaleAnyCustomer(prod.id)?`${toman(lastSaleAnyCustomer(prod.id).price)} ت — ${faDate(lastSaleAnyCustomer(prod.id).date)}`:'ثبت نشده'):''}</strong></div>
-          <div class="inv-line-market-row"><span>آخرین فروش به این مشتری</span><strong data-market="last-customer">${prod?(lastSaleToCustomer(prod.id)?`${toman(lastSaleToCustomer(prod.id).price)} ت — ${faDate(lastSaleToCustomer(prod.id).date)}`:'ثبت نشده'):''}</strong></div>
-        </details>`;
-      const isRowActive = !prod || idx === activeRowIndex;
-      return `
-      <div class="inv-line${prod?'':' inv-line-empty'}${isRowActive?' is-active':''}" data-row="${idx}">
-        ${prod?`<div class="inv-line-collapsed" role="button" tabindex="0" aria-label="ویرایش ${label}">
-          <div class="inv-line-body">
-            <span class="inv-line-name">${label}</span>
-            <div class="inv-line-collapsed-meta"><span class="inv-line-calc">${enToFaDigits(fmtQtyDisplay(r.qty||0))} × ${toman(r.price||0)} ت</span></div>
-          </div>
-          <span class="inv-line-amount">${toman(lineAmt)} ت</span>
+        <div class="inv-item-price">
+          <label>قیمت واحد</label>
+          <input type="text" inputmode="decimal" data-row="${idx}" class="row-price" value="${esc(String(priceDisp))}">
+        </div>
+        ${rows.length>1?`<div class="inv-item-del">
+          <label>&nbsp;</label>
+          <button type="button" class="btn danger small row-del" data-row="${idx}" title="حذف این قلم">×</button>
         </div>`:''}
-        <div class="inv-line-view-active">${activeHtml}</div>
-      </div>`;
+      </div>
+      <div class="row-info" data-row="${idx}">${rowInfoHtml(idx)}</div>
+    `;
     }).join('');
   }
 
@@ -2281,20 +2117,19 @@ function openInvoiceForm(cid, editInv){
     const paid = cashPaid+cardPaid+transferPaid+checkAmount;
     const newBalance = prevBalance + total - paid;
     const profit = invoiceProfitEstimate();
-    const profitColor = profit<0 ? '#D52B36' : '#0F7A4A';
-    const remainCls = newBalance>0 ? 'accent-rust' : 'accent-olive';
-    const summaryEl = document.getElementById('calc-summary');
-    if(summaryEl) summaryEl.innerHTML = `
-      <div class="ledger-row inv-sum-tertiary"><span class="name">مانده قبلی مشتری</span><span class="filler"></span><span class="amount">${toman(prevBalance)} ت</span></div>
-      <div class="ledger-row inv-total-row inv-sum-primary"><span class="name">جمع این فاکتور</span><span class="filler"></span><span class="amount">${toman(total)} ت</span></div>
-      ${discountAmount>0?`<div class="ledger-row inv-discount-row"><span class="name">تخفیف کلی فاکتور</span><span class="filler"></span><span class="amount">− ${toman(discountAmount)} ت</span></div>`:''}
-      <div class="ledger-row inv-sum-secondary"><span class="name">پرداختی</span><span class="filler"></span><span class="amount">(${toman(paid)}) ت</span></div>
-      <div class="ledger-row inv-remain-row inv-sum-primary"><span class="name ${remainCls}">مانده جدید</span><span class="filler"></span><span class="amount ${remainCls}">${toman(Math.abs(newBalance))} ت ${balanceStatusWord(newBalance)}</span></div>
+    const profitColor = profit<0 ? 'var(--rust)' : 'var(--olive-dark)';
+    document.getElementById('calc-summary').innerHTML = `
+      <div class="ledger-row"><span class="name">مانده قبلی مشتری</span><span class="filler"></span><span class="amount">${toman(prevBalance)} ت</span></div>
+      <div class="ledger-row"><span class="name">جمع اقلام</span><span class="filler"></span><span class="amount">${toman(subtotal)} ت</span></div>
+      <div class="ledger-row"><span class="name">تخفیف کلی فاکتور${discountType==='percent'?` (${toman(discount)}٪)`:''}</span><span class="filler"></span><span class="amount">${toman(discountAmount)} ت</span></div>
+      <div class="ledger-row"><span class="name">جمع این فاکتور</span><span class="filler"></span><span class="amount">${toman(total)} ت</span></div>
+      <div class="ledger-row"><span class="name">جمع دریافتی</span><span class="filler"></span><span class="amount">${toman(paid)} ت</span></div>
+      <div class="ledger-row"><span class="name" style="color:${newBalance>0?'var(--rust)':'var(--olive-dark)'}">مانده جدید</span><span class="filler"></span><span class="amount" style="color:${newBalance>0?'var(--rust)':'var(--olive-dark)'}">${toman(Math.abs(newBalance))} ت ${balanceStatusWord(newBalance)}</span></div>
+      <div class="ledger-row" style="border-top:1.5px dashed var(--border);margin-top:6px;padding-top:10px;">
+        <span class="name" style="font-weight:700;">سود این فاکتور (بر اساس FIFO)</span><span class="filler"></span>
+        <span class="amount" style="color:${profitColor};font-weight:700;font-size:1.05rem;">${profit<0?'−':''}${toman(Math.abs(profit))} ت</span>
+      </div>
     `;
-    const profitEl = document.getElementById('inv-profit-summary');
-    if(profitEl){
-      profitEl.innerHTML = `<span class="name">سود این فاکتور (بر اساس میانگین خرید)</span><strong class="amount" style="color:${profitColor}">${profit<0?'−':''}${toman(Math.abs(profit))} ت</strong>`;
-    }
   }
 
   function renderSheet(){
@@ -2307,8 +2142,8 @@ function openInvoiceForm(cid, editInv){
     // those actions. Capturing/restoring scrollTop here is local to this
     // function and does not change what openSheet()/closeModal() do for any
     // other sheet in the app.
-    const _prevScrollEl = document.querySelector('.inv-body') || document.querySelector('.sheet');
-    const _prevScrollTop = _prevScrollEl ? _prevScrollEl.scrollTop : 0;
+    const _prevSheetEl = document.querySelector('.sheet');
+    const _prevScrollTop = _prevSheetEl ? _prevSheetEl.scrollTop : 0;
     // No-Purchase Reason: expected SKUs missing from current basket (non-blocking)
     const basketPids = rows.map(function(r){ return r.productId; }).filter(Boolean);
     const nprCandidatesInv = (typeof getNoPurchaseCandidates === 'function')
@@ -2317,214 +2152,61 @@ function openInvoiceForm(cid, editInv){
     const nprHtmlInv = (typeof noPurchasePromptHtml === 'function')
       ? noPurchasePromptHtml(nprCandidatesInv, 'invoice', 'این مشتری معمولاً این محصول را می‌خرد، ولی در فاکتور فعلی نیست — علت؟')
       : '';
-    const custDisplay = cust
-      ? (cust.ownerName ? (esc(cust.name)+' / '+esc(cust.ownerName)) : esc(cust.name||'—'))
-      : '—';
-
     openSheet(`
-      <div class="inv-sheet-v2">
-        <div class="inv-header">
-          <button type="button" class="inv-header-btn" id="inv-cancel">لغو</button>
-          <div class="inv-header-title">
-            <span class="inv-header-title-main">${editInv?'ویرایش فاکتور':'فاکتور جدید'}</span>
-            <span class="inv-header-title-sub">${editInv?('#'+esc(String(editInv.number||'—'))):'پیش‌نویس'}</span>
-          </div>
-          <button type="button" class="btn inv-header-save" id="save-invoice">${editInv?'ذخیره':'ثبت'}</button>
+      <h3>${editInv?('ویرایش فاکتور #'+(editInv.number||'—')):'فاکتور جدید'}</h3>
+      ${editInv?`<div class="empty" style="padding:0 0 8px;text-align:right;">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
+      <div class="field"><label>تاریخ</label>${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}</div>
+      <div id="items-wrap">${itemsHtml()}</div>
+      <button class="btn secondary small" id="add-row">+ افزودن قلم</button>
+      ${nprHtmlInv}
+
+      <h2 class="section-title">دریافتی همراه این فاکتور (اختیاری)</h2>
+      <div class="field" style="display:flex;gap:8px;">
+        <div style="flex:1;"><label>نقد</label><input id="f-cash" type="text" inputmode="decimal" value="${cashPaid||''}"></div>
+        <div style="flex:1;"><label>کارت</label><input id="f-card" type="text" inputmode="decimal" value="${cardPaid||''}"></div>
+        <div style="flex:1;"><label>انتقال بانکی</label><input id="f-transfer" type="text" inputmode="decimal" value="${transferPaid||''}"></div>
+      </div>
+      <div class="field"><label>دریافت چک</label><input id="f-check" type="text" inputmode="decimal" value="${checkAmount||''}"></div>
+      <div class="field" id="check-due-wrap" style="display:${checkAmount>0?'block':'none'};">
+        <label>تاریخ سررسید چک</label>${shamsiDateInputHTML('f-check-due', checkDue)}
+      </div>
+
+      <div class="field" style="display:flex;gap:6px;align-items:end;">
+        <div style="flex:1;">
+          <label>تخفیف کلی فاکتور (${discountType==='percent'?'درصد':'تومان'}، اختیاری)</label>
+          <input id="f-discount" type="text" inputmode="decimal" value="${discount||''}">
         </div>
-
-        <div class="inv-body">
-          ${editInv?`<div class="inv-edit-notice">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
-
-          <div class="inv-customer-context">
-            <div class="inv-customer-info">
-              <div class="inv-customer-kicker">مشتری</div>
-              <div class="inv-customer-name">${custDisplay}</div>
-              ${cust&&cust.phone?`<div class="inv-customer-meta">${esc(cust.phone)}</div>`:''}
-            </div>
-          </div>
-
-          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}</div>
-
-          <div class="inv-section inv-items-section">
-            <div class="inv-items-card-head">
-              <span class="inv-items-card-label">اقلام فاکتور</span>
-            </div>
-            <div class="inv-items-card">
-              <div id="items-wrap" class="inv-items">${itemsHtml()}</div>
-              <button type="button" class="inv-add-line" id="add-row"><span class="inv-add-line-icon" aria-hidden="true">+</span> افزودن قلم جدید</button>
-            </div>
-          </div>
-
-          ${nprHtmlInv}
-
-          <div class="inv-section inv-payment-section">
-            <div class="inv-payment-heading">
-              <h2 class="inv-section-title">دریافتی همراه این فاکتور <span class="inv-section-title-optional">(اختیاری)</span></h2>
-              <span class="inv-payment-total" id="inv-payment-total">${toman(cashPaid+cardPaid+transferPaid+checkAmount)} ت</span>
-            </div>
-
-            <div class="inv-payment-actions" role="group" aria-label="روش دریافت">
-              <button type="button" class="inv-payment-action" data-payment-method="cash" aria-expanded="false">
-                <span class="inv-payment-action-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18M7 14h.01M11 14h3"/></svg>
-                </span>
-                <span>نقد</span>
-                <span class="inv-payment-action-value" data-payment-value="cash">${cashPaid>0 ? toman(cashPaid) + ' ت' : ''}</span>
-              </button>
-              <button type="button" class="inv-payment-action" data-payment-method="card" aria-expanded="false">
-                <span class="inv-payment-action-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg>
-                </span>
-                <span>کارت</span>
-                <span class="inv-payment-action-value" data-payment-value="card">${cardPaid>0 ? toman(cardPaid) + ' ت' : ''}</span>
-              </button>
-              <button type="button" class="inv-payment-action" data-payment-method="transfer" aria-expanded="false">
-                <span class="inv-payment-action-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h5M8 17h8"/></svg>
-                </span>
-                <span>بانکی</span>
-                <span class="inv-payment-action-value" data-payment-value="transfer">${transferPaid>0 ? toman(transferPaid) + ' ت' : ''}</span>
-              </button>
-              <button type="button" class="inv-payment-action" data-payment-method="check" aria-expanded="false">
-                <span class="inv-payment-action-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-                </span>
-                <span>چک</span>
-                <span class="inv-payment-action-value" data-payment-value="check">${checkAmount>0 ? toman(checkAmount) + ' ت' : ''}</span>
-              </button>
-            </div>
-
-            <div class="inv-payment-backdrop" data-payment-backdrop hidden></div>
-
-            <div class="inv-payment-panel" data-payment-panel="cash" hidden>
-              <div class="inv-payment-panel-head"><div><strong>دریافت نقدی</strong><small>دارم نقدی می‌گیرم</small></div><button type="button" class="inv-payment-close" data-payment-close="cash" aria-label="بستن">×</button></div>
-              <label for="f-cash">مبلغ نقدی</label>
-              <input id="f-cash" type="text" inputmode="decimal" value="${cashPaid||''}" placeholder="مبلغ را وارد کنید">
-              <button type="button" class="inv-payment-confirm" data-payment-confirm="cash">ثبت دریافت نقدی</button>
-            </div>
-
-            <div class="inv-payment-panel" data-payment-panel="card" hidden>
-              <div class="inv-payment-panel-head"><div><strong>دریافت با کارت</strong><small>دارم با کارت دریافت می‌کنم</small></div><button type="button" class="inv-payment-close" data-payment-close="card" aria-label="بستن">×</button></div>
-              <label for="f-card">مبلغ کارت</label>
-              <input id="f-card" type="text" inputmode="decimal" value="${cardPaid||''}" placeholder="مبلغ را وارد کنید">
-              <button type="button" class="inv-payment-confirm" data-payment-confirm="card">ثبت دریافت کارت</button>
-            </div>
-
-            <div class="inv-payment-panel" data-payment-panel="transfer" hidden>
-              <div class="inv-payment-panel-head"><div><strong>انتقال بانکی</strong><small>دارم انتقال بانکی می‌گیرم</small></div><button type="button" class="inv-payment-close" data-payment-close="transfer" aria-label="بستن">×</button></div>
-              <label for="f-transfer">مبلغ انتقال</label>
-              <input id="f-transfer" type="text" inputmode="decimal" value="${transferPaid||''}" placeholder="مبلغ را وارد کنید">
-              <button type="button" class="inv-payment-confirm" data-payment-confirm="transfer">ثبت انتقال بانکی</button>
-            </div>
-
-            <div class="inv-payment-panel" data-payment-panel="check" hidden>
-              <div class="inv-payment-panel-head"><div><strong>دریافت چک</strong><small>دارم چک دریافت می‌کنم</small></div><button type="button" class="inv-payment-close" data-payment-close="check" aria-label="بستن">×</button></div>
-              <label for="f-check">مبلغ چک</label>
-              <input id="f-check" type="text" inputmode="decimal" value="${checkAmount||''}" placeholder="مبلغ چک را وارد کنید">
-              <button type="button" class="inv-payment-confirm" data-payment-confirm="check">ثبت دریافت چک</button>
-              <div class="inv-payment-check-due" id="check-due-wrap" style="display:${checkAmount>0?'block':'none'};">
-                <label for="f-check-due">تاریخ سررسید چک</label>
-                ${shamsiDateInputHTML('f-check-due', checkDue)}
-              </div>
-            </div>
-
-            <div class="inv-discount-block" role="group" aria-label="تخفیف فاکتور">
-              <span class="inv-discount-label">تخفیف</span>
-              <div class="inv-discount-type" role="group" aria-label="نوع تخفیف">
-                <button type="button" class="inv-discount-type-btn${discountType==='fixed'?' is-active':''}" data-discount-type="fixed" aria-pressed="${discountType==='fixed'?'true':'false'}">مبلغ</button>
-                <button type="button" class="inv-discount-type-btn${discountType==='percent'?' is-active':''}" data-discount-type="percent" aria-pressed="${discountType==='percent'?'true':'false'}">درصد</button>
-              </div>
-              <input id="f-discount" type="text" inputmode="decimal" value="${discount ? enToFaDigits(String(discount)) : ''}" placeholder="۰" aria-label="مقدار تخفیف">
-            </div>
-          </div>
-
-          <div class="inv-summary-section">
-            <h2 class="inv-section-title">جمع‌بندی فاکتور</h2>
-            <div id="calc-summary"></div>
-          </div>
-          <div class="inv-profit-summary" id="inv-profit-summary" aria-label="سود این فاکتور"></div>
+        <div style="flex:1;">
+          <label>نوع تخفیف</label>
+          <select id="f-discount-type">
+            <option value="fixed" ${discountType==='fixed'?'selected':''}>مبلغ</option>
+            <option value="percent" ${discountType==='percent'?'selected':''}>درصد</option>
+          </select>
         </div>
       </div>
+
+      <div class="invoice-summary-sticky">
+        <h2 class="section-title">محاسبه خودکار</h2>
+        <div id="calc-summary"></div>
+      </div>
+
+      <div class="btn-row"><button class="btn" id="save-invoice">${editInv?'ذخیره ویرایش':'ثبت فاکتور'}</button></div>
     `);
-    // Presentation-only: the sheet's generic close-x (from openSheet) is
-    // replaced by the "لغو" button in the custom header above, and the
-    // custom header's save button IS the original #save-invoice element
-    // (same id, same listener below) — no duplicate save logic anywhere.
-    (function(){
-      const sheetEl = document.querySelector('.sheet');
-      if(sheetEl) sheetEl.classList.add('inv-sheet-host');
-      // Overlay default z-index (60) is below bottom-nav (70). Lift only while
-      // Invoice V6 host is open so chrome cannot cover the full-screen sheet.
-      const ov = document.getElementById('overlay');
-      if(ov) ov.style.zIndex = '80';
-      const genericClose = document.getElementById('closeX');
-      if(genericClose) genericClose.style.display = 'none';
-      const cancelBtn = document.getElementById('inv-cancel');
-      if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
-        if(await appConfirm('تغییرات ذخیره‌نشده از بین می‌روند. از فاکتور خارج می‌شوید؟')) closeModal();
-      });
-    })();
-    if(_prevScrollTop){
-      const _newScrollEl = document.querySelector('.inv-body') || document.querySelector('.sheet');
-      if(_newScrollEl) _newScrollEl.scrollTop = _prevScrollTop;
+    if(_prevSheetEl){
+      const _newSheetEl = document.querySelector('.sheet');
+      if(_newSheetEl) _newSheetEl.scrollTop = _prevScrollTop;
     }
     updateSummary();
     // No-Purchase Reason chips (re-bound after every renderSheet rebuild)
     if(typeof bindNoPurchasePrompt === 'function') bindNoPurchasePrompt(cid);
 
-    document.querySelectorAll('.inv-line-collapsed').forEach(el=>{
-      const activate = ()=>{
-        const line = el.closest('.inv-line');
-        if(!line) return;
-        const idx = parseInt(line.getAttribute('data-row'), 10);
-        if(idx === activeRowIndex) return;
-        setActiveRow(idx);
-        focusQtyForRow(idx);
-      };
-      el.addEventListener('click', activate);
-      el.addEventListener('keydown', e=>{
-        if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activate(); }
-      });
-    });
-    document.querySelectorAll('.row-qty').forEach(el=>el.addEventListener('blur', e=>{
-      const key = e.target.dataset.row;
-      if(e.target.value.trim()==='' && qtyFocusPrevious.has(String(key))){
-        e.target.value = qtyFocusPrevious.get(String(key));
-        rows[key].qty = parseFloat(faToEnDigits(e.target.value))||0;
-        updateRowInfo(key);
-        updateSummary();
-      }
-      qtyFocusPrevious.delete(String(key));
-    }));
-
     document.getElementById('add-row').addEventListener('click', ()=>{
-      // One active empty line at a time: once a blank line exists, repeated
-      // taps open its product picker instead of creating another blank row.
-      const emptyIdx = rows.findIndex(r=>!r.productId);
-      if(emptyIdx >= 0){
-        activeRowIndex = emptyIdx;
-        openProductDrop(emptyIdx);
-        return;
-      }
       rows.push({productId:'', qty:1, price:0, discount:0});
-      activeRowIndex = rows.length-1;
       renderSheet();
-      // Start the intended workflow immediately: Add Line → Product Search.
-      setTimeout(()=>openProductDrop(rows.length-1), 0);
     });
     document.querySelectorAll('.row-del').forEach(el=>el.addEventListener('click', e=>{
       const i = parseInt(e.currentTarget.dataset.row, 10);
       if(rows.length>1 && i>=0 && i<rows.length){
-        // Stage 3 — keep activeRowIndex valid across the splice: dropping
-        // the active row itself clears it (and its picker, if any); dropping
-        // a row before it shifts it down by one so it still points at the
-        // same logical row after renderSheet() rebuilds the list.
-        if(activeRowIndex === i){
-          activeRowIndex = null;
-          closeAllProductDrops();
-        }else if(activeRowIndex !== null && i < activeRowIndex){
-          activeRowIndex -= 1;
-        }
         rows.splice(i, 1);
         renderSheet();
       }
@@ -2540,37 +2222,6 @@ function openInvoiceForm(cid, editInv){
         d.style.top = d.style.bottom = d.style.maxHeight = d.style.left = d.style.right = '';
       });
     }
-    // Stage 3 — expand/collapse a row in place. Pure class toggle: no
-    // renderSheet(), no outerHTML/innerHTML morph. Rows with no collapsed
-    // view yet (still empty, awaiting a product) are left alone here — they
-    // are not part of the collapse/expand toggle at all (see itemsHtml()).
-    function setActiveRow(idx){
-      idx = parseInt(idx, 10);
-      if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
-      if(idx === activeRowIndex) return;
-      if(prodDropOpenRow !== null) closeAllProductDrops();
-
-      // A transient empty row is always appended by Add Item. Remove that
-      // true empty row from both state and DOM when the user switches away,
-      // so Save can never validate an invisible empty item.
-      if(activeRowIndex !== null && rows[activeRowIndex] && !rows[activeRowIndex].productId && activeRowIndex !== idx){
-        const removedIdx = activeRowIndex;
-        const emptyEl = document.querySelector(`.inv-line[data-row="${removedIdx}"]`);
-        rows.splice(removedIdx, 1);
-        if(emptyEl) emptyEl.remove();
-        // Add Item appends the transient row, so populated row indexes remain stable.
-      }
-
-      activeRowIndex = idx;
-      document.querySelectorAll('.inv-line.is-active').forEach(el=>{
-        const rowIdx = parseInt(el.getAttribute('data-row'), 10);
-        if(rowIdx !== idx && rows[rowIdx] && rows[rowIdx].productId) el.classList.remove('is-active');
-        else if(rowIdx !== idx && (!rows[rowIdx] || !rows[rowIdx].productId)) el.classList.remove('is-active');
-      });
-      const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
-      if(newActiveEl) newActiveEl.classList.add('is-active');
-    }
-
     function positionProductDrop(dropEl, anchorEl){
       if(!dropEl || !anchorEl) return;
       const margin = 10;
@@ -2598,11 +2249,10 @@ function openInvoiceForm(cid, editInv){
     }
     function openProductDrop(idx){
       idx = String(idx);
-      // Same row is a true toggle: tapping the product field again closes it.
-      // Do not rebuild the panel, which previously caused the close→reopen flash.
+      // Already open for this row → do not rebuild
       if(prodDropOpenRow === idx){
-        closeAllProductDrops();
-        return;
+        const existing = document.querySelector(`.prod-drop[data-row="${idx}"]`);
+        if(existing && existing.classList.contains('is-open') && !existing.hidden) return;
       }
       if(prodDropOpening) return;
       prodDropOpening = true;
@@ -2667,10 +2317,6 @@ function openInvoiceForm(cid, editInv){
           if(!remaining.length) card.style.display = 'none';
         }
       }catch(eNpr){ /* non-critical */ }
-      // Stage 3 — row stays active after picking a product; hand off
-      // straight to quantity entry (iOS Safari: wait a frame after the
-      // picker's DOM changes so focus isn't dropped).
-      focusQtyForRow(idx);
     }
 
     // Single gesture open via pointerup (avoids focus+click double-open on mobile)
@@ -2681,10 +2327,11 @@ function openInvoiceForm(cid, editInv){
         e.preventDefault();
         openProductDrop(el.getAttribute('data-row'));
       });
-      // Keep the field display-only. Opening is handled by pointerup alone;
-      // opening from focus as well caused a mobile close→reopen flash.
-      el.addEventListener('focus', function(){
+      // Prevent keyboard / native focus behavior on the display field
+      el.addEventListener('focus', function(e){
+        e.preventDefault();
         try{ el.blur(); }catch(err){}
+        openProductDrop(el.getAttribute('data-row'));
       });
     });
 
@@ -2700,13 +2347,6 @@ function openInvoiceForm(cid, editInv){
         e.preventDefault();
         e.stopPropagation();
         selectProduct(item.getAttribute('data-row'), item.getAttribute('data-pid'));
-      });
-      dropEl.addEventListener('keydown', e=>{
-        const item = e.target.closest('.prod-drop-item');
-        if(item && (e.key==='Enter' || e.key===' ')){
-          e.preventDefault();
-          selectProduct(item.getAttribute('data-row'), item.getAttribute('data-pid'));
-        }
       });
     });
 
@@ -2727,6 +2367,28 @@ function openInvoiceForm(cid, editInv){
       }, true);
     }
 
+    // Price-info panel: delegation survives updateRowInfo()
+    (function bindInvPriceInfoDelegation(){
+      const root = document.getElementById('modalRoot');
+      if(!root || root._invPriceInfoBound) return;
+      root._invPriceInfoBound = true;
+      root.addEventListener('click', function(e){
+        const btn = e.target.closest('.inv-price-info-btn');
+        if(!btn || !root.contains(btn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const i = btn.getAttribute('data-row');
+        const panel = root.querySelector(`.inv-price-info-panel[data-row="${i}"]`);
+        if(!panel) return;
+        const willOpen = panel.hasAttribute('hidden');
+        root.querySelectorAll('.inv-price-info-panel').forEach(p=>p.setAttribute('hidden',''));
+        root.querySelectorAll('.inv-price-info-btn').forEach(b=>b.setAttribute('aria-expanded','false'));
+        if(willOpen){
+          panel.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded','true');
+        }
+      });
+    })();
     document.querySelectorAll('.row-qty').forEach(el=>el.addEventListener('input', e=>{
       const idx = e.target.dataset.row;
       rows[idx].qty = parseFloat(faToEnDigits(e.target.value))||0;
@@ -2739,124 +2401,28 @@ function openInvoiceForm(cid, editInv){
       updateRowInfo(idx);
       updateSummary();
     }));
-    function updateInvPaymentTotal(){
-      const totalEl = document.getElementById('inv-payment-total');
-      if(totalEl){
-        const totalPaid = cashPaid+cardPaid+transferPaid+checkAmount;
-        totalEl.textContent = totalPaid > 0 ? toman(totalPaid) + ' ت' : '';
-      }
-      document.querySelectorAll('[data-payment-value]').forEach(el=>{
-        const method = el.getAttribute('data-payment-value');
-        const amount = method==='cash' ? cashPaid : method==='card' ? cardPaid : method==='transfer' ? transferPaid : checkAmount;
-        el.textContent = amount > 0 ? toman(amount) + ' ت' : '';
-        el.classList.toggle('is-filled', amount > 0);
-      });
-    }
-    function closeInvPaymentPanels(){
-      document.querySelectorAll('.inv-payment-panel').forEach(panel=>panel.hidden = true);
-      const backdrop = document.querySelector('[data-payment-backdrop]');
-      if(backdrop) backdrop.hidden = true;
-      document.querySelectorAll('.inv-payment-action').forEach(btn=>{
-        btn.classList.remove('is-active');
-        btn.setAttribute('aria-expanded','false');
-      });
-    }
-    function paymentAmountFor(method){
-      return method==='cash' ? cashPaid : method==='card' ? cardPaid : method==='transfer' ? transferPaid : checkAmount;
-    }
-    function setPaymentAmount(method, amount){
-      const value = Math.max(0, Number(amount)||0);
-      if(method==='cash') cashPaid=value;
-      else if(method==='card') cardPaid=value;
-      else if(method==='transfer') transferPaid=value;
-      else checkAmount=value;
-    }
-    document.querySelectorAll('.inv-payment-action').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const method = btn.getAttribute('data-payment-method');
-        const panel = document.querySelector(`.inv-payment-panel[data-payment-panel="${method}"]`);
-        if(!panel) return;
-        const willOpen = panel.hidden;
-        closeInvPaymentPanels();
-        if(willOpen){
-          const backdrop = document.querySelector('[data-payment-backdrop]');
-          if(backdrop) backdrop.hidden = false;
-          panel.hidden = false;
-          btn.classList.add('is-active');
-          btn.setAttribute('aria-expanded','true');
-          const input = panel.querySelector('input[type="text"]');
-          if(input){
-            input.value = pendingPayment[method] > 0 ? enToFaDigits(String(pendingPayment[method])) : '';
-            setTimeout(()=>input.focus(), 0);
-          }
-          if(method==='check'){
-            const due = panel.querySelector('#f-check-due');
-            if(due) due.value = pendingPayment.checkDue || checkDue;
-          }
-        }
-      });
-    });
-    const paymentBackdrop = document.querySelector('[data-payment-backdrop]');
-    if(paymentBackdrop) paymentBackdrop.addEventListener('click', closeInvPaymentPanels);
-    document.querySelectorAll('.inv-payment-close').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const method = btn.getAttribute('data-payment-close');
-        const panel = document.querySelector(`.inv-payment-panel[data-payment-panel="${method}"]`);
-        if(panel) panel.hidden = true;
-        const action = document.querySelector(`.inv-payment-action[data-payment-method="${method}"]`);
-        if(action){
-          action.classList.remove('is-active');
-          action.setAttribute('aria-expanded','false');
-        }
-        const backdrop = document.querySelector('[data-payment-backdrop]');
-        if(backdrop) backdrop.hidden = true;
-      });
-    });
-    ['cash','card','transfer','check'].forEach(method=>{
-      const id = method==='cash' ? 'f-cash' : method==='card' ? 'f-card' : method==='transfer' ? 'f-transfer' : 'f-check';
-      const input = document.getElementById(id);
-      if(input) input.addEventListener('input', e=>{
-        const v = parseFloat(faToEnDigits(e.target.value))||0;
-        pendingPayment[method] = v;
-        e.target.value = v ? enToFaDigits(String(v)) : '';
-        if(method==='check'){
-          const dueWrap = document.getElementById('check-due-wrap');
-          if(dueWrap) dueWrap.style.display = v>0 ? 'block' : 'none';
-        }
-      });
-    });
-    document.querySelectorAll('.inv-payment-confirm').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const method = btn.getAttribute('data-payment-confirm');
-        const input = document.querySelector(`.inv-payment-panel[data-payment-panel="${method}"] input[type="text"]`);
-        const value = input ? parseFloat(faToEnDigits(input.value))||0 : 0;
-        pendingPayment[method] = value;
-        setPaymentAmount(method, value);
-        if(method==='check'){
-          const due = document.getElementById('f-check-due');
-          pendingPayment.checkDue = due ? due.value : checkDue;
-          checkDue = pendingPayment.checkDue || todayISO();
-        }
-        updateInvPaymentTotal();
-        updateSummary();
-        closeInvPaymentPanels();
-      });
-    });
-    document.getElementById('f-discount').addEventListener('input', e=>{
-      let v = parseFloat(faToEnDigits(e.target.value))||0;
-      if(discountType==='percent') v = Math.min(100, Math.max(0, v));
-      discount = v;
-      e.target.value = v ? enToFaDigits(String(v)) : '';
+    document.getElementById('f-cash').addEventListener('input', e=>{ cashPaid = parseFloat(faToEnDigits(e.target.value))||0; updateSummary(); });
+    document.getElementById('f-card').addEventListener('input', e=>{ cardPaid = parseFloat(faToEnDigits(e.target.value))||0; updateSummary(); });
+    document.getElementById('f-transfer').addEventListener('input', e=>{ transferPaid = parseFloat(faToEnDigits(e.target.value))||0; updateSummary(); });
+    document.getElementById('f-check').addEventListener('input', e=>{
+      checkAmount = parseFloat(faToEnDigits(e.target.value))||0;
+      document.getElementById('check-due-wrap').style.display = checkAmount>0 ? 'block':'none';
       updateSummary();
     });
-    document.querySelectorAll('.inv-discount-type-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const nextType = btn.getAttribute('data-discount-type');
-        if(nextType===discountType) return;
-        discountType = nextType;
-        if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
-        renderSheet();
-      });
+    document.getElementById('f-check-due').addEventListener('change', e=>{ checkDue = e.target.value; });
+    document.getElementById('f-discount').addEventListener('input', e=>{
+      let v = parseFloat(faToEnDigits(e.target.value))||0;
+      if(discountType==='percent'){
+        v = Math.min(100, Math.max(0, v));
+        if(String(v) !== e.target.value) e.target.value = v || '';
+      }
+      discount = v;
+      updateSummary();
+    });
+    document.getElementById('f-discount-type').addEventListener('change', e=>{
+      discountType = e.target.value;
+      if(discountType==='percent') discount = Math.min(100, Math.max(0, discount));
+      renderSheet();
     });
 
     document.getElementById('save-invoice').addEventListener('click', async (e)=>{
@@ -2865,67 +2431,35 @@ function openInvoiceForm(cid, editInv){
       btn.disabled = true;
       const date = document.getElementById('f-date').value || todayISO();
 
-      // A row with no productId is the empty draft input kept open for the
-      // next item after Add Item. It is UI state, not an invoice item.
-      // A row with a productId that no longer resolves is still invalid.
-      const unresolvedRow = rows.find(r=> r.productId && !data.products.find(p=>p.id===r.productId));
-      if(unresolvedRow){
-        showToast('برای هر ردیف باید یک جنس از لیست انتخاب کنی.');
+      // اعتبارسنجی: هر ردیف باید جنس مشخصی داشته باشه (چون فیلد جستجو دیگه پیش‌فرض نداره)
+      const noProductRow = rows.find(r=> !r.productId || !data.products.find(p=>p.id===r.productId));
+      if(noProductRow){
+        alert('برای هر ردیف باید یک جنس از لیست انتخاب کنی.');
         btn.disabled = false;
         return;
       }
 
-      // Only rows with a real, resolvable product are invoice items.
-      const filledRows = rows.filter(r=> r.productId && data.products.find(p=>p.id===r.productId));
-      if(filledRows.length===0){
-        showToast('حداقل یک قلم معتبر برای ثبت فاکتور لازم است.');
-        btn.disabled = false;
-        return;
-      }
-
-      // Business validation: discount invariants must hold before any stock/payment
-      // mutation or persistence. UI clamping is not sufficient protection.
-      const invalidRow = filledRows.find(r=> {
-        const gross = (Number(r.qty)||0) * (Number(r.price)||0);
-        const rowDiscount = Number(r.discount)||0;
-        return !(r.qty>0) || r.price<0 || rowDiscount<0 || rowDiscount>gross;
-      });
+      // اعتبارسنجی مقادیر ردیف‌های فاکتور قبل از ذخیره: تعداد باید بزرگ‌تر از صفر، قیمت/تخفیف نباید منفی باشند
+      const invalidRow = rows.find(r=> !(r.qty>0) || r.price<0 || (r.discount||0)<0);
       if(invalidRow){
-        showToast('مقادیر فاکتور نامعتبر است.\n\nتعداد باید بزرگ‌تر از صفر، قیمت و تخفیف نباید منفی باشند و تخفیف هر ردیف نباید از مبلغ همان ردیف بیشتر باشد.');
+        alert('مقادیر فاکتور نامعتبر است.\n\nتعداد هر ردیف باید بزرگ‌تر از صفر باشد و قیمت/تخفیف نباید منفی باشند.');
         btn.disabled = false;
         return;
       }
-      const invoiceSubtotal = filledRows.reduce((s,r)=>s + (Number(r.qty)||0)*(Number(r.price)||0) - (Number(r.discount)||0), 0);
-      const normalizedDiscount = Number(discount);
-      if(!Number.isFinite(normalizedDiscount) || normalizedDiscount<0){
-        showToast('تخفیف کلی فاکتور نمی‌تواند منفی یا نامعتبر باشد.');
-        btn.disabled = false;
-        return;
-      }
-      if(discountType==='fixed' && normalizedDiscount>invoiceSubtotal){
-        showToast('تخفیف مبلغی فاکتور نمی‌تواند از مبلغ خالص اقلام بیشتر باشد.');
-        btn.disabled = false;
-        return;
-      }
-      if(discountType==='percent' && normalizedDiscount>100){
-        showToast('درصد تخفیف فاکتور باید بین صفر تا ۱۰۰ باشد.');
-        btn.disabled = false;
-        return;
-      }
-      if(discountType!=='fixed' && discountType!=='percent'){
-        showToast('نوع تخفیف فاکتور نامعتبر است.');
+      if(discount<0){
+        alert('تخفیف کلی فاکتور نمی‌تواند منفی باشد.');
         btn.disabled = false;
         return;
       }
       // FIX (audit M-1): reject negative amounts in the invoice-attached payment
       // fields, same as row qty/price/discount above. Zero/positive unaffected.
       if(cashPaid<0 || cardPaid<0 || transferPaid<0 || checkAmount<0){
-        showToast('مبلغ دریافتی (نقد/کارت/انتقال/چک) نمی‌تواند منفی باشد.');
+        alert('مبلغ دریافتی (نقد/کارت/انتقال/چک) نمی‌تواند منفی باشد.');
         btn.disabled = false;
         return;
       }
 
-      const items = filledRows.map(r=>{
+      const items = rows.map(r=>{
         const prod = data.products.find(p=>p.id===r.productId);
         return { productId:r.productId, name:prod.name, qty:r.qty, price:r.price, buyPrice:(r.buyPrice!==undefined?r.buyPrice:prod.buy), discount:r.discount||0, weight:(prod.packageWeight||0)*r.qty };
       });
@@ -2943,15 +2477,10 @@ function openInvoiceForm(cid, editInv){
       }
       const stockCheck = validateSaleAvailability(items, creditStock, creditFifo);
       if(!stockCheck.ok){
-        showToast(stockCheck.error || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
+        alert(stockCheck.error || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
         btn.disabled = false;
         return;
       }
-
-      const saveMessage = editInv
-        ? 'با ویرایش این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟'
-        : 'فاکتور ثبت شود؟ تغییرات فاکتور پس از تأیید ثبت خواهند شد.';
-      if(!(await appConfirm(saveMessage))){ btn.disabled = false; return; }
 
       const total = invoiceTotal();
       const paid = cashPaid+cardPaid+transferPaid+checkAmount;
@@ -2964,6 +2493,8 @@ function openInvoiceForm(cid, editInv){
           btn.disabled = false;
           return;
         }
+        if(!confirm('با ویرایش این فاکتور، موجودی انبار و حساب مشتری اصلاح خواهد شد. ادامه می‌دهید؟')){ btn.disabled = false; return; }
+
         // اسنپ‌شات کامل قبل از هر mutation — اگر saveData() در انتها شکست بخورد،
         // data در حافظه دقیقاً به همین حالت (قبل از هر تغییری) برمی‌گردد تا با
         // آخرین نسخه‌ی موفق در IndexedDB ناهماهنگ نماند.
@@ -2999,7 +2530,7 @@ function openInvoiceForm(cid, editInv){
           editInv.newBalance = before.newBalance;
           applyInvoiceStockEffects(oldItemsSnap, oldDateSnap, editInv, false);
           pushInvoicePayments(cid, editInv, before.cashPaid, before.cardPaid, before.transferPaid, before.checkPaid, checkDue, checkMeta);
-          showToast((e && e.message) || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
+          alert((e && e.message) || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
           btn.disabled = false;
           return;
         }
@@ -3017,7 +2548,7 @@ function openInvoiceForm(cid, editInv){
         }catch(e){
           // saveData() شکست خورد: data را دقیقاً به حالت قبل از این ویرایش برگردان
           // تا RAM با آخرین نسخه‌ی واقعاً ذخیره‌شده در IndexedDB هماهنگ بماند.
-          restoreDataInPlace(previousData);
+          data = previousData;
           btn.disabled = false;
           return;
         }
@@ -3037,7 +2568,7 @@ function openInvoiceForm(cid, editInv){
       try{
         applyInvoiceStockEffects(items, date, newInv, true);
       }catch(e){
-        showToast((e && e.message) || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
+        alert((e && e.message) || 'موجودی کافی نیست یا موجودی FIFO با موجودی کالا ناسازگار است.');
         btn.disabled = false;
         return;
       }
@@ -3049,7 +2580,7 @@ function openInvoiceForm(cid, editInv){
       }catch(e){
         // saveData() شکست خورد: data را دقیقاً به حالت قبل از این فاکتور برگردان
         // تا RAM با آخرین نسخه‌ی واقعاً ذخیره‌شده در IndexedDB هماهنگ بماند.
-        restoreDataInPlace(previousData);
+        data = previousData;
         btn.disabled = false;
         return;
       }
@@ -3142,12 +2673,8 @@ function openPurchaseReturnReasonPicker(onPick){
     '</div>'
   );
   const root = document.getElementById('modalRoot');
-  let committed = false;
   root.querySelectorAll('[data-pr-reason]').forEach(function(btn){
     btn.addEventListener('click', function(){
-      if(committed) return;
-      committed = true;
-      root.querySelectorAll('[data-pr-reason]').forEach(function(b){ b.disabled = true; });
       const v = btn.getAttribute('data-pr-reason');
       if(typeof onPick === 'function') onPick(v);
     });
@@ -3189,7 +2716,7 @@ function openSupplierDetail(sid){
       const lines = purchaseLines(p);
       const linesLabel = lines.length ? lines.map(l=>`${esc(l.name)} × ${l.qty}`).join('، ') : '';
       return `
-      <div class="ledger-row"><span class="name">${faDate(p.date)} ${p.desc?`<span class="sub">${esc(p.desc)}</span>`:''}${linesLabel?`<span class="sub">${linesLabel}</span>`:''}${returnedAmount>0?`<span class="sub">برگشت‌شده: ${toman(returnedAmount)} ت${p.productId?` (${returnedQty} از ${p.qty})`:''}</span>`:''}</span><span class="filler"></span><span class="amount">${toman(p.amount)} ت${remainingAmount>0?`<br><button class="btn secondary small" data-return-purchase="${esc(p.id)}">برگشت</button>`:''}</span></div>
+      <div class="ledger-row"><span class="name">${faDate(p.date)} ${p.desc?`<span class="sub">${esc(p.desc)}</span>`:''}${linesLabel?`<span class="sub">${linesLabel}</span>`:''}${returnedAmount>0?`<span class="sub">برگشت‌شده: ${toman(returnedAmount)} ت${p.productId?` (${returnedQty} از ${p.qty})`:''}</span>`:''}</span><span class="filler"></span><span class="amount">${toman(p.amount)} ت${remainingAmount>0?`<br><button class="btn secondary small" data-return-purchase="${p.id}">برگشت</button>`:''}</span></div>
     `;}).join('')}
     <h2 class="section-title">پرداختی‌ها</h2>
     ${payments.length===0?`<div class="empty">پرداختی ثبت نشده</div>`:payments.map((p,pidx)=>{
@@ -3313,7 +2840,7 @@ function openSupplierDetail(sid){
         try{
           await saveData();
         }catch(saveErr){
-          restoreDataInPlace(previousData);
+          data = previousData;
           throw saveErr;
         }
         openSupplierDetail(sid); render(); showToast('خرید ثبت شد');
@@ -3337,7 +2864,7 @@ function openSupplierDetail(sid){
         try{
           await saveData();
         }catch(saveErr){
-          restoreDataInPlace(previousData);
+          data = previousData;
           throw saveErr;
         }
         openSupplierDetail(sid); render(); showToast('خرید ثبت شد');
@@ -3415,7 +2942,7 @@ function openSupplierDetail(sid){
         const realIdx = (s.payments||[]).indexOf(p);
         if(realIdx<0) throw new Error('validation');
         const label = p.method==='check' ? ('چک'+(p.checkNumber?(' #'+p.checkNumber):'')) : 'پرداخت';
-        if(!(await appConfirm('«'+label+'» به مبلغ '+toman(p.method==='check'?(p.faceAmount||p.amount):p.amount)+' تومان حذف شود؟\nمانده حساب تامین‌کننده اصلاح می‌شود.'))) throw new Error('validation');
+        if(!confirm('«'+label+'» به مبلغ '+toman(p.method==='check'?(p.faceAmount||p.amount):p.amount)+' تومان حذف شود؟\nمانده حساب تامین‌کننده اصلاح می‌شود.')) throw new Error('validation');
         s.payments.splice(realIdx, 1);
         await saveData(); openSupplierDetail(sid); render(); showToast('حذف شد');
       });
@@ -3512,7 +3039,7 @@ function openSupplierDetail(sid){
       const msg = willDeactivate
         ? `این تأمین‌کننده غیرفعال شود؟ اطلاعات و سوابق خرید و پرداخت حذف نخواهد شد.`
         : `تامین‌کننده «${s.name}» دوباره فعال شود؟`;
-      if(!(await appConfirm(msg))) throw new Error('validation');
+      if(!confirm(msg)) throw new Error('validation');
       s.active = (s.active===false) ? true : false;
       await saveData(); openSupplierDetail(sid); render();
       showToast(s.active===false ? 'تأمین‌کننده غیرفعال شد' : 'تأمین‌کننده فعال شد');
@@ -3543,12 +3070,12 @@ function openSupplierDetail(sid){
             if(remLineQty<=0){
               return `<div class="field" style="opacity:.55;">
               <label>${esc(it.name)} (خریداری‌شده: ${it.qty} — ۰ قابل‌برگشت؛ موجودی این خرید مصرف شده)</label>
-              <input class="ret-item-qty" data-item-id="${esc(it.id)}" data-product-id="${esc(it.productId)}" data-unit-cost="${it.unitCost}" data-max="0" type="text" inputmode="decimal" disabled>
+              <input class="ret-item-qty" data-item-id="${it.id}" data-product-id="${it.productId}" data-unit-cost="${it.unitCost}" data-max="0" type="text" inputmode="decimal" disabled>
             </div>`;
             }
             return `<div class="field">
               <label>${esc(it.name)} (خریداری‌شده: ${it.qty}، حداکثر قابل‌برگشت: ${remLineQty})</label>
-              <input class="ret-item-qty" data-item-id="${esc(it.id)}" data-product-id="${esc(it.productId)}" data-unit-cost="${it.unitCost}" data-max="${remLineQty}" type="text" inputmode="decimal" placeholder="تعداد برگشتی (اختیاری)">
+              <input class="ret-item-qty" data-item-id="${it.id}" data-product-id="${it.productId}" data-unit-cost="${it.unitCost}" data-max="${remLineQty}" type="text" inputmode="decimal" placeholder="تعداد برگشتی (اختیاری)">
             </div>`;
           }).join('')}
           </div>
@@ -3582,13 +3109,13 @@ function openSupplierDetail(sid){
           });
           if(lineReturns.length===0){ showToast('حداقل مقدار برگشتی یک قلم رو وارد کن'); throw new Error('validation'); }
           const badLine = lineReturns.find(l=>l.qty>l.max);
-          if(badLine){ showToast('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این قلم بیشتره.\n\nباقیمانده قابل‌برگشت: '+badLine.max); throw new Error('validation'); }
-          if(overStock){ showToast('موجودی واقعی «'+overStock.name+'» در انبار فقط '+(overStock.stockQty||0)+' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.'); throw new Error('validation'); }
+          if(badLine){ alert('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این قلم بیشتره.\n\nباقیمانده قابل‌برگشت: '+badLine.max); throw new Error('validation'); }
+          if(overStock){ alert('موجودی واقعی «'+overStock.name+'» در انبار فقط '+(overStock.stockQty||0)+' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.'); throw new Error('validation'); }
           const totalAmount = lineReturns.reduce((a,l)=>a+Math.round(l.qty*l.unitCost),0);
           if(totalAmount<=0){ showToast('مبلغ برگشتی رو وارد کن'); throw new Error('validation'); }
           const liveRemainingAmount = purchaseReturnRemainingAmount(p);
-          if(totalAmount>liveRemainingAmount){ showToast('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: '+toman(liveRemainingAmount)+' تومان'); throw new Error('validation'); }
-          if(!(await appConfirm('با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد. ادامه می‌دهید؟'))) throw new Error('validation');
+          if(totalAmount>liveRemainingAmount){ alert('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: '+toman(liveRemainingAmount)+' تومان'); throw new Error('validation'); }
+          if(!confirm('با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد. ادامه می‌دهید؟')) throw new Error('validation');
           const totalQty = lineReturns.reduce((a,l)=>a+l.qty,0);
           const retLines = lineReturns.map(l=>({productId:l.productId, qty:l.qty, itemId:l.itemId}));
           const lineItemsSnap = lineReturns.map(l=>({itemId:l.itemId, productId:l.productId, qty:l.qty, amount:Math.round(l.qty*l.unitCost)}));
@@ -3597,7 +3124,7 @@ function openSupplierDetail(sid){
             await withSubmitGuard(document.getElementById('save-return'), async ()=>{
               const previousData = JSON.parse(JSON.stringify(data));
               const retResult = applyPurchaseReturnStockEffects(p, retLines, s.name, date);
-              if(!retResult.ok){ showToast(retResult.error||'برگشت خرید ممکن نشد'); throw new Error('validation'); }
+              if(!retResult.ok){ alert(retResult.error||'برگشت خرید ممکن نشد'); throw new Error('validation'); }
               p.returns = p.returns||[];
               p.returns.push({
                 id:uid(), date, qty:totalQty, amount:totalAmount,
@@ -3607,7 +3134,7 @@ function openSupplierDetail(sid){
               try{
                 await saveData();
               }catch(saveErr){
-                restoreDataInPlace(previousData);
+                data = previousData;
                 throw saveErr;
               }
               openSupplierDetail(sid); render(); showToast('برگشت خرید ثبت شد');
@@ -3651,32 +3178,32 @@ function openSupplierDetail(sid){
           : purchaseReturnRemainingQty(p);
         const liveRemainingAmount = purchaseReturnRemainingAmount(p);
         if(qty>0 && qty>liveRemainingQty){
-          showToast('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این خرید بیشتره.\n\nباقیمانده قابل‌برگشت: '+liveRemainingQty);
+          alert('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این خرید بیشتره.\n\nباقیمانده قابل‌برگشت: '+liveRemainingQty);
           throw new Error('validation');
         }
         if(p.productId && qty>0){
           const realStockProd = data.products.find(x=>x.id===p.productId);
           if(realStockProd && qty > (realStockProd.stockQty||0)){
-            showToast('موجودی واقعی «'+realStockProd.name+'» در انبار فقط '+(realStockProd.stockQty||0)+' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.');
+            alert('موجودی واقعی «'+realStockProd.name+'» در انبار فقط '+(realStockProd.stockQty||0)+' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.');
             throw new Error('validation');
           }
         }
-        if(amount>liveRemainingAmount){ showToast('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: '+toman(liveRemainingAmount)+' تومان'); throw new Error('validation'); }
-        if(!(await appConfirm((p.productId?'با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد.':'با ثبت این برگشت، فقط بدهی به تامین‌کننده کم می‌شود (موجودی خودکار اصلاح نمی‌شود).')+' ادامه می‌دهید?'))) throw new Error('validation');
+        if(amount>liveRemainingAmount){ alert('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: '+toman(liveRemainingAmount)+' تومان'); throw new Error('validation'); }
+        if(!confirm((p.productId?'با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد.':'با ثبت این برگشت، فقط بدهی به تامین‌کننده کم می‌شود (موجودی خودکار اصلاح نمی‌شود).')+' ادامه می‌دهید؟')) throw new Error('validation');
         // G4: reason required for NEW purchase returns (one reason per return transaction)
         openPurchaseReturnReasonPicker(async function(returnReason){
           await withSubmitGuard(document.getElementById('save-return'), async ()=>{
             const previousData = JSON.parse(JSON.stringify(data));
             if(p.productId && qty>0){
               const retResult = applyPurchaseReturnStockEffects(p, [{productId:p.productId, qty}], s.name, date);
-              if(!retResult.ok){ showToast(retResult.error||'برگشت خرید ممکن نشد'); throw new Error('validation'); }
+              if(!retResult.ok){ alert(retResult.error||'برگشت خرید ممکن نشد'); throw new Error('validation'); }
             }
             p.returns = p.returns||[];
             p.returns.push({id:uid(), date, qty, amount, returnReason: returnReason});
             try{
               await saveData();
             }catch(saveErr){
-              restoreDataInPlace(previousData);
+              data = previousData;
               throw saveErr;
             }
             openSupplierDetail(sid); render(); showToast('برگشت خرید ثبت شد');
