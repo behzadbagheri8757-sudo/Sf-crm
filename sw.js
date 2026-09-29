@@ -27,12 +27,19 @@
    scrollY 1:1 and reverses identically. Removed the now-duplicate "داشبورد"
    <h2> inside Dashboard's own content — the header already shows it as the
    page title since the brand-name/page-title fix) */
+/* CHANGED: v63 -> v64 (Computation Bank is now part of the offline app shell. Added js/computation-bank.js to PRECACHE_URLS and bumped the shell cache version so the execution-scoped bank is available offline. No business logic changed.)
+   */
 /* CHANGED: v61 -> v62 (offline-shell fix only: css/shamsi-calendar.css and
    js/shamsi-calendar.js are loaded by index.html on every page load but were
    missing from PRECACHE_URLS, so a freshly-activated cache version had no
    guarantee they'd be cached before the first offline use. Added both to the
    precache list; no other asset, route, or business logic touched.) */
-const CACHE_NAME = 'baqeri-shell-v63';
+/* CHANGED: v64 -> v65 (classification fix only: js/pin-lock.js moved into
+   CRITICAL_SHELLS — bootSpaShell() hard-gates boot on it whenever a PIN is
+   configured, so it is boot-critical, not merely a nice-to-have precache
+   entry. It was already in PRECACHE_URLS; no asset list, route, or business
+   logic otherwise changed.) */
+const CACHE_NAME = 'baqeri-shell-v67';
 
 /** App Shell — paths relative to this SW (same directory as index.html). */
 const PRECACHE_URLS = [
@@ -48,6 +55,7 @@ const PRECACHE_URLS = [
   './js/db.js',
   './js/location.js',
   './js/calc.js',
+  './js/computation-bank.js',
   './js/stock.js',
   './js/backup.js',
   './js/pin-lock.js',
@@ -117,7 +125,14 @@ const CRITICAL_SHELLS = [
   './js/ui.js',
   './js/router.js',
   './js/view.host.js',
-  './js/views/dashboard.js'
+  './js/views/dashboard.js',
+  // js/pin-lock.js: bootSpaShell() (js/nav.js) hard-gates boot on
+  // window.pinLock whenever a PIN is configured (localStorage
+  // baqeri_pin_lock_v1) — if the module is missing it shows an error screen
+  // and returns before loadData()/render() ever run. That makes it required
+  // for offline boot for any user with PIN lock enabled, so it belongs here
+  // like the other boot-path files above, not just in PRECACHE_URLS.
+  './js/pin-lock.js'
 ];
 
 /**

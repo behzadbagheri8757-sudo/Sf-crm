@@ -3,13 +3,49 @@
 <head>
 <meta charset="UTF-8">
 <script>
-/* Apply saved theme before first paint (prevents flash of wrong/default theme).
-   Reads the same key/logic as the picker in js/views/settings.js. */
+/* Apply the saved theme before first paint. The stored preference is one of:
+   system | light | dark. The root data-theme attribute is always the resolved
+   visual theme, so CSS never needs a competing theme architecture. */
 (function(){
   try{
-    var t = localStorage.getItem('baqeri_theme_v1');
-    if(t && t !== 'default'){
-      document.documentElement.setAttribute('data-theme', t);
+    var KEY = 'baqeri_theme_v1';
+    var root = document.documentElement;
+    var mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function normalize(v){
+      return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+    }
+    function resolve(v){
+      v = normalize(v);
+      return v === 'system' ? (mql && mql.matches ? 'dark' : 'light') : v;
+    }
+    function apply(v){
+      root.setAttribute('data-theme', resolve(v));
+    }
+    function preference(){
+      try { return normalize(localStorage.getItem(KEY)); } catch(e) { return 'system'; }
+    }
+
+    apply(preference());
+
+    window.BaqeriTheme = {
+      key: KEY,
+      getPreference: preference,
+      apply: apply,
+      setPreference: function(v){
+        v = normalize(v);
+        try { localStorage.setItem(KEY, v); } catch(e) {}
+        apply(v);
+        return v;
+      }
+    };
+
+    if(mql){
+      var onSystemChange = function(){
+        if(preference() === 'system') apply('system');
+      };
+      if(typeof mql.addEventListener === 'function') mql.addEventListener('change', onSystemChange);
+      else if(typeof mql.addListener === 'function') mql.addListener(onSystemChange);
     }
   }catch(e){}
 })();
@@ -28,8 +64,6 @@
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152.png">
 <title>داشبورد — حبوبات و خشکبار باقری</title>
-<script src="./vendor/xlsx.full.min.js"></script>
-<script src="./vendor/html2canvas.min.js"></script>
 <link rel="stylesheet" href="./css/app.css">
 <link rel="stylesheet" href="./css/visual-grammar.css">
 <link rel="stylesheet" href="./css/visual-grammar-components.css">
@@ -59,6 +93,7 @@
 <script src="./js/shamsi-calendar.js"></script>
 <script src="./js/db.js"></script>
 <script src="./js/location.js"></script>
+<script src="./js/computation-bank.js"></script>
 <script src="./js/calc.js"></script>
 <script src="./js/intelligence/persistence.js"></script>
 <script src="./js/intelligence/feedback.js"></script>
