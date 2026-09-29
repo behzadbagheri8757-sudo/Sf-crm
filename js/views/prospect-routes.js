@@ -8,16 +8,7 @@
 (function (global) {
   let addRouteHandler = null;
   function navigateToProspects() {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/prospects');
-    } else {
-      location.href = '#/prospects';
-    }
+    AppRouter.navigate('/prospects');
   }
 
   function drawRoutes(root) {

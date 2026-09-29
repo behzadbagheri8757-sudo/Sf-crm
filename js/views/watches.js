@@ -28,29 +28,11 @@
   }
 
   function navigateToWatch(occId) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/watch', { id: occId });
-    } else {
-      location.href = watchDetailHref(occId);
-    }
+    AppRouter.navigate('/watch', { id: occId });
   }
 
   function navigateToWatches() {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/watches');
-    } else {
-      location.href = watchesHref();
-    }
+    AppRouter.navigate('/watches');
   }
 
   function customerNameById(cid) {
@@ -227,16 +209,22 @@
 
     var nav = document.getElementById('nav');
     if (nav) nav.style.display = '';
+    var ctx = typeof createComputationContext === 'function'
+      ? createComputationContext({ data: data })
+      : null;
 
     function refresh() {
       if (cancelled) return;
+      ctx = typeof createComputationContext === 'function'
+        ? createComputationContext({ data: data })
+        : null;
       renderWatchList(root);
     }
 
     // Reconcile first (existing lifecycle logic; fail-open) so a direct
     // deep link to #/watches shows current data, same as the Dashboard does.
     if (typeof reconcileWatchLifecycle === 'function') {
-      reconcileWatchLifecycle().then(refresh).catch(function (e) {
+      reconcileWatchLifecycle(null, ctx).then(refresh).catch(function (e) {
         console.warn('watch lifecycle reconcile failed', e);
         refresh();
       });
@@ -310,14 +298,20 @@
 
     var nav = document.getElementById('nav');
     if (nav) nav.style.display = '';
+    var ctx = typeof createComputationContext === 'function'
+      ? createComputationContext({ data: data })
+      : null;
 
     function refresh() {
       if (cancelled) return;
+      ctx = typeof createComputationContext === 'function'
+        ? createComputationContext({ data: data })
+        : null;
       renderWatchDetail(root, detailOccId);
     }
 
     if (typeof reconcileWatchLifecycle === 'function') {
-      reconcileWatchLifecycle().then(refresh).catch(function (e) {
+      reconcileWatchLifecycle(null, ctx).then(refresh).catch(function (e) {
         console.warn('watch lifecycle reconcile failed', e);
         refresh();
       });
@@ -344,7 +338,7 @@
       var card = e.target.closest('[data-watch-open-customer]');
       if (card && !e.target.closest('button,a')) {
         var cid = card.getAttribute('data-watch-open-customer');
-        if (cid) { if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) AppRouter.navigate('/customer', {id: cid}); else location.href = '#/customer?id=' + encodeURIComponent(cid); }
+        if (cid) { AppRouter.navigate('/customer', {id: cid}); }
       }
     }
     root.addEventListener('click', onDetailClick);
@@ -354,7 +348,7 @@
       if (!card) return;
       e.preventDefault();
       var cid = card.getAttribute('data-watch-open-customer');
-      if (cid) { if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) AppRouter.navigate('/customer', {id: cid}); else location.href = '#/customer?id=' + encodeURIComponent(cid); }
+      if (cid) { AppRouter.navigate('/customer', {id: cid}); }
     }
     root.addEventListener('keydown', onDetailKeydown);
 

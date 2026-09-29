@@ -16,16 +16,7 @@
   let fabHandler = null;
 
   function navigateToCustomer(cid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/customer', { id: cid });
-    } else {
-      location.href = '#/customer?id=' + encodeURIComponent(cid);
-    }
+    AppRouter.navigate('/customer', { id: cid });
   }
 
   function invoicePaidAmount(inv) {
@@ -104,7 +95,7 @@
         <div class="btn-row"><a class="btn secondary" href="#/customers">رفتن به مشتریان</a></div>`);
       return;
     }
-    const opts = data.customers.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','fa'))
+    const opts = data.customers.filter(c => c.active !== false).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','fa'))
       .map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
     openSheet(`
       <h3>فاکتور جدید</h3>

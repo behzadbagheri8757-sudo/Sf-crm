@@ -26,31 +26,12 @@
   }
 
   function navigateToProspect(id) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/prospect', { id: id });
-    } else {
-      location.href = '#/prospect?id=' + encodeURIComponent(id);
-    }
+    AppRouter.navigate('/prospect', { id: id });
   }
 
   function navigateToEvaluation(shopId) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      const params = shopId ? { shopId: shopId } : {};
-      AppRouter.navigate('/evaluation', params);
-    } else {
-      const url = shopId ? '#/evaluation?shopId=' + encodeURIComponent(shopId) : '#/evaluation';
-      location.href = url;
-    }
+    const params = shopId ? { shopId: shopId } : {};
+    AppRouter.navigate('/evaluation', params);
   }
 
   function renderTargetCard() {
@@ -318,16 +299,7 @@
     });
     root.querySelector('[data-nav-routes]').addEventListener('click', function (e) {
       e.preventDefault();
-      if (
-        typeof isSpaShell === 'function' &&
-        isSpaShell() &&
-        typeof AppRouter !== 'undefined' &&
-        AppRouter.navigate
-      ) {
-        AppRouter.navigate('/locations');
-      } else {
-        location.href = '#/locations';
-      }
+      AppRouter.navigate('/locations');
     });
 
     // Delegated list click — once per draw (same pattern as Customers/Checks)

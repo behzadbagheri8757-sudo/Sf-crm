@@ -22,19 +22,11 @@
   function rankPill(rank) { return prospectRankBadgeHTML(rank); }
 
   function navigateToProspects() {
-    if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) {
-      AppRouter.navigate('/prospects');
-    } else {
-      location.href = '#/prospects';
-    }
+    AppRouter.navigate('/prospects');
   }
 
   function navigateToCustomer(cid) {
-    if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) {
-      AppRouter.navigate('/customer', { id: cid });
-    } else {
-      location.href = '#/customer?id=' + encodeURIComponent(cid);
-    }
+    AppRouter.navigate('/customer', { id: cid });
   }
 
   // Presentation-only helpers for the legacy (V1) evaluation detail screen.

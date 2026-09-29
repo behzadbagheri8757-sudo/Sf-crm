@@ -29,16 +29,7 @@
   }
 
   function navigateToCustomer(cid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/customer', { id: cid });
-    } else {
-      location.href = '#/customer?id=' + encodeURIComponent(cid);
-    }
+    AppRouter.navigate('/customer', { id: cid });
   }
 
   function invoicePayStatus(inv) {
@@ -177,7 +168,7 @@
    * Only products with rejectedCount >= threshold are returned.
    * Pure / read-only — does not write DB or mutate CRM.
    */
-  function buildProductRejectionInsights(customerId, threshold) {
+  function buildProductRejectionInsights(customerId, threshold, ctx) {
     var out = [];
     if (!customerId || typeof customerBehavior !== 'function') return out;
     var thr = (threshold != null && Number.isFinite(Number(threshold)))
@@ -186,7 +177,7 @@
     if (thr < 1) thr = PRODUCT_REJECTION_THRESHOLD_DEFAULT;
 
     var b;
-    try { b = customerBehavior(customerId); } catch (e) { return out; }
+    try { b = customerBehavior(customerId, ctx); } catch (e) { return out; }
     if (!b || !Array.isArray(b.offeredProductStats)) return out;
 
     for (var i = 0; i < b.offeredProductStats.length; i++) {
@@ -237,10 +228,10 @@
     return out;
   }
 
-  function productRejectionInsightsHtml(customerId) {
+  function productRejectionInsightsHtml(customerId, ctx) {
     var items = [];
     try {
-      items = buildProductRejectionInsights(customerId);
+      items = buildProductRejectionInsights(customerId, undefined, ctx);
     } catch (e) {
       return '';
     }
@@ -262,12 +253,12 @@
       '<div class="dash-activity customer-rejection-list">' + rows + '</div>';
   }
 
-  function intelligenceWatchHtml(cid) {
+  function intelligenceWatchHtml(cid, ctx) {
     if (typeof extractCustomerSignals !== 'function' && typeof extractWatchObservations !== 'function' && typeof getActiveWatchOccurrences !== 'function') return '';
 
     var confirmed = [];
     if (typeof extractCustomerSignals === 'function') {
-      try { confirmed = extractCustomerSignals(cid) || []; } catch (e) { confirmed = []; }
+      try { confirmed = extractCustomerSignals(cid, ctx) || []; } catch (e) { confirmed = []; }
     }
     var activeConfirmed = confirmed.filter(function (s) { return s && s.status === 'active'; });
 
@@ -287,7 +278,7 @@
     }
     if (!occs.length && custIsActive && typeof extractWatchObservations === 'function') {
       try {
-        var raw = extractWatchObservations(cid, confirmed) || [];
+        var raw = extractWatchObservations(cid, confirmed, ctx) || [];
         occs = raw.map(function (w, idx) {
           return {
             id: null,
@@ -441,7 +432,7 @@
     });
   }
 
-  function drawCustomerPage(root) {
+  function drawCustomerPage(root, ctx) {
     if (!root) return;
     root.classList.add('customer-detail-view'); // UPDATED: Added for CSS scoping
 
@@ -471,8 +462,8 @@
       setHeaderTitle(c.name, { isRoot: false });
     }
 
-    const t = customerTotals(c.id);
-    const profit = customerProfit(c.id);
+    const t = customerTotals(c.id, ctx);
+    const profit = customerProfit(c.id, ctx);
     const word = balanceStatusWord(t.balance);
     const color = t.balance > 0 ? 'accent-rust' : t.balance < 0 ? 'accent-olive' : 'accent-olive';
     const balanceLine = t.balance === 0 ? word : word + ': ' + toman(Math.abs(t.balance)) + ' ت';
@@ -487,8 +478,8 @@
     let recommendedAction = null;
     {
       let priority = null, action = null;
-      try { if (typeof calculateCustomerPriority === 'function') priority = calculateCustomerPriority(c.id); } catch (eP) { priority = null; }
-      try { if (typeof calculateCustomerAction === 'function') action = calculateCustomerAction(c.id); } catch (eA) { action = null; }
+      try { if (typeof calculateCustomerPriority === 'function') priority = calculateCustomerPriority(c.id, { ctx: ctx }); } catch (eP) { priority = null; }
+      try { if (typeof calculateCustomerAction === 'function') action = calculateCustomerAction(c.id, priority, { ctx: ctx }); } catch (eA) { action = null; }
       recommendedAction = action && action.actionType !== 'no_action' ? action : null;
       const riskLevel = priority ? priority.riskLevel : null;
       const storyText = (priority && priority.customerStory && priority.customerStory.summary) ? priority.customerStory.summary : '';
@@ -500,17 +491,17 @@
       }
     }
 
-    const invs = customerInvoices(c.id)
+    const invs = customerInvoices(c.id, ctx)
       .slice()
       .sort(function (a, b) {
         return (b.date || '').localeCompare(a.date || '') || String(b.number).localeCompare(String(a.number));
       });
-    const pays = customerPayments(c.id)
+    const pays = customerPayments(c.id, ctx)
       .slice()
       .sort(function (a, b) {
         return (b.date || '').localeCompare(a.date || '');
       });
-    const chks = customerChecks(c.id)
+    const chks = customerChecks(c.id, ctx)
       .slice()
       .sort(function (a, b) {
         return (b.dueDate || '').localeCompare(a.dueDate || '');
@@ -604,7 +595,7 @@
             if (Array.isArray(v.tags) && v.tags.length) extraBits.push('برچسب: ' + v.tags.join('، '));
             if (Array.isArray(v.offeredProducts) && v.offeredProducts.length) {
               var rxMap = { accepted: 'قبول', rejected: 'رد', deferred: 'بعداً' };
-              var rrMap = { price: 'قیمت', quality: 'کیفیت', competitor: 'رقیب', unavailable: 'ناموجود', no_need: 'عدم نیاز', other: 'سایر' };
+              var rrMap = { price: 'قیمت', quality: 'کیفیت', competitor: 'رقیب', unavailable: 'ناموجود', no_need: 'عدم نیاز', still_stock: 'موجود داشت', other: 'سایر' };
               var bits = v.offeredProducts.map(function (op) {
                 var prod = (data.products || []).find(function (p) { return p.id === op.productId; });
                 var name = prod ? prod.name : (op.productId || '—');
@@ -645,7 +636,7 @@
 
     let behaviorHtml = '';
     if (typeof customerBehavior === 'function') {
-      const b = customerBehavior(c.id);
+      const b = customerBehavior(c.id, ctx);
       // customerBehaviorSummary's own bullet lines now render lower on the
       // page, inside "جزئیات کامل رفتار خرید" progressive disclosure —
       // the headline decision (risk/opportunity + next action) already
@@ -758,7 +749,7 @@
             ? '—'
             : 'ویزیتی ثبت نشده';
 
-      const watchHtmlBlock = intelligenceWatchHtml(c.id);
+      const watchHtmlBlock = intelligenceWatchHtml(c.id, ctx);
       behaviorHtml =
         '<h3 class="sub-title">رفتار خرید و هوش تجاری</h3>' +
         (watchHtmlBlock
@@ -898,7 +889,7 @@
       ' ت</div></div>' +
       '</div>' +
       behaviorHtml +
-      productRejectionInsightsHtml(c.id) +
+      productRejectionInsightsHtml(c.id, ctx) +
       '<h3 class="sub-title">فاکتورها (' +
       invs.length +
       ')</h3>' +
@@ -971,7 +962,7 @@
           // For action types without a dedicated existing form (e.g. investigate,
           // manager_review, call), expose the existing explanation rather than
           // inventing a new workflow.
-          const target = root.querySelector('details');
+          const target = root.querySelector('.customer-behavior-details');
           if (target) target.open = true;
           if (target && typeof target.scrollIntoView === 'function') {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1009,11 +1000,19 @@
 
     currentCustomerId = params && params.id ? params.id : null;
     function refreshCustomer() {
-      function paint() { drawCustomerPage(rootEl || root); }
+      // Per-cycle, RAM-only Context: shared only so that reconcileWatchLifecycle's
+      // Watch-observation pass and the subsequent Priority/Signals pass (both of
+      // which independently derive the same per-customer SKU aggregation) don't
+      // recompute _aggregatePairMap twice for the same data snapshot. Discarded
+      // after this refreshCustomer() call; never persisted, never reused elsewhere.
+      var ctx = typeof createComputationContext === 'function'
+        ? createComputationContext({ data: data })
+        : { aggregatePairMapCache: Object.create(null) };
+      function paint() { drawCustomerPage(rootEl || root, ctx); }
       // Paint immediately so the page is never blank if lifecycle reconcile hangs.
       paint();
       if (typeof reconcileWatchLifecycle === 'function' && currentCustomerId) {
-        reconcileWatchLifecycle(currentCustomerId).then(paint).catch(function () { paint(); });
+        reconcileWatchLifecycle(currentCustomerId, ctx).then(paint).catch(function () { paint(); });
       }
     }
     refreshCustomer();

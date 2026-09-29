@@ -17,16 +17,7 @@
   }
 
   function navigateToSupplier(sid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/supplier', { id: sid });
-    } else {
-      location.href = '#/supplier?id=' + encodeURIComponent(sid);
-    }
+    AppRouter.navigate('/supplier', { id: sid });
   }
 
   function renderSupplierPurchaseReturn(s) {

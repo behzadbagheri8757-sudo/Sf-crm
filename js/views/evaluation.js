@@ -68,11 +68,7 @@
 
   function navigateToProspect(id, opts) {
     const justCreated = !!(opts && opts.justCreated);
-    if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) {
-      AppRouter.navigate('/prospect', justCreated ? { id: id, justCreated: '1' } : { id: id });
-    } else {
-      location.href = '#/prospect?id=' + encodeURIComponent(id) + (justCreated ? '&justCreated=1' : '');
-    }
+    AppRouter.navigate('/prospect', justCreated ? { id: id, justCreated: '1' } : { id: id });
   }
 
   function currentQuestions() {
