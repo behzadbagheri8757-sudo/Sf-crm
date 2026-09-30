@@ -4689,3 +4689,25 @@ button#save-tx{
   color:var(--vg-color-text);
   margin-bottom:14px;
 }
+
+
+/* ============================================================
+   DARK MODE ELEVATED OVERLAYS / FLOATING ACTION
+   Scoped to Dark Mode only. Ordinary cards are flattened above;
+   overlays and FAB retain elevation where it communicates depth.
+   ============================================================ */
+html[data-theme="dark"] .confirm-overlay {
+  background: rgba(0,0,0,.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+html[data-theme="dark"] .confirm-card {
+  background: var(--vg-color-surface);
+  box-shadow: var(--vg-shadow-overlay);
+}
+html[data-theme="dark"] .confirm-message {
+  color: var(--vg-color-text);
+}
+html[data-theme="dark"] .fab {
+  background: #007A50;
+}

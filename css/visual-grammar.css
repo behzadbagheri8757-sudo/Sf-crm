@@ -192,8 +192,8 @@ html[data-theme="light"]{
 html[data-theme="dark"]{
   color-scheme:dark;
 
-  --vg-color-bg:               #101216;
-  --vg-color-bg-system:        #0B0D10;
+  --vg-color-bg:               #0A0B0E;
+  --vg-color-bg-system:        #050608;
   --vg-color-surface:          #181A1F;
   --vg-color-surface-soft:     #202329;
   --vg-color-text:             #F2F2F7;
@@ -201,7 +201,7 @@ html[data-theme="dark"]{
   --vg-color-text-muted:       #9699A3;
   --vg-color-border:           rgba(255,255,255,.105);
   --vg-color-divider:          rgba(255,255,255,.075);
-  --vg-color-primary:          #5AA9F0;
+  --vg-color-primary:          #4AA3FF;
   --vg-color-primary-soft:     rgba(0,112,210,.18);
   --vg-color-success:          #45C99A;
   --vg-color-success-soft:     rgba(0,160,104,.16);
@@ -663,4 +663,37 @@ html[data-theme="dark"] .dash-qa-ico{
 html[data-theme="dark"] .bottom-nav-item.active .bn-ico,
 html[data-theme="dark"] .bottom-nav-item.active .bn-ico .app-icon{
   color:var(--vg-color-primary);
+}
+
+
+/* ============================================================
+   DARK MODE SURFACE MATERIAL — refined
+   Dark cards use subtle border separation instead of
+   black-on-dark box shadows. Scoped to Dark Mode only.
+   Elevation is intentionally retained for sheets, modals,
+   confirm dialogs, toast and floating controls.
+   ============================================================ */
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .dash-health-row,
+html[data-theme="dark"] .dash-monthly-target,
+html[data-theme="dark"] .dash-qa-btn,
+html[data-theme="dark"] .dash-activity-section,
+html[data-theme="dark"] .dash-watch-compact,
+html[data-theme="dark"] .cust-summary,
+html[data-theme="dark"] .cust-recommended-action,
+html[data-theme="dark"] .prospect-daily-target,
+html[data-theme="dark"] .settings-section,
+html[data-theme="dark"] .gc-panel,
+html[data-theme="dark"] .gc-mission,
+html[data-theme="dark"] .more-group-card,
+html[data-theme="dark"] .inv-items-card,
+html[data-theme="dark"] .inv-profit-summary,
+html[data-theme="dark"] .inv-summary-section,
+html[data-theme="dark"] .biz-status-secondary,
+html[data-theme="dark"] .report-summary,
+html[data-theme="dark"] .report-summary-card,
+html[data-theme="dark"] .prospect-result-card,
+html[data-theme="dark"] .tx-details {
+  box-shadow: none;
+  border: 1px solid rgba(255,255,255,.10);
 }
