@@ -590,7 +590,7 @@ function _bnAnimateIndicatorToItem(bar, item){
   /* Responsive first: just long enough for take-off/stretch/jump/landing to
      each register as part of one continuous event, not a slow-motion
      replay. */
-  var durationMs = Math.round(260 + 180 * distanceRatio);
+  var durationMs = Math.round(260 + 100 * distanceRatio);
 
   /* If this travel inherited a non-1.00 scale from an animation that was
      just interrupted, fold that discrepancy out smoothly over the first
