@@ -4711,3 +4711,31 @@ html[data-theme="dark"] .confirm-message {
 html[data-theme="dark"] .fab {
   background: #007A50;
 }
+
+/* --------------------------------------------------------------------------
+   Input clear (×) button — iOS-style, shared floating control (see ui.js)
+   -------------------------------------------------------------------------- */
+.input-clear-btn{
+  position:fixed;
+  z-index:100000;
+  width:30px;
+  height:30px;
+  margin:0;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  direction:ltr;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.input-clear-btn[hidden]{display:none}
+.input-clear-btn svg{width:18px;height:18px;display:block;pointer-events:none}
+input.has-input-clear{padding-inline-end:34px !important}
+/* narrow fields (invoice quantity, 74-76px): 22px button + 3px gap. Content
+   box stays >= 41px (74px at <=360) so a 5-digit quantity (~40px) never touches the button. */
+input.has-input-clear.has-input-clear-sm{padding-inline-end:26px !important}
+@media print{.input-clear-btn{display:none !important}}

@@ -314,7 +314,6 @@
   .shamsi-calendar-day{ transition:none; }
 }
 
-
 /* Explicit application theme wins over the legacy system fallback above.
    The fallback remains intact for startup/error cases where no theme
    attribute is present. */
