@@ -20,7 +20,12 @@
       return v === 'system' ? (mql && mql.matches ? 'dark' : 'light') : v;
     }
     function apply(v){
+      root.classList.add('theme-transition');
       root.setAttribute('data-theme', resolve(v));
+      window.clearTimeout(root.__baqeriThemeTransitionTimer);
+      root.__baqeriThemeTransitionTimer = window.setTimeout(function(){
+        root.classList.remove('theme-transition');
+      }, 220);
     }
     function preference(){
       try { return normalize(localStorage.getItem(KEY)); } catch(e) { return 'system'; }
