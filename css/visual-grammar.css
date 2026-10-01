@@ -287,6 +287,17 @@ html[data-theme="dark"] .more-sheet-item{
   color:var(--vg-color-text);
   border-color:var(--vg-color-border);
 }
+html.theme-transition,
+html.theme-transition *{
+  transition:background-color 180ms ease,
+             color 180ms ease,
+             border-color 180ms ease,
+             box-shadow 180ms ease !important;
+}
+
+html[data-theme="dark"] .sheet-handle{
+  background:rgba(255,255,255,.16);
+}
 html[data-theme="dark"] .more-sheet-handle{
   background:rgba(255,255,255,.16);
 }
@@ -396,6 +407,11 @@ html[data-theme="dark"] .sheet{
   border-color:var(--vg-color-border);
   box-shadow:var(--vg-shadow-raised);
 }
+html[data-theme="dark"] .inv-payment-panel{
+  background:var(--vg-color-surface);
+  border-color:var(--vg-color-border);
+  box-shadow:var(--vg-shadow-overlay), 0 0 0 100vmax rgba(0,0,0,.45);
+}
 html[data-theme="dark"] .field input,
 html[data-theme="dark"] .field select,
 html[data-theme="dark"] .field textarea,
@@ -491,11 +507,15 @@ html[data-theme="dark"] .inv-line-avg-cost{
 html[data-theme="dark"] .inv-line-market-details summary{
   color:var(--vg-color-text-secondary);
 }
-html[data-theme="dark"] .inv-line-del,
 html[data-theme="dark"] .inv-payment-close,
 html[data-theme="dark"] .inv-header-btn{
   background:rgba(255,255,255,.07);
   color:var(--vg-color-text-muted);
+}
+/* Destructive row action stays a danger color in Dark Mode (Light Mode: #D52B36). */
+html[data-theme="dark"] .inv-line-del{
+  background:rgba(255,255,255,.07);
+  color:var(--vg-color-danger);
 }
 
 /* Prospect, evaluation and Game Center */
@@ -554,6 +574,18 @@ html[data-theme="dark"] .action-urgency-medium{
 html[data-theme="dark"] .action-urgency-low{
   color:var(--vg-color-neutral);
   background:var(--vg-color-neutral-soft);
+}
+
+html[data-theme="dark"] .watch-severity-high{
+  color:#FF6973!important;
+  background:rgba(250,57,70,.15);
+}
+html[data-theme="dark"] .watch-detail-reason .watch-detail-value{
+  color:var(--vg-color-warning);
+}
+html[data-theme="dark"] .dash-action-toggle{
+  border-color:rgba(255,255,255,.14);
+  color:var(--vg-color-warning);
 }
 
 /* Settings */
@@ -696,4 +728,30 @@ html[data-theme="dark"] .prospect-result-card,
 html[data-theme="dark"] .tx-details {
   box-shadow: none;
   border: 1px solid rgba(255,255,255,.10);
+}
+
+/* Settings: nested .card is an intentionally flat content box (see
+   .settings-section .card in app.css). The generic Dark Mode .card rules above
+   are more specific than that rule, so restate the flat treatment here. */
+html[data-theme="dark"] .settings-section .card{
+  background:transparent;
+  border:none;
+  box-shadow:none;
+}
+
+/* Game Center secondary surfaces: the Light Mode black-alpha fills/lines
+   (.05-.08) vanish on the dark surface. Subtle white-alpha equivalents,
+   matching the existing Dark Mode values used by .gc-seg / --vg-color-divider. */
+html[data-theme="dark"] .gc-track{
+  background:rgba(255,255,255,.08);
+}
+html[data-theme="dark"] .gc-pill:not(.is-on){
+  background:rgba(255,255,255,.07);
+}
+html[data-theme="dark"] .gc-line{
+  border-bottom-color:var(--vg-color-divider);
+}
+/* Default/subtle urgency indicator only; critical/high keep their own colors. */
+html[data-theme="dark"] .action-row:not(.action-row-critical):not(.action-row-high)::after{
+  background:rgba(255,255,255,.16);
 }

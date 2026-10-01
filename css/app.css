@@ -519,6 +519,14 @@ body.modal-open{
 #ptr-indicator:not(.show){
   transform:translateY(-40px);
 }
+html[data-theme="dark"] #ptr-indicator{
+  background:rgba(24,26,31,.92);
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+html[data-theme="dark"] .ptr-spinner{
+  border-color:rgba(74,163,255,.28);
+  border-top-color:var(--vg-color-primary);
+}
 .ptr-spinner{
   width:16px;
   height:16px;
@@ -1001,6 +1009,7 @@ a.tx-row:active{
   mask-repeat:no-repeat;
   -webkit-mask-position:center;
   mask-position:center;
+  transition:transform .15s ease;
 }
 details[open] > .customer-behavior-summary::after{
   transform:rotate(180deg);
@@ -4063,6 +4072,13 @@ main.route-pop-enter.route-anim-run{ transform:translateX(0); }
   will-change:transform;
   transform:translateX(0);
   transition:transform var(--ios-route) var(--ios-route-ease);
+  background:var(--vg-color-bg);
+}
+html[data-theme="dark"] .route-ghost{
+  background:var(--vg-color-bg);
+}
+html[data-theme="dark"] .route-ghost.route-ghost-canvas-white{
+  background:var(--vg-color-bg-system);
 }
 /* PUSH: outgoing page shifts subtly right in RTL. */
 .route-ghost-under{ z-index:0; }
@@ -4200,7 +4216,7 @@ a.ledger-row:active,
    card sheet (see the .sheet-handle display:none rule near its block). */
 .overlay:not(.more-overlay){
   opacity:0;
-  transition:opacity 220ms var(--ios-ease-out);
+  transition:opacity 270ms var(--ios-ease-out);
 }
 .overlay.show{
   opacity:1;

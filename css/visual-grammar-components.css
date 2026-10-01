@@ -74,8 +74,6 @@ input[placeholder*="جستجو"]{
   align-items:stretch;
   justify-content:space-around;
 
-.bottom-nav[hidden]{ display:none !important; }
-
   /* Short floating capsule: 60px at rest → 46px minimized. border-radius
      is set far larger than any of these heights on purpose — the browser
      clamps border-radius to half the box's own height/width, so the two
@@ -106,6 +104,8 @@ input[placeholder*="جستجو"]{
              min-height var(--bn-minimize-duration) cubic-bezier(.22,1,.36,1),
              padding-block var(--bn-minimize-duration) cubic-bezier(.22,1,.36,1);
 }
+
+.bottom-nav[hidden]{ display:none !important; }
 
 .bottom-nav-item{
   position:relative;
@@ -408,6 +408,12 @@ input[placeholder*="جستجو"]{
 .field textarea{
   min-height:72px;
   border-radius:var(--vg-radius-soft);
+}
+html[data-theme="dark"] .field input:focus,
+html[data-theme="dark"] .field select:focus,
+html[data-theme="dark"] .field textarea:focus{
+  border-color:rgba(74,163,255,.45);
+  box-shadow:0 0 0 3px rgba(74,163,255,.14);
 }
 
 
