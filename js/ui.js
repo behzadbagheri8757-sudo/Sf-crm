@@ -146,6 +146,210 @@ function isLiveAmountInput(el){
     }
   }
 })();
+/* iOS-style clear (×) button for editable text/numeric inputs (UI-only).
+   One shared floating button, positioned over the focused input, so it works
+   for dynamically (re)rendered forms without touching any form markup.
+   Clearing sets value='' and fires a normal bubbling 'input' event, exactly
+   like the user deleting the text, so existing live formatting / invoice
+   calculations / dirty-tracking run unchanged. Opt out with data-no-clear. */
+(function bindInputClearButton(){
+  if(typeof document === 'undefined') return;
+  var OK_TYPES = ['text','tel','number','email','url'];
+  // Fields narrower than NARROW get the compact 22px button + 26px end
+  // padding (has-input-clear-sm). Covers the invoice qty field (74-76px) and
+  // the price field at <=360px (88px); the price field at 96px keeps 30px/34px.
+  var SIZE = 30, SIZE_SM = 22, NARROW = 90, MIN_W = 40;
+  // Follow loop: runs only while the button may still be moving, and stops
+  // once the geometry has been identical for `need` consecutive frames.
+  // Viewport-driven changes (iOS keyboard show/hide, focus) use the longer
+  // window because the keyboard animation outlasts the short one and can
+  // move things without emitting further events; both are bounded.
+  var STABLE_FRAMES = 10, STABLE_FRAMES_VIEWPORT = 40;
+  var need = STABLE_FRAMES;
+  var btn = null, cur = null, mo = null, loop = 0, stable = 0, lastKey = '';
+  // Measured difference between where position:fixed actually renders the
+  // button and where we asked for it (iOS visual-viewport quirks); see place().
+  var corrX = 0, corrY = 0;
+
+  function eligible(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var t = (el.getAttribute('type') || 'text').toLowerCase();
+    if(OK_TYPES.indexOf(t) === -1) return false;
+    if(el.readOnly || el.disabled) return false;
+    if(el.getAttribute('inputmode') === 'none') return false;
+    if(el.hasAttribute('data-no-clear') || el.hasAttribute('data-shamsi-field') || el.classList.contains('pin-input-real')) return false;
+    return true;
+  }
+
+  function ensureBtn(){
+    if(btn) return btn;
+    btn = document.createElement('span');
+    btn.className = 'input-clear-btn';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('aria-label', 'پاک کردن');
+    btn.hidden = true;
+    btn.innerHTML = '<svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="9" fill="#8E8E93"/><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>';
+    // Keep focus/keyboard on the input: block focus-stealing default actions.
+    function keep(e){ e.preventDefault(); }
+    btn.addEventListener('mousedown', keep);
+    btn.addEventListener('touchstart', keep, {passive:false});
+    btn.addEventListener('pointerdown', function(e){ e.preventDefault(); clearCurrent(); });
+    btn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); });
+    document.body.appendChild(btn);
+    return btn;
+  }
+
+  // Hard hide: input lost focus / eligibility / value, or was removed.
+  function hide(){
+    if(loop){ cancelAnimationFrame(loop); loop = 0; }
+    stable = 0; lastKey = ''; need = STABLE_FRAMES; corrX = corrY = 0;
+    if(cur){ cur.classList.remove('has-input-clear'); cur.classList.remove('has-input-clear-sm'); }
+    if(btn) btn.hidden = true;
+    if(mo) mo.disconnect();
+  }
+
+  function clipped(el, r){
+    // true when the input is scrolled out of view inside any clipping ancestor
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    var top = 0, left = 0, bottom = window.innerHeight, right = window.innerWidth;
+    // Visible area may extend past the layout viewport while the visual
+    // viewport is panned/offset (iOS keyboard). Only ever widen the bounds:
+    // a transient viewport change must not soft-hide a valid input.
+    var vv = window.visualViewport;
+    if(vv){
+      bottom = Math.max(bottom, vv.offsetTop + vv.height);
+      right = Math.max(right, vv.offsetLeft + vv.width);
+    }
+    for(var p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement){
+      var cs = getComputedStyle(p);
+      if(cs.overflowY === 'visible' && cs.overflowX === 'visible') continue;
+      var pr = p.getBoundingClientRect();
+      if(pr.top > top) top = pr.top;
+      if(pr.left > left) left = pr.left;
+      if(pr.bottom < bottom) bottom = pr.bottom;
+      if(pr.right < right) right = pr.right;
+    }
+    return cy < top || cy > bottom || cx < left || cx > right;
+  }
+
+  // Positions the button from the input's CURRENT rect. Returns a geometry
+  // key (used to detect when movement has settled) or null after a hard hide.
+  // A transiently clipped / off-screen / collapsed input only hides the
+  // button softly: state, observer and follow loop stay alive so it comes
+  // back on its own when the input reappears (sheet/row animations).
+  function update(){
+    var el = cur;
+    if(!el || !el.isConnected || document.activeElement !== el){
+      var a = document.activeElement;
+      if(a && a !== el && eligible(a)){
+        if(el){ el.classList.remove('has-input-clear'); el.classList.remove('has-input-clear-sm'); }
+        el = cur = a;
+      } else { hide(); return null; }
+    }
+    if(el.value === ''){ hide(); return null; }
+    // Apply the end-padding class BEFORE measuring: for auto-width inputs it
+    // changes the box, and the button must be placed against the final rect.
+    el.classList.add('has-input-clear');
+    var r = el.getBoundingClientRect();
+    var narrow = r.width < NARROW;
+    el.classList.toggle('has-input-clear-sm', narrow);
+    var b = ensureBtn();
+    if(!mo && typeof MutationObserver !== 'undefined') mo = new MutationObserver(follow);
+    if(mo) mo.observe(document.body, {childList:true, subtree:true}); // idempotent
+    var vk = '';
+    var vv = window.visualViewport;
+    if(vv) vk = '|' + Math.round(vv.offsetTop) + '|' + Math.round(vv.offsetLeft) + '|' + Math.round(vv.height) + '|' + Math.round(vv.width) + '|' + Math.round(vv.scale * 100);
+    var key = Math.round(r.top * 2) + '|' + Math.round(r.left * 2) + '|' + Math.round(r.width * 2) + '|' + Math.round(r.height * 2) + vk;
+    if(r.width < MIN_W || r.height < 20 || clipped(el, r)){
+      b.hidden = true;
+      return 'h|' + key;
+    }
+    var size = narrow ? SIZE_SM : SIZE;
+    var rtl = getComputedStyle(el).direction === 'rtl';
+    b.style.width = b.style.height = size + 'px';
+    b.hidden = false;
+    place(b, rtl ? r.left + 2 : r.right - size - 2, r.top + (r.height - size) / 2);
+    return 's|' + Math.round(corrX * 2) + '|' + Math.round(corrY * 2) + '|' + key;
+  }
+
+  // Put the button's rect at (x, y) in getBoundingClientRect() space, the
+  // same space the input was measured in. position:fixed and that space can
+  // disagree while the visual viewport is offset/animating (iOS keyboard), so
+  // instead of trusting the CSS coordinates we read back where the button
+  // really landed and fold the difference into a correction. The first write
+  // reuses the last known correction, so a steady state costs one write + one
+  // read; a residual (< 0.5px is ignored) triggers a single re-write.
+  function place(b, x, y){
+    b.style.left = (x + corrX) + 'px';
+    b.style.top = (y + corrY) + 'px';
+    var br = b.getBoundingClientRect();
+    var ex = br.left - x, ey = br.top - y;
+    if(Math.abs(ex) > 0.5 || Math.abs(ey) > 0.5){
+      corrX -= ex; corrY -= ey;
+      b.style.left = (x + corrX) + 'px';
+      b.style.top = (y + corrY) + 'px';
+    }
+  }
+
+  function tick(){
+    loop = 0;
+    var key = update();
+    if(key === null) return;                 // hard hide: loop ends
+    if(key === lastKey) stable++; else { stable = 0; lastKey = key; }
+    if(stable < need) loop = requestAnimationFrame(tick);
+    else need = STABLE_FRAMES;               // settled: loop ends, window resets
+  }
+
+  // (Re)start following. Never creates a second loop: an already-running
+  // loop just has its stability counter reset. Pass exactly `true` for
+  // viewport-driven triggers (keyboard) to use the longer settle window —
+  // strict compare because this is also used directly as an event/observer
+  // callback, which passes an Event/record list as the first argument.
+  function follow(long){
+    stable = 0;
+    if(long === true) need = STABLE_FRAMES_VIEWPORT;
+    if(!loop) loop = requestAnimationFrame(tick);
+  }
+
+  function clearCurrent(){
+    var el = cur;
+    if(!el || !el.isConnected) { follow(); return; }
+    if(el.value !== ''){
+      el.value = '';
+      el.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    // A handler may have re-rendered the field; update() re-adopts the focused one.
+    try{ if(el.isConnected && document.activeElement !== el) el.focus({preventScroll:true}); }catch(_e){}
+    update();
+    follow();
+  }
+
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(eligible(t) && cur !== t){
+      // New input: drop the previous input's state and never show the button
+      // at the previous input's coordinates, even for one frame.
+      if(cur){ cur.classList.remove('has-input-clear'); cur.classList.remove('has-input-clear-sm'); }
+      if(btn) btn.hidden = true;
+      cur = t;
+      lastKey = '';
+    }
+    if(cur) update();   // position immediately from the current rect
+    follow(true);       // ...then keep following (through the iOS keyboard animation)
+  }, true);
+  document.addEventListener('focusout', function(){ follow(true); }, true);
+  document.addEventListener('input', function(e){ if(e.target === cur) follow(); }, true);
+  document.addEventListener('scroll', function(){ if(cur) follow(); }, {capture:true, passive:true});
+  ['transitionrun','transitionstart','transitionend'].forEach(function(n){
+    document.addEventListener(n, function(){ if(cur) follow(); }, true);
+  });
+  window.addEventListener('resize', function(){ if(cur) follow(); });
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', function(){ if(cur) follow(true); });
+    window.visualViewport.addEventListener('scroll', function(){ if(cur) follow(true); });
+  }
+})();
+
 function esc(s){
   return String(s===undefined||s===null?'':s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -678,6 +882,7 @@ function bindSheetDragToDismiss(sheetEl, handleEl, dismissFn){
     startY = lastY = e.touches[0].clientY;
     startT = lastT = e.timeStamp;
     velocity = 0;
+    deltaY = 0; // a previous cancelled gesture must not leak into this one
     sheetEl.style.transition = 'none';
   }, {passive:true});
   handleEl.addEventListener('touchmove', function(e){
@@ -705,6 +910,15 @@ function bindSheetDragToDismiss(sheetEl, handleEl, dismissFn){
     if(shouldDismiss) dismissFn();
     deltaY = 0; velocity = 0;
   });
+  // OS-interrupted gesture: touchend never fires. Same cleanup as the
+  // non-dismiss path of touchend; never dismisses.
+  handleEl.addEventListener('touchcancel', function(){
+    if(!dragging) return;
+    dragging = false;
+    sheetEl.style.transition = '';
+    sheetEl.style.transform = '';
+    deltaY = 0; velocity = 0;
+  }, {passive:true});
 }
 
 let _modalHideTimer = null;
