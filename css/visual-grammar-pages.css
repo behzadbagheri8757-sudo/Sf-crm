@@ -763,3 +763,363 @@ main .empty{margin:14px 0;}
 html[data-theme="dark"] #main.customer-detail-view .watch-level-high{
   color:#F3A56B;
 }
+
+
+/* =========================================================
+   BAGHERI Master UI Patch — Customer Live
+   Scoped to .customer-detail-view; no shared Watch grammar changed.
+   ========================================================= */
+#main.customer-detail-view .customer-master {
+  --customer-gap: 14px;
+  display: block;
+  padding-bottom: 24px;
+}
+#main.customer-detail-view .customer-topline {
+  margin: 0 0 8px;
+}
+#main.customer-detail-view .customer-backlink {
+  color: var(--vg-color-text-muted, var(--ink));
+  text-decoration: none;
+  font-size: .82rem;
+}
+#main.customer-detail-view .customer-section {
+  margin: 0 0 var(--customer-gap);
+}
+#main.customer-detail-view .customer-section-kicker {
+  margin: 0 0 7px;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .76rem;
+  font-weight: 650;
+  letter-spacing: .01em;
+}
+#main.customer-detail-view .customer-identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+#main.customer-detail-view .customer-identity-main {
+  min-width: 0;
+}
+#main.customer-detail-view .customer-identity-name {
+  font-size: 1.28rem;
+  line-height: 1.25;
+  font-weight: 760;
+  letter-spacing: -.02em;
+}
+#main.customer-detail-view .customer-identity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  margin-top: 6px;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .78rem;
+  line-height: 1.65;
+}
+#main.customer-detail-view .customer-balance-block {
+  flex: 0 0 auto;
+  min-width: 112px;
+  text-align: left;
+}
+#main.customer-detail-view .customer-balance-block > span {
+  display: block;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .72rem;
+}
+#main.customer-detail-view .customer-balance-block > strong {
+  display: block;
+  margin-top: 2px;
+  font-size: .98rem;
+  line-height: 1.35;
+}
+#main.customer-detail-view .customer-story-section {
+  padding-top: 2px;
+}
+#main.customer-detail-view .customer-story-section .cust-summary {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+#main.customer-detail-view .customer-story-section .cust-summary-story {
+  color: var(--vg-color-text, var(--ink));
+  font-size: .94rem;
+  line-height: 1.9;
+}
+#main.customer-detail-view .customer-attention-section {
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+#main.customer-detail-view .customer-attention-list {
+  display: grid;
+  gap: 8px;
+}
+#main.customer-detail-view .customer-attention-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0,1fr);
+  gap: 9px;
+  padding: 9px 0;
+}
+#main.customer-detail-view .customer-attention-index {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary, #4AA3FF) 12%, transparent);
+  color: var(--primary, #4AA3FF);
+  font-size: .72rem;
+  font-weight: 750;
+}
+#main.customer-detail-view .customer-attention-title {
+  font-size: .88rem;
+  line-height: 1.7;
+  font-weight: 650;
+}
+#main.customer-detail-view .customer-attention-evidence {
+  margin-top: 2px;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .76rem;
+  line-height: 1.65;
+}
+#main.customer-detail-view .customer-action-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface, var(--card));
+}
+#main.customer-detail-view .customer-action-main > div {
+  min-width: 0;
+}
+#main.customer-detail-view .customer-action-main strong,
+#main.customer-detail-view .customer-action-main span {
+  display: block;
+}
+#main.customer-detail-view .customer-action-main strong {
+  font-size: .91rem;
+  line-height: 1.55;
+}
+#main.customer-detail-view .customer-action-main span {
+  margin-top: 3px;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .76rem;
+  line-height: 1.6;
+}
+#main.customer-detail-view .customer-actions-section {
+  padding-bottom: 3px;
+}
+#main.customer-detail-view .customer-actions-section .cust-actions-primary {
+  margin: 0;
+}
+#main.customer-detail-view .customer-actions-section .cust-actions-secondary {
+  margin-top: 7px;
+  opacity: .9;
+}
+#main.customer-detail-view .customer-pattern-grid,
+#main.customer-detail-view .customer-financial-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--line);
+}
+#main.customer-detail-view .customer-pattern-grid > div,
+#main.customer-detail-view .customer-financial-grid > div {
+  min-width: 0;
+  padding: 10px 11px;
+  background: var(--surface, var(--card));
+}
+#main.customer-detail-view .customer-pattern-grid span,
+#main.customer-detail-view .customer-financial-grid span {
+  display: block;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .71rem;
+}
+#main.customer-detail-view .customer-pattern-grid strong,
+#main.customer-detail-view .customer-financial-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: .82rem;
+  line-height: 1.55;
+}
+#main.customer-detail-view .customer-inline-alert {
+  margin-top: 7px;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .77rem;
+}
+#main.customer-detail-view .customer-basket-list {
+  border-top: 1px solid var(--line);
+}
+#main.customer-detail-view .customer-basket-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .8rem;
+}
+#main.customer-detail-view .customer-basket-row span:last-child {
+  color: var(--vg-color-text-muted, var(--muted));
+  white-space: nowrap;
+}
+#main.customer-detail-view .customer-secondary-insight .sub-title {
+  margin-top: 0;
+}
+#main.customer-detail-view .customer-details-section {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+#main.customer-detail-view .customer-details-section > details {
+  border-bottom: 1px solid var(--line);
+}
+#main.customer-detail-view .customer-details-section > details > summary {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  font-size: .84rem;
+  font-weight: 650;
+}
+#main.customer-detail-view .customer-details-section > details > summary::-webkit-details-marker {
+  display: none;
+}
+#main.customer-detail-view .customer-details-section > details > summary::after {
+  content: '⌄';
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .9rem;
+}
+#main.customer-detail-view .customer-details-section > details[open] > summary::after {
+  content: '⌃';
+}
+#main.customer-detail-view .customer-details-section > details > summary span {
+  margin-right: auto;
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .74rem;
+  font-weight: 500;
+}
+#main.customer-detail-view .customer-details-section > details > *:not(summary) {
+  padding-bottom: 12px;
+}
+#main.customer-detail-view .customer-full-meta {
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .78rem;
+  line-height: 1.9;
+}
+#main.customer-detail-view .customer-detail-empty {
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .78rem;
+}
+@media (max-width: 520px) {
+  #main.customer-detail-view .customer-identity {
+    gap: 10px;
+  }
+  #main.customer-detail-view .customer-identity-name {
+    font-size: 1.18rem;
+  }
+  #main.customer-detail-view .customer-balance-block {
+    min-width: 98px;
+  }
+}
+
+
+/* Master UI Patch — compact Inventory attention section */
+.inventory-attention {
+  margin: 0 0 16px;
+}
+.inventory-attention-list {
+  border-top: 1px solid var(--line);
+}
+.inventory-attention-row {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+  font-size: .82rem;
+}
+.inventory-attention-row strong {
+  font-size: .72rem;
+  font-weight: 650;
+}
+
+
+/* Master UI Patch — Dashboard / list surfaces */
+.dash-pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--line);
+}
+.dash-pulse-grid a {
+  min-width: 0;
+  padding: 10px 11px;
+  background: var(--surface, var(--card));
+  color: inherit;
+  text-decoration: none;
+}
+.dash-pulse-grid span,
+.dash-pulse-grid strong {
+  display: block;
+}
+.dash-pulse-grid span {
+  color: var(--vg-color-text-muted, var(--muted));
+  font-size: .7rem;
+}
+.dash-pulse-grid strong {
+  margin-top: 3px;
+  font-size: .8rem;
+}
+.customer-list-row .customer-row-main {
+  min-width: 0;
+}
+.customer-list-row .customer-row-title-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.customer-list-row .customer-row-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+.customer-list-row .customer-row-status {
+  font-size: .67rem;
+  line-height: 1.4;
+}
+.customer-list-row .customer-row-balance {
+  min-width: 76px;
+}
+.watch-filter-row {
+  margin: 8px 0 12px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.watch-filter-row::-webkit-scrollbar {
+  display: none;
+}
+@media (max-width: 520px) {
+  .dash-pulse-grid {
+    grid-template-columns: 1fr;
+  }
+}
