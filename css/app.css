@@ -1129,6 +1129,17 @@ details[open] > .customer-behavior-summary::after{
 .dash-health-value.debt{
   color:#D52B36;
 }
+.dash-health-row.dash-health-due{
+  grid-column:1 / -1;
+  flex-direction:row;
+  align-items:center;
+  justify-content:space-between;
+  min-height:0;
+  padding:11px 12px;
+}
+.dash-health-due .dash-health-value{
+  width:auto;
+}
 .dash-health-link:active{
   transform:scale(.98);
   background:#F8FAFC;

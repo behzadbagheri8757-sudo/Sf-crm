@@ -504,6 +504,28 @@ html[data-theme="dark"] .inv-line-avg-cost{
   background:rgba(255,255,255,.06);
   color:var(--vg-color-text-secondary);
 }
+html[data-theme="dark"] .inv-line-avg-cost.is-below{
+  background:var(--vg-color-danger-soft);
+  color:var(--vg-color-danger);
+}
+html[data-theme="dark"] .dash-qa-label{
+  color:var(--vg-color-text);
+}
+html[data-theme="dark"] .dashboard-eyebrow{
+  color:var(--vg-color-text-muted);
+}
+html[data-theme="dark"] .report-summary-value.debt{
+  color:var(--vg-color-danger);
+}
+html[data-theme="dark"] .inv-customer-kicker{
+  color:var(--vg-color-text-muted);
+}
+html[data-theme="dark"] button.app-back{
+  background:rgba(255,255,255,.08);
+}
+html[data-theme="dark"] .prod-drop-ico{
+  background:var(--vg-color-primary-soft);
+}
 html[data-theme="dark"] .inv-line-market-details summary{
   color:var(--vg-color-text-secondary);
 }
