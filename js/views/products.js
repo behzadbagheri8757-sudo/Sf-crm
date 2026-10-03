@@ -52,9 +52,7 @@
       return { p: p, st: productStatus(p), val: productValue(p) };
     });
 
-    if (prodFilter === 'attention')
-      rows = rows.filter(function (x) { return x.st.key !== 'ok'; });
-    else if (prodFilter === 'in')
+    if (prodFilter === 'in')
       rows = rows.filter(function (x) {
         return (Number(x.p.stockQty) || 0) > 0;
       });
@@ -176,7 +174,6 @@
       '" autocomplete="off"></div>' +
       '<div class="chip-row" id="product-chips">' +
       chip('all', 'همه') +
-      chip('attention', 'نیازمند توجه') +
       chip('in', 'موجود') +
       chip('low', 'کم‌موجود') +
       chip('zero', 'ناموجود') +

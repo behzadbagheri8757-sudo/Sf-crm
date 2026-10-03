@@ -116,10 +116,11 @@
         '</div></div>';
     }
 
-    // First three are visible; the existing disclosure keeps the remaining
-    // actions reachable without changing the existing ranking/order.
-    const visibleItems = items.slice(0, 3);
-    const hiddenItems = items.slice(3);
+    // Max Top 5 by unifiedScore (already sorted by calculateAllActions)
+    items = items.slice(0, 5);
+
+    const visibleItems = items.slice(0, 2);
+    const hiddenItems = items.slice(2);
 
     function renderRow(a) {
       const isProspect = a.type === 'prospect';
@@ -170,11 +171,9 @@
         '</button>';
     }
 
-    const riskCount = items.filter(function (a) {
-      return a && (a.urgency === 'critical' || a.urgency === 'high');
-    }).length;
-    const riskBadge = riskCount > 0
-      ? '<span class="dash-risk-badge" title="تعداد موارد بحرانی/پراهمیت در همین لیست">' + riskCount + ' مورد مهم</span>'
+    const total = items.length;
+    const riskBadge = total > 0
+      ? '<span class="dash-risk-badge">' + enToFaDigits(String(total)) + ' کار</span>'
       : '';
 
     return '<div class="dashboard-block">' + dashSectionHead(dashboardIcon('actions',20), 'کارهای پیشنهادی امروز', '', '', riskBadge) + '<div class="dash-activity dash-action-queue">' + visibleRows + hiddenBlock + '</div></div>';
@@ -270,13 +269,13 @@
   function recentVisitsHtml() {
     const items = [];
     (data.customers || []).forEach(function (c) {
-      (c.visits || []).forEach(function (v) { items.push({ customerId: c.id, name: c.name, date: v.date, time: v.time, result: v.result }); });
+      (c.visits || []).forEach(function (v) { items.push({ customerId: c.id, name: c.name, date: v.date, time: v.time, result: v.result, ordered: v.ordered === true || (typeof VISIT_RESULTS !== 'undefined' && v.result === VISIT_RESULTS[0]) }); });
     });
     items.sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || (b.time || '').localeCompare(a.time || ''); });
     const top = items.slice(0, 5);
     if (!top.length) return '';
     const rows = top.map(function (v) {
-      return '<a class="ledger-row" href="#/customer?id=' + encodeURIComponent(v.customerId) + '"><span class="name">' + esc(v.name) + '<span class="sub">' + faDate(v.date) + (v.time ? ' ' + esc(v.time) : '') + (v.result ? ' — ' + esc(v.result) : '') + '</span></span><span class="filler"></span><span class="amount">ویزیت</span></a>';
+      return '<a class="ledger-row" href="#/customer?id=' + encodeURIComponent(v.customerId) + '"><span class="name">' + esc(v.name) + '<span class="sub">' + faDate(v.date) + (v.time ? ' ' + esc(v.time) : '') + '</span></span><span class="filler"></span><span class="amount' + (v.ordered ? ' accent-olive' : '') + '">' + esc(v.result || '—') + '</span></a>';
     }).join('');
     /* Inner section only — parent .dash-activity-group provides the surface */
     return '<div class="dash-activity-section">' + dashSectionHead(dashboardIcon('visitSection',20), 'آخرین ویزیت‌ها', '#/visits', 'همه ←') + '<div class="dash-activity">' + rows + '</div></div>';
@@ -390,31 +389,6 @@
     try { return Number(value).toLocaleString('fa-IR'); } catch(e) { return String(value || ''); }
   }
 
-  function businessPulseHtml(ctx) {
-    var g = null;
-    var low = [];
-    try { g = typeof globalTotals === 'function' ? globalTotals(ctx) : null; } catch (e) { g = null; }
-    try { low = typeof lowStockProducts === 'function' ? (lowStockProducts() || []) : []; } catch (e2) { low = []; }
-    var parts = [];
-    if (g && Number(g.customerDebt) > 0) {
-      parts.push('<a href="#/customers?filter=debt"><span>بدهی مشتریان</span><strong>' + money(g.customerDebt) + '</strong></a>');
-    }
-    if (low.length) {
-      parts.push('<a href="#/inventory"><span>کمبود موجودی</span><strong>' + faDigits(low.length) + ' کالا</strong></a>');
-    }
-    var zero = [];
-    try {
-      zero = (data.products || []).filter(function (p) { return Number(p.stockQty) === 0; });
-    } catch (e3) { zero = []; }
-    if (zero.length) {
-      parts.push('<a href="#/inventory"><span>ناموجود</span><strong>' + faDigits(zero.length) + ' کالا</strong></a>');
-    }
-    if (!parts.length) return '';
-    return '<div class="dashboard-block dash-business-pulse">' +
-      '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('summary',20) + '</span><span>نبض کسب‌وکار</span></div></div>' +
-      '<div class="dash-pulse-grid">' + parts.join('') + '</div></div>';
-  }
-
   async function renderInto(root, isStale, ctx) {
     // Lifecycle reconcile before painting Watch summary (additive; fail-open)
     if (typeof reconcileWatchLifecycle === 'function') {
@@ -431,8 +405,8 @@
          C. Quick Actions — tools (de-emphasized)
          D. Recent Activity — invoices + visits (one activity surface)
          Data sources, helpers, IDs, and event bindings are unchanged. */
-    const focusActions = todaysActionsHtml(ctx);
-    const activityInvoices = recentInvoicesHtml(ctx);
+     const focusActions = todaysActionsHtml(ctx);
+     const activityInvoices = recentInvoicesHtml(ctx);
     const activityVisits = recentVisitsHtml();
     const activityBody = activityInvoices + activityVisits;
     const activityBlock = activityBody
@@ -461,12 +435,9 @@
         '<div class="dash-focus-actions">' + focusActions + '</div>' +
       '</div>' +
 
-      /* B — Business Pulse */
-      businessPulseHtml(ctx) +
-
-      /* C — Financial snapshot, intentionally compact */
+      /* B — Financial Health (same metrics; stacked rows for mobile) */
       '<div class="dashboard-block dash-health">' +
-        '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('card',20) + '</span><span>خلاصه مالی</span></div></div>' +
+        '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('card',20) + '</span><span>وضعیت مالی</span></div></div>' +
         '<div class="dash-health-surface">' +
           '<div class="dash-health-row"><span class="dash-health-label">سود این ماه</span><span class="dash-health-value">' + money(metrics.mtdProfit) + '</span></div>' +
           '<div class="dash-health-row"><span class="dash-health-label">ارزش موجودی</span><span class="dash-health-value">' + money(invVal) + '</span></div>' +
@@ -475,10 +446,10 @@
         '</div>' +
       '</div>' +
 
-      /* D — Quick Actions */
+      /* C — Quick Actions (tools) */
       quickActionsHtml() +
 
-      /* E — Recent Activity */
+      /* D — Recent Activity */
       activityBlock +
       '</div>';
 

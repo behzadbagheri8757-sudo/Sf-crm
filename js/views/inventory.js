@@ -148,22 +148,6 @@
       : '<div class="empty">هنوز گردش موجودی ثبت نشده</div>';
 
     const prodHref = '#/products';
-    var attentionProducts = products.filter(function (p) {
-      var q = Number(p.stockQty) || 0;
-      return q < 0 || q === 0 || (p.minStock != null && q > 0 && q < Number(p.minStock));
-    }).slice(0, 5);
-    var attentionHtml = attentionProducts.length
-      ? '<section class="inventory-attention">' +
-        '<div class="sub-title" style="margin-top:0;">نیازمند توجه</div>' +
-        '<div class="inventory-attention-list">' +
-        attentionProducts.map(function (p) {
-          var q = Number(p.stockQty) || 0;
-          var label = q < 0 ? 'منفی' : q === 0 ? 'ناموجود' : 'کم‌موجود';
-          var tone = q < 0 ? 'accent-red' : q === 0 ? 'accent-rust' : 'accent-amber';
-          return '<a class="inventory-attention-row" href="#/products"><span>' + esc(p.name) + '</span><strong class="' + tone + '">' + label + '</strong></a>';
-        }).join('') +
-        '</div></section>'
-      : '';
 
     root.innerHTML =
       '<div class="btn-row" style="margin-bottom:10px;">' +
@@ -189,7 +173,6 @@
           ' کالا</div></div>'
         : '') +
       '</div>' +
-      attentionHtml +
       '<h3 class="sub-title">موجودی کالاها</h3>' +
       '<div class="empty" style="padding:0 0 8px;text-align:right;font-size:.78rem;">برای اصلاح موجودی روی هر کالا بزنید (همان فرم فعلی ورود/خروج/ویرایش).</div>' +
       '<div class="tx-list inventory-list">' + stockList + '</div>' +
