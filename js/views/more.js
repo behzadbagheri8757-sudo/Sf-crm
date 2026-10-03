@@ -20,42 +20,43 @@
 (function (global) {
   const GROUPS = [
     {
-      title: 'عملیات میدانی',
+      title: 'عملیات و پیگیری',
       items: [
-        { label: 'هشدارهای زودهنگام', href: '#/watches',   iconKey: 'checklist' },
-        { label: 'ویزیت مشتریان',    href: '#/visits',    iconKey: 'visit' },
-        { label: 'ارزیابی مغازه‌ها',  href: '#/prospects', iconKey: 'buildingStorefront' },
+        { label: 'نیازمند پیگیری', href: '#/watches', iconKey: 'checklist' },
+        { label: 'ویزیت مشتریان', href: '#/visits', iconKey: 'visit' },
+        { label: 'ارزیابی مغازه‌ها', href: '#/prospects', iconKey: 'buildingStorefront' },
+        { label: 'ارزیابی', href: '#/evaluation', iconKey: 'checklist' },
       ],
     },
     {
-      title: 'عملکرد فروش',
+      title: 'مالی و اسناد',
+      items: [
+        { label: 'پرداخت‌ها', href: '#/payments', iconKey: 'banknotes' },
+        { label: 'چک‌ها', href: '#/checks', iconKey: 'cheque' },
+        { label: 'گزارش‌ها', href: '#/reports', iconKey: 'chartBar' },
+      ],
+    },
+    {
+      title: 'کالا و تأمین',
+      items: [
+        { label: 'انبار', href: '#/inventory', iconKey: 'warehouse' },
+        { label: 'تأمین‌کنندگان', href: '#/suppliers', iconKey: 'truck' },
+      ],
+    },
+    {
+      title: 'رشد و انگیزه',
       items: [
         { label: 'مرکز بازی فروش', href: '#/game', iconKey: 'trophy' },
       ],
     },
     {
-      title: 'عملکرد مالی',
+      title: 'مدیریت سیستم',
       items: [
-        { label: 'پرداخت‌ها', href: '#/payments', iconKey: 'banknotes' },
-        { label: 'گزارش‌ها',  href: '#/reports',  iconKey: 'chartBar' },
-        { label: 'چک‌ها',     href: '#/checks',   iconKey: 'cheque' },
-      ],
-    },
-    {
-      title: 'مدیریت و پشتیبانی',
-      items: [
-        { label: 'انبار',         href: '#/inventory', iconKey: 'warehouse' },
-        { label: 'تأمین‌کنندگان', href: '#/suppliers', iconKey: 'truck' },
-      ],
-    },
-    {
-      title: 'تنظیمات',
-      items: [
-        { label: 'پشتیبان‌گیری و تنظیمات', href: '#/settings', iconKey: 'cog' },
+        { label: 'موقعیت‌ها', href: '#/locations', iconKey: 'mapPin' },
+        { label: 'تنظیمات و پشتیبان‌گیری', href: '#/settings', iconKey: 'cog' },
       ],
     },
   ];
-
   // Canonical project chevron — same inline SVG used in js/nav.js
   // (fillMoreSheetList → .more-sheet-item-chevron) and, as a mask-image,
   // in css/app.css (a.ledger-row:not(.action-row)::after). Path

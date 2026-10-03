@@ -176,8 +176,27 @@
     }
     if (!occs.length) {
       root.innerHTML =
-        '<div class="watch-page-head"><div><h2 class="section-title">هشدارهای زودهنگام</h2><div class="watch-page-hint">مواردی که فعلاً نیاز به بررسی دارند</div></div></div>' +
-        '<div class="empty watch-empty">هشدار فعالی نیست</div>';
+        '<div class="watch-page-head"><div><h2 class="section-title">نیازمند پیگیری</h2><div class="watch-page-hint">نشانه‌هایی که فعلاً نیاز به بررسی دارند</div></div></div>' +
+        '<div class="empty watch-empty">مورد فعالی نیست</div>';
+      return;
+    }
+
+    var categories = [];
+    occs.forEach(function (o) {
+      var cat = o && o.watchCategory;
+      if (cat && categories.indexOf(cat) === -1) categories.push(cat);
+    });
+    var filterHtml = '<div class="chip-row watch-filter-row">' +
+      '<button type="button" class="chip ' + (watchFilter === 'all' ? 'active' : '') + '" data-watch-filter="all">همه</button>' +
+      categories.map(function (cat) {
+        return '<button type="button" class="chip ' + (watchFilter === cat ? 'active' : '') + '" data-watch-filter="' + esc(cat) + '">' + esc(categoryLabel(cat).replace(/ \(نشانه اولیه\)$/,'')) + '</button>';
+      }).join('') +
+      '</div>';
+    if (watchFilter !== 'all') {
+      occs = occs.filter(function (o) { return o && o.watchCategory === watchFilter; });
+    }
+    if (!occs.length) {
+      root.innerHTML = '<div class="watch-page-head"><div><h2 class="section-title">نیازمند پیگیری</h2></div></div>' + filterHtml + '<div class="empty watch-empty">موردی با این فیلتر پیدا نشد</div>';
       return;
     }
 
@@ -217,11 +236,19 @@
     }).join('');
 
     root.innerHTML =
-      '<div class="watch-page-head"><div><h2 class="section-title">هشدارهای زودهنگام</h2><div class="watch-page-hint">هر مورد یک نشانه است، نه لزوماً یک مشکل قطعی</div></div><span class="watch-total-count">' + faDigits(occs.length) + '</span></div>' +
+      '<div class="watch-page-head"><div><h2 class="section-title">نیازمند پیگیری</h2><div class="watch-page-hint">هر مورد یک نشانه است؛ تصمیم نهایی با شماست</div></div><span class="watch-total-count">' + faDigits(occs.length) + '</span></div>' +
+      filterHtml +
       html;
 
     if (listClickHandler) root.removeEventListener('click', listClickHandler);
     listClickHandler = function (e) {
+      var filterBtn = e.target.closest('[data-watch-filter]');
+      if (filterBtn) {
+        e.preventDefault();
+        watchFilter = filterBtn.getAttribute('data-watch-filter') || 'all';
+        renderWatchList(root);
+        return;
+      }
       var row = e.target.closest('[data-watch-id]');
       if (!row) return;
       e.preventDefault();
@@ -287,6 +314,7 @@
 
   var detailRootEl = null;
   var detailOccId = null;
+  var watchFilter = 'all';
 
   /* Public-API-only lookup: getActiveWatchOccurrences() has no id filter,
      so we search the full active list. (There is no getOccurrenceById in

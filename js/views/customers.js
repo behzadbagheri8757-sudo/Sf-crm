@@ -6,7 +6,7 @@
 
 (function (global) {
   let custQuery = '';
-  let custFilter = 'all'; // all | debt | settled | credit
+  let custFilter = 'all'; // all | attention | debt | settled | credit
   let custSortByDebt = false;
   let locFilter = { regionId: '', routeId: '', neighborhoodId: '', unassigned: false };
 
@@ -64,7 +64,15 @@
       return { c: c, t: customerTotals(c.id, custCtx) };
     });
 
-    if (custFilter === 'debt') rows = rows.filter(function (x) { return x.t.balance > 0; });
+    if (custFilter === 'attention') {
+      rows = rows.filter(function (x) {
+        var pr = priorityMap[x.c.id] || null;
+        var watchCount = (typeof getActiveWatchOccurrences === 'function')
+          ? (function(){ try { return (getActiveWatchOccurrences(x.c.id) || []).length; } catch(e){ return 0; } })()
+          : 0;
+        return !!(watchCount || (pr && pr.riskLevel && pr.riskLevel !== 'low'));
+      });
+    } else if (custFilter === 'debt') rows = rows.filter(function (x) { return x.t.balance > 0; });
     else if (custFilter === 'settled') rows = rows.filter(function (x) { return x.t.balance === 0; });
     else if (custFilter === 'credit') rows = rows.filter(function (x) { return x.t.balance < 0; });
 
@@ -252,7 +260,7 @@
     };
     root.innerHTML =
       '<div class="field"><input id="customer-search" placeholder="جستجوی نام، آدرس، تلفن، منطقه و…" value="' + esc(custQuery) + '" autocomplete="off"></div>' +
-      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
+      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('attention','نیازمند توجه') + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
       '<div class="btn-row" style="margin-bottom:8px;align-items:center;flex-wrap:wrap;">' +
       '<button type="button" class="btn small secondary" id="customer-filter">فیلتر</button>' +
       '<button type="button" class="btn small secondary" id="sort-debt">' + (custSortByDebt ? '✓ ' : '') + 'مرتب‌سازی بر اساس بدهی</button>' +

@@ -116,11 +116,10 @@
         '</div></div>';
     }
 
-    // Max Top 5 by unifiedScore (already sorted by calculateAllActions)
-    items = items.slice(0, 5);
-
-    const visibleItems = items.slice(0, 2);
-    const hiddenItems = items.slice(2);
+    // First three are visible; the existing disclosure keeps the remaining
+    // actions reachable without changing the existing ranking/order.
+    const visibleItems = items.slice(0, 3);
+    const hiddenItems = items.slice(3);
 
     function renderRow(a) {
       const isProspect = a.type === 'prospect';
@@ -391,6 +390,31 @@
     try { return Number(value).toLocaleString('fa-IR'); } catch(e) { return String(value || ''); }
   }
 
+  function businessPulseHtml(ctx) {
+    var g = null;
+    var low = [];
+    try { g = typeof globalTotals === 'function' ? globalTotals(ctx) : null; } catch (e) { g = null; }
+    try { low = typeof lowStockProducts === 'function' ? (lowStockProducts() || []) : []; } catch (e2) { low = []; }
+    var parts = [];
+    if (g && Number(g.customerDebt) > 0) {
+      parts.push('<a href="#/customers?filter=debt"><span>بدهی مشتریان</span><strong>' + money(g.customerDebt) + '</strong></a>');
+    }
+    if (low.length) {
+      parts.push('<a href="#/inventory"><span>کمبود موجودی</span><strong>' + faDigits(low.length) + ' کالا</strong></a>');
+    }
+    var zero = [];
+    try {
+      zero = (data.products || []).filter(function (p) { return Number(p.stockQty) === 0; });
+    } catch (e3) { zero = []; }
+    if (zero.length) {
+      parts.push('<a href="#/inventory"><span>ناموجود</span><strong>' + faDigits(zero.length) + ' کالا</strong></a>');
+    }
+    if (!parts.length) return '';
+    return '<div class="dashboard-block dash-business-pulse">' +
+      '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('summary',20) + '</span><span>نبض کسب‌وکار</span></div></div>' +
+      '<div class="dash-pulse-grid">' + parts.join('') + '</div></div>';
+  }
+
   async function renderInto(root, isStale, ctx) {
     // Lifecycle reconcile before painting Watch summary (additive; fail-open)
     if (typeof reconcileWatchLifecycle === 'function') {
@@ -407,8 +431,8 @@
          C. Quick Actions — tools (de-emphasized)
          D. Recent Activity — invoices + visits (one activity surface)
          Data sources, helpers, IDs, and event bindings are unchanged. */
-     const focusActions = todaysActionsHtml(ctx);
-     const activityInvoices = recentInvoicesHtml(ctx);
+    const focusActions = todaysActionsHtml(ctx);
+    const activityInvoices = recentInvoicesHtml(ctx);
     const activityVisits = recentVisitsHtml();
     const activityBody = activityInvoices + activityVisits;
     const activityBlock = activityBody
@@ -437,9 +461,12 @@
         '<div class="dash-focus-actions">' + focusActions + '</div>' +
       '</div>' +
 
-      /* B — Financial Health (same metrics; stacked rows for mobile) */
+      /* B — Business Pulse */
+      businessPulseHtml(ctx) +
+
+      /* C — Financial snapshot, intentionally compact */
       '<div class="dashboard-block dash-health">' +
-        '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('card',20) + '</span><span>وضعیت مالی</span></div></div>' +
+        '<div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('card',20) + '</span><span>خلاصه مالی</span></div></div>' +
         '<div class="dash-health-surface">' +
           '<div class="dash-health-row"><span class="dash-health-label">سود این ماه</span><span class="dash-health-value">' + money(metrics.mtdProfit) + '</span></div>' +
           '<div class="dash-health-row"><span class="dash-health-label">ارزش موجودی</span><span class="dash-health-value">' + money(invVal) + '</span></div>' +
@@ -448,10 +475,10 @@
         '</div>' +
       '</div>' +
 
-      /* C — Quick Actions (tools) */
+      /* D — Quick Actions */
       quickActionsHtml() +
 
-      /* D — Recent Activity */
+      /* E — Recent Activity */
       activityBlock +
       '</div>';
 

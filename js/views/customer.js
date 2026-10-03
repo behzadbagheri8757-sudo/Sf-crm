@@ -1000,97 +1000,131 @@
       }
     } catch (eIdentity) { /* display-only: ignore */ }
 
+    /* Master UI composition — existing data only. */
+    var identityMeta = [];
+    if (c.ownerName) identityMeta.push('مسئول فروشگاه: ' + esc(c.ownerName));
+    if (c.phone) identityMeta.push('تلفن: ' + esc(c.phone));
+    if (c.locationId) identityMeta.push('موقعیت: ' + esc(getLocationDisplayString(c.locationId)));
+    else {
+      if (c.region) identityMeta.push('منطقه: ' + esc(c.region));
+      if (c.route) identityMeta.push('مسیر: ' + esc(c.route));
+    }
+
+    var attentionItems = [];
+    try {
+      var priorityNow = typeof calculateCustomerPriority === 'function'
+        ? calculateCustomerPriority(c.id, { ctx: ctx }) : null;
+      if (priorityNow && Array.isArray(priorityNow.signals)) {
+        priorityNow.signals.slice(0, 3).forEach(function (sig) {
+          if (!sig) return;
+          var reason = sig.reason || sig.message || sig.title || '';
+          var product = sig.productName || '';
+          if (product && reason && reason.indexOf(product) === -1) reason = product + ' — ' + reason;
+          if (reason) attentionItems.push({ title: reason, evidence: sig.evidence || null });
+        });
+      }
+    } catch (ePriorityDisplay) {}
+    try {
+      var activeWatchItems = typeof getActiveWatchOccurrences === 'function' ? (getActiveWatchOccurrences(c.id) || []) : [];
+      activeWatchItems.forEach(function (o) {
+        if (attentionItems.length >= 3 || !o) return;
+        var reason = o.generatedReason || '';
+        if (o.productName && reason && reason.indexOf(o.productName) === -1) reason = o.productName + ' — ' + reason;
+        if (!reason && o.productName) reason = 'نیاز به بررسی وضعیت خرید «' + o.productName + '»';
+        if (!reason) return;
+        var duplicate = attentionItems.some(function (x) { return x.title === reason; });
+        if (!duplicate) attentionItems.push({ title: reason, evidence: o.evidence || null });
+      });
+    } catch (eWatchDisplay) {}
+
+    function attentionEvidenceHtml(e) {
+      if (!e) return '';
+      var text = '';
+      if (e.daysSinceLast != null && e.averageIntervalDays != null) {
+        text = 'آخرین خرید ' + Math.round(e.daysSinceLast) + ' روز پیش؛ روال معمول حدود ' + Math.round(e.averageIntervalDays) + ' روز';
+      } else if (e.currentGap != null && e.typicalCycle != null) {
+        text = 'فاصله فعلی ' + e.currentGap + ' روز؛ چرخه معمول ' + e.typicalCycle + ' روز';
+      } else if (e.comparison) {
+        text = String(e.comparison);
+      }
+      return text ? '<div class="customer-attention-evidence">' + esc(text) + '</div>' : '';
+    }
+
+    var attentionHtml = attentionItems.length
+      ? '<section class="customer-section customer-attention-section"><div class="customer-section-kicker">نیازمند توجه</div><div class="customer-attention-list">' +
+        attentionItems.map(function (it, i) {
+          return '<div class="customer-attention-item"><div class="customer-attention-index">' + (i + 1) + '</div><div class="customer-attention-body"><div class="customer-attention-title">' + esc(it.title) + '</div>' + attentionEvidenceHtml(it.evidence) + '</div></div>';
+        }).join('') +
+        '</div></section>'
+      : '';
+
+    var behavior = null;
+    try { behavior = typeof customerBehavior === 'function' ? customerBehavior(c.id, ctx) : null; } catch (eBehaviorDisplay) {}
+    var buyingHtml = '';
+    var basketHtml = '';
+    if (behavior) {
+      var patternBits = [];
+      if (behavior.lastInvoiceDate) patternBits.push('<div><span>آخرین خرید</span><strong>' + faDate(behavior.lastInvoiceDate) + '</strong></div>');
+      if (behavior.avgIntervalDays != null) patternBits.push('<div><span>روال معمول</span><strong>' + Math.round(behavior.avgIntervalDays * 10) / 10 + ' روز</strong></div>');
+      if (behavior.daysSinceLast != null) patternBits.push('<div><span>فاصله فعلی</span><strong>' + Math.round(behavior.daysSinceLast) + ' روز</strong></div>');
+      if (behavior.amountTrend === 'up' || behavior.amountTrend === 'down' || behavior.amountTrend === 'flat') {
+        patternBits.push('<div><span>روند مبلغ</span><strong>' + (behavior.amountTrend === 'up' ? 'افزایشی' : behavior.amountTrend === 'down' ? 'کاهشی' : 'تقریباً ثابت') + '</strong></div>');
+      }
+      var behind = '';
+      if (behavior.behindPattern === true && behavior.daysSinceLast != null && behavior.avgIntervalDays != null) {
+        var gapDays = Math.round(behavior.daysSinceLast - behavior.avgIntervalDays);
+        if (gapDays > 0) behind = '<div class="customer-inline-alert">' + gapDays + ' روز عقب‌تر از روال معمول</div>';
+      }
+      buyingHtml = patternBits.length
+        ? '<section class="customer-section"><div class="customer-section-kicker">الگوی خرید</div><div class="customer-pattern-grid">' + patternBits.join('') + '</div>' + behind + '</section>'
+        : '';
+      if (Array.isArray(behavior.decliningProducts) && behavior.decliningProducts.length) {
+        basketHtml = '<section class="customer-section"><div class="customer-section-kicker">تغییرات سبد</div><div class="customer-basket-list">' +
+          behavior.decliningProducts.slice(0, 5).map(function (p) {
+            return '<div class="customer-basket-row"><span>' + esc(p.name) + '</span><span>' + fmtQtyDisplay(p.earlyQty) + ' ← ' + fmtQtyDisplay(p.lateQty) + '</span></div>';
+          }).join('') + '</div></section>';
+      }
+    }
+
+    var financialHtml =
+      '<section class="customer-section customer-financial-section"><div class="customer-section-kicker">وضعیت مالی</div>' +
+      '<div class="customer-financial-grid">' +
+      '<div><span>مانده</span><strong class="' + color + '">' + (t.balance === 0 ? 'تسویه' : toman(Math.abs(t.balance)) + ' ت') + '</strong></div>' +
+      '<div><span>خرید</span><strong>' + toman(t.invTotal) + ' ت</strong></div>' +
+      '<div><span>پرداخت</span><strong>' + toman(t.payTotal) + ' ت</strong></div>' +
+      '<div><span>چک</span><strong>' + toman(t.checkTotal) + ' ت</strong></div>' +
+      '</div></section>';
+
+    var actionReason = recommendedAction && (recommendedAction.reason || recommendedAction.whyNow)
+      ? (recommendedAction.reason || recommendedAction.whyNow) : '';
+
     root.innerHTML =
-      '<div class="btn-row" style="margin-bottom:10px;">' +
-      '<a class="btn secondary small" href="' +
-      customersHref() +
-      '">← مشتریان</a></div>' +
-      '<div class="card customer-identity-card">' +
-      '<div class="customer-identity-name">' +
-      esc(c.name) +
-      '</div>' +
-      '<div class="customer-identity-meta">' +
-      identityStatusHtml +
-      identityBehindHtml +
-      (c.ownerName ? '<div>مسئول فروشگاه: ' + esc(c.ownerName) + '</div>' : '') +
-      (c.phone ? '<div>تلفن: ' + esc(c.phone) + '</div>' : '') +
-      (c.locationId
-        ? '<div>موقعیت: ' + esc(getLocationDisplayString(c.locationId)) + '</div>'
-        : ((c.region ? '<div>منطقه: ' + esc(c.region) + '</div>' : '') +
-           (c.route ? '<div>مسیر: ' + esc(c.route) + '</div>' : ''))) +
-      (c.address ? '<div>آدرس: ' + esc(c.address) + '</div>' : '') +
-      (c.note ? '<div>یادداشت: ' + esc(c.note) + '</div>' : '') +
-      '</div>' +
-      '<div class="customer-balance-block">' +
-      '<div class="label">مانده حساب</div>' +
-      '<div class="value ' +
-      color +
-      ' customer-balance-value">' +
-      balanceLine +
-      '</div></div></div>' +
-      unifiedSummaryHtml +
-      (recommendedAction
-        ? '<div class="cust-recommended-action">' +
-          '<div class="cust-recommended-action-label">اقدام پیشنهادی</div>' +
-          '<button type="button" class="btn cust-recommended-action-btn" id="cust-recommended-action">' +
-          esc(recommendedAction.action) +
-          '</button></div>'
-        : '') +
-      '<h3 class="sub-title">عملیات</h3>' +
-      '<div class="btn-row cust-actions-primary" style="margin-bottom:8px;">' +
-      '<button type="button" class="btn" id="act-invoice">ثبت فاکتور</button>' +
-      '<button type="button" class="btn secondary" id="act-pay">ثبت پرداخت</button>' +
-      '<button type="button" class="btn secondary" id="act-visit">ثبت ویزیت</button>' +
-      '</div>' +
-      '<div class="btn-row cust-actions-secondary" style="margin-bottom:16px;">' +
-      '<button type="button" class="btn small secondary" id="act-check">ثبت چک</button>' +
-      '<button type="button" class="btn small secondary" id="act-edit">ویرایش مشتری</button>' +
-      '<button type="button" class="btn small secondary" id="act-location">اختصاص موقعیت</button>' +
-      '<button type="button" class="btn small secondary" id="act-print-statement">صورت‌حساب</button>' +
-      '<button type="button" class="btn small secondary" id="act-toggle-active">' + (c.active === false ? 'فعال‌سازی مشتری' : 'غیرفعال‌سازی مشتری') + '</button>' +
-      '</div>' +
-      behaviorHtml +
-      '<div class="cards" style="margin-bottom:14px;">' +
-      '<div class="card"><div class="label">مجموع خرید (فاکتورها)</div><div class="value">' +
-      toman(t.invTotal) +
-      ' ت</div></div>' +
-      '<div class="card"><div class="label">مجموع پرداخت‌ها</div><div class="value">' +
-      toman(t.payTotal) +
-      ' ت</div></div>' +
-      '<div class="card"><div class="label">جمع چک‌ها</div><div class="value">' +
-      toman(t.checkTotal) +
-      ' ت</div></div>' +
-      '<div class="card"><div class="label">مانده اولیه</div><div class="value">' +
-      toman(t.openingBalance) +
-      ' ت</div></div>' +
-      '<div class="card"><div class="label">تعداد فاکتور</div><div class="value">' +
-      invs.length +
-      '</div></div>' +
-      '<div class="card"><div class="label">سود مشتری</div><div class="value accent-amber">' +
-      toman(profit) +
-      ' ت</div></div>' +
-      '</div>' +
-      productRejectionInsightsHtml(c.id, ctx) +
-      '<h3 class="sub-title">فاکتورها (' +
-      invs.length +
-      ')</h3>' +
-      '<div class="customer-tx-list customer-invoice-list">' + invRows + '</div>' +
-      '<h3 class="sub-title">پرداخت‌ها (' +
-      pays.length +
-      ')</h3>' +
-      '<div class="customer-tx-list customer-payment-list">' + payRows + '</div>' +
-      '<h3 class="sub-title">چک‌ها (' +
-      chks.length +
-      ')</h3>' +
-      '<div class="customer-tx-list customer-check-list">' + chkRows + '</div>' +
-      '<h3 class="sub-title">ویزیت‌ها و ارزیابی‌ها (' +
-      visits.length +
-      ')</h3>' +
-      '<div class="btn-row" style="margin-bottom:8px;">' +
-      '<button type="button" class="btn small" id="act-visit-section">ثبت ویزیت برای این مشتری</button>' +
-      '<a class="btn small secondary" href="#/visits">همه ویزیت‌ها</a>' +
-      '</div>' +
-      '<div class="customer-tx-list customer-visit-list">' + visitRows + '</div>';
+      '<div class="customer-master">' +
+      '<div class="customer-topline"><a class="customer-backlink" href="' + customersHref() + '">← مشتریان</a></div>' +
+      '<section class="customer-identity customer-section">' +
+        '<div class="customer-identity-main"><div class="customer-identity-name">' + esc(c.name) + '</div>' +
+        '<div class="customer-identity-meta">' + identityStatusHtml + identityBehindHtml + identityMeta.slice(0, 3).map(function (x) { return '<div>' + x + '</div>'; }).join('') + '</div></div>' +
+        '<div class="customer-balance-block"><span>مانده حساب</span><strong class="' + color + '">' + esc(balanceLine) + '</strong></div>' +
+      '</section>' +
+      (unifiedSummaryHtml ? '<section class="customer-section customer-story-section"><div class="customer-section-kicker">وضعیت فعلی</div>' + unifiedSummaryHtml + '</section>' : '') +
+      attentionHtml +
+      (recommendedAction ? '<section class="customer-section customer-action-section"><div class="customer-section-kicker">پیشنهاد اصلی</div><div class="customer-action-main"><div><strong>' + esc(recommendedAction.action || '') + '</strong>' + (actionReason ? '<span>' + esc(actionReason) + '</span>' : '') + '</div><button type="button" class="btn cust-recommended-action-btn" id="cust-recommended-action">انجام</button></div></section>' : '') +
+      '<section class="customer-section customer-actions-section"><div class="customer-section-kicker">اقدام سریع</div><div class="btn-row cust-actions-primary">' +
+        '<button type="button" class="btn" id="act-invoice">ثبت فاکتور</button><button type="button" class="btn secondary" id="act-visit">ثبت ویزیت</button><button type="button" class="btn secondary" id="act-pay">ثبت پرداخت</button>' +
+      '</div><div class="btn-row cust-actions-secondary">' +
+        '<button type="button" class="btn small secondary" id="act-check">ثبت چک</button><button type="button" class="btn small secondary" id="act-edit">ویرایش مشتری</button><button type="button" class="btn small secondary" id="act-location">اختصاص موقعیت</button><button type="button" class="btn small secondary" id="act-print-statement">صورت‌حساب</button><button type="button" class="btn small secondary" id="act-toggle-active">' + (c.active === false ? 'فعال‌سازی مشتری' : 'غیرفعال‌سازی مشتری') + '</button>' +
+      '</div></section>' +
+      buyingHtml + financialHtml + basketHtml +
+      (productRejectionInsightsHtml(c.id, ctx) ? '<section class="customer-section customer-secondary-insight">' + productRejectionInsightsHtml(c.id, ctx) + '</section>' : '') +
+      '<section class="customer-details-section">' +
+        '<details class="customer-behavior-details"><summary>جزئیات رفتار خرید</summary>' + (behaviorHtml || '<div class="customer-detail-empty">اطلاعات کافی نیست.</div>') + '</details>' +
+        '<details><summary>فاکتورها <span>' + invs.length + '</span></summary><div class="customer-tx-list customer-invoice-list">' + invRows + '</div></details>' +
+        '<details><summary>پرداخت‌ها <span>' + pays.length + '</span></summary><div class="customer-tx-list customer-payment-list">' + payRows + '</div></details>' +
+        '<details><summary>چک‌ها <span>' + chks.length + '</span></summary><div class="customer-tx-list customer-check-list">' + chkRows + '</div></details>' +
+        '<details><summary>ویزیت‌ها و ارزیابی‌ها <span>' + visits.length + '</span></summary><div class="btn-row" style="margin-bottom:8px;"><button type="button" class="btn small" id="act-visit-section">ثبت ویزیت برای این مشتری</button><a class="btn small secondary" href="#/visits">همه ویزیت‌ها</a></div><div class="customer-tx-list customer-visit-list">' + visitRows + '</div></details>' +
+        '<details><summary>اطلاعات کامل مشتری</summary><div class="customer-full-meta">' + identityMeta.concat(c.address ? ['آدرس: ' + esc(c.address)] : [], c.note ? ['یادداشت: ' + esc(c.note)] : []).map(function (x) { return '<div>' + x + '</div>'; }).join('') + '</div></details>' +
+      '</section>' +
+      '</div>';
 
     document.getElementById('act-invoice').onclick = function () {
       openAddInvoice(c.id);
