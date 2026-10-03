@@ -17,22 +17,11 @@
   let locFilterHandler = null;
   let locUnassignedHandler = null;
   function customerHref(cid) {
-    return typeof isSpaShell === 'function' && isSpaShell()
-      ? '#/customer?id=' + encodeURIComponent(cid)
-      : '#/customer?id=' + encodeURIComponent(cid);
+    return '#/customer?id=' + encodeURIComponent(cid);
   }
 
   function navigateToCustomer(cid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/customer', { id: cid });
-    } else {
-      location.href = '#/customer?id=' + encodeURIComponent(cid);
-    }
+    AppRouter.navigate('/customer', { id: cid });
   }
 
   /* Priority/story lookup — cached for the current view state and only
@@ -41,11 +30,12 @@
      Read-only use of the existing frozen Priority Engine; no new
      scoring, no new thresholds (see spec §9.6 performance rule). */
   let custPriorityMap = null;
+  let custCtx = null;
   function buildPriorityLookup() {
     const map = Object.create(null);
     if (typeof calculateAllCustomerPriorities !== 'function') return map;
     let list = [];
-    try { list = calculateAllCustomerPriorities() || []; } catch (e) { return map; }
+    try { list = calculateAllCustomerPriorities(custCtx) || []; } catch (e) { return map; }
     list.forEach(function (p) { if (p && p.customerId) map[p.customerId] = p; });
     return map;
   }
@@ -71,7 +61,7 @@
     }
 
     rows = rows.map(function (c) {
-      return { c: c, t: customerTotals(c.id) };
+      return { c: c, t: customerTotals(c.id, custCtx) };
     });
 
     if (custFilter === 'debt') rows = rows.filter(function (x) { return x.t.balance > 0; });
@@ -113,8 +103,7 @@
         const c = x.c;
         const t = x.t;
         const word = balanceStatusWord(t.balance);
-        const color = t.balance > 0 ? 'accent-rust' : t.balance < 0 ? 'accent-olive' : '';
-        const amt = t.balance === 0 ? word : word + ': ' + toman(Math.abs(t.balance)) + ' ت';
+        const color = t.balance > 0 ? 'accent-rust' : t.balance < 0 ? 'accent-olive' : 'accent-olive';
 
         // One compact status badge + one activity metric. These are read-only
         // presentations of existing frozen outputs; no new scoring/thresholds.
@@ -122,25 +111,25 @@
         const riskLevel = pr ? pr.riskLevel : null;
         const riskCls = riskLevel ? 'radar-risk-' + riskLevel : '';
         const behavior = (typeof customerBehavior === 'function')
-          ? (function(){ try { return customerBehavior(c.id) || {}; } catch(e){ return {}; } })()
+          ? (function(){ try { return customerBehavior(c.id, custCtx) || {}; } catch(e){ return {}; } })()
           : {};
         const watchCount = (typeof getActiveWatchOccurrences === 'function')
           ? (function(){ try { return (getActiveWatchOccurrences(c.id) || []).length; } catch(e){ return 0; } })()
           : 0;
-        const status = (typeof customerStatus === 'function') ? customerStatus(c.id) : null;
+        const status = (typeof customerStatus === 'function') ? customerStatus(c.id, custCtx) : null;
 
-        let badgeLabel = 'فعال';
+        let badgeLabel = '';
         let badgeTone = 'neutral';
-        if (riskLevel === 'critical') { badgeLabel = 'عاجل'; badgeTone = 'danger'; }
+        if (c.active === false) { badgeLabel = 'غیرفعال شده'; badgeTone = 'muted'; }
+        else if (riskLevel === 'critical') { badgeLabel = 'فوری'; badgeTone = 'danger'; }
         else if (riskLevel === 'high') { badgeLabel = 'پیگیری'; badgeTone = 'warning'; }
         else if (behavior.behindPattern === true) { badgeLabel = 'عقب‌افتاده'; badgeTone = 'warning'; }
         else if (status === 'lost') { badgeLabel = 'از دست رفته'; badgeTone = 'muted'; }
-        else if (status === 'inactive') { badgeLabel = 'غیرفعال'; badgeTone = 'muted'; }
+        else if (status === 'inactive') { badgeLabel = 'سرد شده'; badgeTone = 'muted'; }
         else if (status === 'new') { badgeLabel = 'جدید'; badgeTone = 'neutral'; }
-        else if (status === 'active') { badgeLabel = 'فعال'; badgeTone = 'success'; }
 
         const days = (typeof customerStats === 'function')
-          ? (function(){ try { return customerStats(c.id).daysSinceLast; } catch(e){ return Infinity; } })()
+        ? (function(){ try { return customerStats(c.id, custCtx).daysSinceLast; } catch(e){ return Infinity; } })()
           : Infinity;
         const daysText = Number.isFinite(days)
           ? ('آخرین خرید: ' + Math.max(0, Math.round(days)) + ' روز پیش')
@@ -154,17 +143,25 @@
           customerHref(c.id) +
           '" style="text-decoration:none;color:inherit;"' +
           (watchTitle ? ' title="' + esc(watchTitle) + '"' : '') + '>' +
-          '<span class="name">' +
-          esc(c.name) +
-          '<span class="sub customer-row-meta">' + esc(daysText) + '</span>' +
+          '<span class="customer-row-main">' +
+          '<span class="customer-row-title-line">' +
+          '<span class="customer-row-name tx-row-title">' + esc(c.name) + '</span>' +
           '</span>' +
-          '<span class="customer-row-status badge tone-' + badgeTone + '">' + esc(badgeLabel) + '</span>' +
-          (watchCount > 0 ? '<span class="customer-row-watch" aria-label="هشدار فعال" title="' + esc(watchTitle) + '">⚠</span>' : '<span class="customer-row-watch-placeholder" aria-hidden="true"></span>') +
-          '<span class="filler"></span>' +
-          '<span class="amount ' +
-          color +
-          '">' +
-          amt +
+          '<span class="customer-row-meta-line">' +
+          (badgeLabel
+            ? '<span class="customer-row-status badge tone-' + badgeTone + '">' + esc(badgeLabel) + '</span>'
+            : '') +
+          '<span class="customer-row-meta">' + esc(daysText) + '</span>' +
+          (watchCount > 0
+            ? '<span class="customer-row-watch" aria-label="هشدار فعال" title="' + esc(watchTitle) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>'
+            : '') +
+          '</span>' +
+          '</span>' +
+          '<span class="customer-row-balance ' + color + '">' +
+          '<span class="customer-row-balance-label">' + esc(word) + '</span>' +
+          '<span class="customer-row-balance-value">' +
+          (t.balance !== 0 ? toman(Math.abs(t.balance)) + ' ت' : '') +
+          '</span>' +
           '</span></a>'
         );
       })
@@ -254,7 +251,6 @@
       return '<button type="button" class="chip ' + (custFilter === id ? 'active' : '') + '" data-filter="' + id + '">' + label + '</button>';
     };
     root.innerHTML =
-      '<h2 class="section-title">مشتریان</h2>' +
       '<div class="field"><input id="customer-search" placeholder="جستجوی نام، آدرس، تلفن، منطقه و…" value="' + esc(custQuery) + '" autocomplete="off"></div>' +
       '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
       '<div class="btn-row" style="margin-bottom:8px;align-items:center;flex-wrap:wrap;">' +
@@ -313,6 +309,9 @@
     custFilter = (params && ['debt', 'settled', 'credit'].indexOf(params.filter) !== -1) ? params.filter : 'all';
     custSortByDebt = false;
     locFilter = { regionId: '', routeId: '', neighborhoodId: '', unassigned: false };
+    custCtx = typeof createComputationContext === 'function'
+      ? createComputationContext({ data: data })
+      : null;
     custPriorityMap = null; // fresh on entering the page
     drawCustomersPage(root);
 
@@ -320,6 +319,9 @@
     // change risk/story output — invalidate the cache then, not on every
     // keystroke render.
     refreshToken = ViewHost.setRefresh(function () {
+      custCtx = typeof createComputationContext === 'function'
+        ? createComputationContext({ data: data })
+        : null;
       custPriorityMap = null;
       renderCustomerListOnly();
     });
@@ -328,6 +330,7 @@
     return function unmount() {
       ViewHost.clearRefresh(refreshToken);
       refreshToken = null;
+      custCtx = null;
       if (searchHandler) {
         const se = document.getElementById('customer-search');
         if (se) se.removeEventListener('input', searchHandler);

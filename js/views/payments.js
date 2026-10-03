@@ -14,16 +14,7 @@
   let sortHandler = null;
   let fabHandler = null;
   function navigateToCustomer(cid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/customer', { id: cid });
-    } else {
-      location.href = '#/customer?id=' + encodeURIComponent(cid);
-    }
+    AppRouter.navigate('/customer', { id: cid });
   }
 
   function paymentRows() {
@@ -125,7 +116,7 @@
     // Final Retouch: compact payment-summary (same totals; presentation only)
     sumEl.innerHTML = `
       <div class="card">
-        <div class="label">تعداد</div>
+        <div class="label">تعداد پرداخت (فیلتر)</div>
         <div class="value">${rows.length}</div>
       </div>
       <div class="card">
@@ -206,6 +197,7 @@
     }
 
     const opts = data.customers
+      .filter(c => c.active !== false)
       .slice()
       .sort((a, b) =>
         (a.name || '').localeCompare(b.name || '', 'fa')
@@ -266,10 +258,6 @@
     };
 
     root.innerHTML = `
-      <h2 class="section-title">
-        پرداخت‌ها / دریافت‌ها
-      </h2>
-
       <div class="field">
         <input
           id="payment-search"
@@ -285,6 +273,7 @@
         ${chip('card', 'کارت')}
         ${chip('transfer', 'انتقال')}
         ${chip('return', 'برگشت')}
+        ${chip('discount', 'تخفیف')}
         ${chip('supplier', 'تامین‌کننده')}
       </div>
 

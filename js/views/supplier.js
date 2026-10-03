@@ -17,16 +17,7 @@
   }
 
   function navigateToSupplier(sid) {
-    if (
-      typeof isSpaShell === 'function' &&
-      isSpaShell() &&
-      typeof AppRouter !== 'undefined' &&
-      AppRouter.navigate
-    ) {
-      AppRouter.navigate('/supplier', { id: sid });
-    } else {
-      location.href = '#/supplier?id=' + encodeURIComponent(sid);
-    }
+    AppRouter.navigate('/supplier', { id: sid });
   }
 
   function renderSupplierPurchaseReturn(s) {
@@ -56,12 +47,12 @@
               if (remLineQty <= 0) {
                 return `<div class="field" style="opacity:.55;">
                   <label>${esc(it.name)} (خریداری‌شده: ${it.qty} — <span class="accent-rust">۰ قابل‌برگشت</span>؛ موجودی این خرید مصرف شده)</label>
-                  <input class="ret-item-qty" data-item-id="${it.id}" data-product-id="${it.productId}" data-unit-cost="${it.unitCost}" data-max="0" type="text" inputmode="decimal" disabled value="">
+                  <input class="ret-item-qty" data-item-id="${esc(it.id)}" data-product-id="${esc(it.productId)}" data-unit-cost="${it.unitCost}" data-max="0" type="text" inputmode="decimal" disabled value="">
                 </div>`;
               }
               return `<div class="field">
                 <label>${esc(it.name)} (خریداری‌شده: ${it.qty}، حداکثر قابل‌برگشت: ${remLineQty})</label>
-                <input class="ret-item-qty" data-item-id="${it.id}" data-product-id="${it.productId}" data-unit-cost="${it.unitCost}" data-max="${remLineQty}" type="text" inputmode="decimal" placeholder="تعداد برگشتی (اختیاری)">
+                <input class="ret-item-qty" data-item-id="${esc(it.id)}" data-product-id="${esc(it.productId)}" data-unit-cost="${it.unitCost}" data-max="${remLineQty}" type="text" inputmode="decimal" placeholder="تعداد برگشتی (اختیاری)">
               </div>`;
             }).join('')}
             </div>
@@ -97,13 +88,13 @@
               });
               if (lineReturns.length === 0) { showToast('حداقل مقدار برگشتی یک قلم رو وارد کن'); throw new Error('validation'); }
               const badLine = lineReturns.find(l => l.qty > l.max);
-              if (badLine) { alert('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این قلم بیشتره.\n\nباقیمانده قابل‌برگشت: ' + badLine.max); throw new Error('validation'); }
-              if (overStock) { alert('موجودی واقعی «' + overStock.name + '» در انبار فقط ' + (overStock.stockQty || 0) + ' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.'); throw new Error('validation'); }
+              if (badLine) { showToast('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این قلم بیشتره.\n\nباقیمانده قابل‌برگشت: ' + badLine.max); throw new Error('validation'); }
+              if (overStock) { showToast('موجودی واقعی «' + overStock.name + '» در انبار فقط ' + (overStock.stockQty || 0) + ' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.'); throw new Error('validation'); }
               const totalAmount = lineReturns.reduce((a, l) => a + Math.round(l.qty * l.unitCost), 0);
               if (totalAmount <= 0) { showToast('مبلغ برگشتی رو وارد کن'); throw new Error('validation'); }
               const liveRemainingAmount = purchaseReturnRemainingAmount(purchase);
-              if (totalAmount > liveRemainingAmount) { alert('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: ' + toman(liveRemainingAmount) + ' تومان'); throw new Error('validation'); }
-              if (!confirm('با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد. ادامه می‌دهید؟')) throw new Error('validation');
+              if (totalAmount > liveRemainingAmount) { showToast('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: ' + toman(liveRemainingAmount) + ' تومان'); throw new Error('validation'); }
+              if (!(await appConfirm('با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد. ادامه می‌دهید؟'))) throw new Error('validation');
               const totalQty = lineReturns.reduce((a, l) => a + l.qty, 0);
               const retLines = lineReturns.map(l => ({ productId: l.productId, qty: l.qty, itemId: l.itemId }));
               const lineItemsSnap = lineReturns.map(l => ({ itemId: l.itemId, productId: l.productId, qty: l.qty, amount: Math.round(l.qty * l.unitCost) }));
@@ -111,7 +102,7 @@
                 return (async function () {
                   const previousData = JSON.parse(JSON.stringify(data));
                   const retResult = applyPurchaseReturnStockEffects(purchase, retLines, s.name, date);
-                  if (!retResult.ok) { alert(retResult.error || 'برگشت خرید ممکن نشد'); throw new Error('validation'); }
+                  if (!retResult.ok) { showToast(retResult.error || 'برگشت خرید ممکن نشد'); throw new Error('validation'); }
                   purchase.returns = purchase.returns || [];
                   const rec = {
                     id: uid(),
@@ -122,7 +113,7 @@
                   };
                   if (returnReason) rec.returnReason = returnReason;
                   purchase.returns.push(rec);
-                  try { await saveData(); } catch (saveErr) { data = previousData; throw saveErr; }
+                  try { await saveData(); } catch (saveErr) { restoreDataInPlace(previousData); throw saveErr; }
                   closeModal();
                   drawSupplierPage(rootEl);
                   showToast('برگشت خرید ثبت شد');
@@ -175,33 +166,33 @@
             const liveRemainingQty = purchaseReturnRemainingQty(purchase);
             const liveRemainingAmount = purchaseReturnRemainingAmount(purchase);
             if (qty > 0 && qty > liveRemainingQty) {
-              alert('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این خرید بیشتره.\n\nباقیمانده قابل‌برگشت: ' + liveRemainingQty);
+              showToast('مقدار برگشتی از باقیمانده‌ی قابل‌برگشت این خرید بیشتره.\n\nباقیمانده قابل‌برگشت: ' + liveRemainingQty);
               throw new Error('validation');
             }
             if (purchase.productId && qty > 0) {
               const realStockProd = data.products.find(x => x.id === purchase.productId);
               if (realStockProd && qty > (realStockProd.stockQty || 0)) {
-                alert('موجودی واقعی «' + realStockProd.name + '» در انبار فقط ' + (realStockProd.stockQty || 0) + ' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.');
+                showToast('موجودی واقعی «' + realStockProd.name + '» در انبار فقط ' + (realStockProd.stockQty || 0) + ' عدد است.\n\nمقدار برگشتی نمی‌تواند از موجودی واقعی قابل‌برگشت بیشتر باشد.');
                 throw new Error('validation');
               }
             }
             if (amount > liveRemainingAmount) {
-              alert('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: ' + toman(liveRemainingAmount) + ' تومان');
+              showToast('مبلغ برگشتی از مبلغ باقیمانده‌ی این خرید بیشتره.\n\nمبلغ باقیمانده قابل‌برگشت: ' + toman(liveRemainingAmount) + ' تومان');
               throw new Error('validation');
             }
-            if (!confirm((purchase.productId ? 'با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد.' : 'با ثبت این برگشت، فقط بدهی به تامین‌کننده کم می‌شود (موجودی خودکار اصلاح نمی‌شود).') + ' ادامه می‌دهید؟')) throw new Error('validation');
+            if (!(await appConfirm((purchase.productId ? 'با ثبت این برگشت، موجودی انبار و بدهی به تامین‌کننده اصلاح خواهد شد.' : 'با ثبت این برگشت، فقط بدهی به تامین‌کننده کم می‌شود (موجودی خودکار اصلاح نمی‌شود).') + ' ادامه می‌دهید؟'))) throw new Error('validation');
             function commitSingleReturn(returnReason) {
               return (async function () {
                 const previousData = JSON.parse(JSON.stringify(data));
                 if (purchase.productId && qty > 0) {
                   const retResult = applyPurchaseReturnStockEffects(purchase, [{ productId: purchase.productId, qty: qty }], s.name, date);
-                  if (!retResult.ok) { alert(retResult.error || 'برگشت خرید ممکن نشد'); throw new Error('validation'); }
+                  if (!retResult.ok) { showToast(retResult.error || 'برگشت خرید ممکن نشد'); throw new Error('validation'); }
                 }
                 purchase.returns = purchase.returns || [];
                 const rec = { id: uid(), date: date, qty: qty, amount: amount };
                 if (returnReason) rec.returnReason = returnReason;
                 purchase.returns.push(rec);
-                try { await saveData(); } catch (saveErr) { data = previousData; throw saveErr; }
+                try { await saveData(); } catch (saveErr) { restoreDataInPlace(previousData); throw saveErr; }
                 closeModal();
                 drawSupplierPage(rootEl);
                 showToast('برگشت خرید ثبت شد');
@@ -232,7 +223,7 @@
           const realIdx = (s.payments || []).indexOf(p);
           if (realIdx < 0) throw new Error('validation');
           const label = p.method === 'check' ? ('چک' + (p.checkNumber ? (' #' + p.checkNumber) : '')) : 'پرداخت';
-          if (!confirm('«' + label + '» به مبلغ ' + toman(p.method === 'check' ? (p.faceAmount || p.amount) : p.amount) + ' تومان حذف شود؟\nمانده حساب تامین‌کننده اصلاح می‌شود.')) throw new Error('validation');
+          if (!(await appConfirm('«' + label + '» به مبلغ ' + toman(p.method === 'check' ? (p.faceAmount || p.amount) : p.amount) + ' تومان حذف شود؟\nمانده حساب تامین‌کننده اصلاح می‌شود.'))) throw new Error('validation');
           s.payments.splice(realIdx, 1);
           await saveData();
           drawSupplierPage(rootEl);
@@ -341,7 +332,7 @@
           const msg = willDeactivate
             ? 'این تأمین‌کننده غیرفعال شود؟ اطلاعات و سوابق خرید و پرداخت حذف نخواهد شد.'
             : 'تامین‌کننده «' + s.name + '» دوباره فعال شود؟';
-          if (!confirm(msg)) throw new Error('validation');
+          if (!(await appConfirm(msg))) throw new Error('validation');
           s.active = (s.active === false) ? true : false;
           await saveData();
           drawSupplierPage(rootEl);
@@ -362,7 +353,7 @@
           <label>کالای مرتبط (اختیاری — برای افزایش خودکار موجودی)</label>
           <select id="f-product">
             <option value="">— بدون کالای مشخص —</option>
-            ${data.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+            ${(data.products || []).filter(p => p && p.active !== false).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>تعداد کالا (در صورت انتخاب کالا)</label><input id="f-qty" type="text" inputmode="decimal"></div>
@@ -373,7 +364,7 @@
         <div class="field" style="display:flex;gap:6px;">
           <select id="mi-product" style="flex:2;">
             <option value="">انتخاب کالا</option>
-            ${data.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+            ${(data.products || []).filter(p => p && p.active !== false).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
           </select>
           <input id="mi-qty" type="text" inputmode="decimal" placeholder="تعداد" style="flex:1;">
           <input id="mi-price" type="text" inputmode="decimal" placeholder="قیمت واحد" style="flex:1;">
@@ -387,7 +378,7 @@
 
     function renderMultiRows() {
       document.getElementById('multi-item-rows').innerHTML = multiItems.map((it, idx) => `
-        <div class="ledger-row"><span class="name">${esc((data.products.find(x => x.id === it.productId) || {}).name || '?')} × ${it.qty} @ ${toman(it.unitCost)} ت</span><span class="filler"></span><span class="amount">${toman(it.qty * it.unitCost)} ت<br><button class="btn danger small" data-del-item="${idx}" type="button">حذف</button></span></div>
+        <div class="ledger-row supplier-purchase-item-row"><span class="name"><span class="tx-row-title">${esc((data.products.find(x => x.id === it.productId) || {}).name || '?')}</span><span class="sub">${it.qty} ${esc(String((data.products.find(x => x.id === it.productId) || {}).packageWeight ? 'بسته' : 'واحد'))}${(data.products.find(x => x.id === it.productId) || {}).packageWeight ? ' · وزن بسته ' + enToFaDigits(String((data.products.find(x => x.id === it.productId) || {}).packageWeight)) : ''} · قیمت واحد ${toman(it.unitCost)} ت</span></span><span class="filler"></span><span class="amount"><span class="tx-row-total">${toman(it.qty * it.unitCost)} ت</span><br><button class="btn danger small" data-del-item="${idx}" type="button">حذف</button></span></div>
       `).join('');
       document.getElementById('multi-item-total').textContent = toman(multiItems.reduce((s2, it) => s2 + it.qty * it.unitCost, 0));
       document.querySelectorAll('[data-del-item]').forEach(btn => {
@@ -453,7 +444,7 @@
           const previousData = JSON.parse(JSON.stringify(data));
           s.purchases.push(purchase);
           applyPurchaseStockEffects(purchase, s.name);
-          try { await saveData(); } catch (saveErr) { data = previousData; throw saveErr; }
+          try { await saveData(); } catch (saveErr) { restoreDataInPlace(previousData); throw saveErr; }
           closeModal();
           drawSupplierPage(rootEl);
           showToast('خرید ثبت شد');
@@ -472,7 +463,7 @@
           const previousData = JSON.parse(JSON.stringify(data));
           s.purchases.push(purchase);
           applyPurchaseStockEffects(purchase, s.name);
-          try { await saveData(); } catch (saveErr) { data = previousData; throw saveErr; }
+          try { await saveData(); } catch (saveErr) { restoreDataInPlace(previousData); throw saveErr; }
           closeModal();
           drawSupplierPage(rootEl);
           showToast('خرید ثبت شد');
@@ -662,7 +653,7 @@
 
       <!-- IDENTITY -->
       <div class="tx-identity card">
-        <div class="tx-identity-title">${esc(s.name)}${s.active === false ? ' <span class="badge pending">غیرفعال</span>' : ''}</div>
+        <div class="tx-identity-title">${esc(s.name)}${s.active === false ? ' <span class="badge tone-muted">غیرفعال</span>' : ''}</div>
         <div class="tx-identity-meta">
           ${s.phone ? '<span>تلفن: ' + esc(s.phone) + '</span>' : '<span class="sub">بدون تلفن</span>'}
         </div>
