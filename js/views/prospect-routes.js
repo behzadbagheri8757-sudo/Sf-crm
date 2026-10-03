@@ -1,0 +1,117 @@
+/* js/views/prospect-routes.js — SPA Prospect routes view (Phase 8).
+   Extracted from prospect-routes.html. Reuses prospectState,
+   addProspectRoute, deleteProspectRoute, addProspectNeighborhood.
+   No new financial logic.
+*/
+'use strict';
+
+(function (global) {
+  let addRouteHandler = null;
+  function navigateToProspects() {
+    AppRouter.navigate('/prospects');
+  }
+
+  function drawRoutes(root) {
+    const routes = prospectState.routes;
+    root.innerHTML = `
+      <div class="btn-row" style="margin-bottom:10px;">
+        <a class="btn secondary small" href="#/prospects">← مغازه‌های بالقوه</a>
+      </div>
+      <h2 class="section-title">مسیرها و محله‌ها</h2>
+      <p class="tx-hint">مسیر و محله برای برنامه‌ریزی ویزیت میدانی — جدا از ساختار موقعیت مکانی.</p>
+      <div class="field"><label>مسیر جدید</label>
+        <div class="btn-row">
+          <input id="new-route" placeholder="مثلاً: مسیر غرب" style="flex:1;">
+          <button type="button" class="btn small" id="add-route">افزودن</button>
+        </div>
+      </div>
+      <div id="route-list" class="field-route-list"></div>
+    `;
+
+    const list = document.getElementById('route-list');
+    if (!routes.length) {
+      list.innerHTML = '<div class="empty">هنوز مسیری نیست</div>';
+    } else {
+      list.innerHTML = routes.map(r => {
+        const count = prospectState.shops.filter(s => s.routeId === r.id).length;
+        const neighList = (r.neighborhoods || []);
+        const neigh = neighList.length
+          ? neighList.map(n =>
+              `<span class="field-neigh-chip">${esc(n.name)}</span>`
+            ).join('')
+          : '<span class="sub">بدون محله</span>';
+        return `<div class="card field-route-card" data-route="${esc(r.id)}">
+          <div class="field-route-title">${esc(r.name)} <span class="sub">(${count} مغازه)</span></div>
+          <div class="field-route-neighs">${neigh}</div>
+          <div class="btn-row" style="margin-top:8px;">
+            <button type="button" class="btn small secondary" data-add-neigh="${esc(r.id)}">+ محله</button>
+            <button type="button" class="btn small danger" data-del-route="${esc(r.id)}">حذف مسیر</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Add route handler
+    const addBtn = document.getElementById('add-route');
+    addRouteHandler = function () {
+      const name = (document.getElementById('new-route').value || '').trim();
+      if (!name) { showToast('نام مسیر را وارد کن'); return; }
+      addProspectRoute(name).then(() => {
+        showToast('مسیر اضافه شد');
+        drawRoutes(root);
+      });
+    };
+    addBtn.onclick = addRouteHandler;
+
+    // Delegated events for delete and add neighborhood
+    list.addEventListener('click', async function (e) {
+      const delBtn = e.target.closest('[data-del-route]');
+      if (delBtn) {
+        const id = delBtn.getAttribute('data-del-route');
+        if (!(await appConfirm('این مسیر حذف شود؟'))) return;
+        deleteProspectRoute(id).then(() => {
+          showToast('حذف شد');
+          drawRoutes(root);
+        });
+        return;
+      }
+      const neighBtn = e.target.closest('[data-add-neigh]');
+      if (neighBtn) {
+        const routeId = neighBtn.getAttribute('data-add-neigh');
+        const name = prompt('نام محله / خیابان:');
+        if (!name || !name.trim()) return;
+        addProspectNeighborhood(routeId, name.trim()).then(() => {
+          showToast('محله اضافه شد');
+          drawRoutes(root);
+        });
+      }
+    });
+  }
+
+  function mount(root, params) {
+    let refreshToken = null;
+    if (!root) return function () {};
+
+    const nav = document.getElementById('nav');
+    if (nav) nav.style.display = '';
+
+    drawRoutes(root);
+
+    refreshToken = ViewHost.setRefresh(()=>drawRoutes(root));
+
+
+
+    return function unmount() {
+      ViewHost.clearRefresh(refreshToken);
+      refreshToken = null;
+      if (addRouteHandler) {
+        const addBtn = document.getElementById('add-route');
+        if (addBtn) addBtn.onclick = null;
+      }
+      addRouteHandler = null;
+      root.innerHTML = '';
+    };
+  }
+
+  global.ProspectRoutesView = { mount: mount, unmount: function () {} };
+})(typeof window !== 'undefined' ? window : this);
