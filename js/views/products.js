@@ -25,14 +25,6 @@
     return (Number(p.stockQty) || 0) * (Number(p.buy) || 0);
   }
 
-  // Display-only: cap quantity to 2 decimal places (e.g. 3.176470588 -> 3.18).
-  // Does not touch p.stockQty itself or any calculation — formatting only.
-  function fmtQty(n) {
-    var num = Number(n) || 0;
-    var rounded = Math.round(num * 100) / 100;
-    return String(rounded);
-  }
-
   function renderProductListOnly() {
     const list = document.getElementById('product-list');
     if (!list) return;
@@ -131,6 +123,10 @@
             esc(p.category || '—') +
             ' · ' +
             esc(String(unit)) +
+            ' · خرید ' +
+            toman(p.buy) +
+            ' / فروش ' +
+            toman(p.retail || p.sell || 0) +
             '</span>' +
             '<span class="sub ' +
             st.cls +
@@ -139,12 +135,13 @@
             statusExtra +
             '</span></span>' +
             '<span class="filler"></span>' +
-            '<span class="amount tx-row-amount product-row-summary">' +
-            '<span class="product-row-value"><span class="product-row-label">ارزش کل</span><span class="tx-row-total">' +
-            toman(val) + ' ت</span></span>' +
-            '<span class="product-row-qty"><span class="product-row-label">موجودی</span><span class="product-row-qty-value">' +
-            fmtQty(p.stockQty) + ' ' + esc(String(unit)) + '</span></span>' +
-            '</span></div>'
+            '<span class="amount tx-row-amount">' +
+            '<span class="tx-row-total">' +
+            (p.stockQty || 0) +
+            '</span>' +
+            '<span class="tx-row-meta">ارزش ' +
+            toman(val) +
+            ' ت</span></span></div>'
           );
         })
         .join('');
@@ -165,6 +162,7 @@
       );
     };
     root.innerHTML =
+      '<h2 class="section-title">کالا و اجناس</h2>' +
       '<div class="btn-row" style="margin-bottom:10px;">' +
       '<a class="btn secondary small" href="' +
       invHref +

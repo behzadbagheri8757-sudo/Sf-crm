@@ -14,11 +14,29 @@
   let sortHandler = null;
   let fabHandler = null;
   function navigateToCustomer(cid) {
-    AppRouter.navigate('/customer', { id: cid });
+    if (
+      typeof isSpaShell === 'function' &&
+      isSpaShell() &&
+      typeof AppRouter !== 'undefined' &&
+      AppRouter.navigate
+    ) {
+      AppRouter.navigate('/customer', { id: cid });
+    } else {
+      location.href = '#/customer?id=' + encodeURIComponent(cid);
+    }
   }
 
   function navigateToInvoice(invId) {
-    AppRouter.navigate('/invoice', { id: invId });
+    if (
+      typeof isSpaShell === 'function' &&
+      isSpaShell() &&
+      typeof AppRouter !== 'undefined' &&
+      AppRouter.navigate
+    ) {
+      AppRouter.navigate('/invoice', { id: invId });
+    } else {
+      location.href = '#/invoice?id=' + encodeURIComponent(invId);
+    }
   }
 
   function checkStatusLabel(ch) {
@@ -116,7 +134,7 @@
         <div class="btn-row"><a class="btn secondary" href="#/customers">رفتن به مشتریان</a></div>`);
       return;
     }
-    const opts = data.customers.filter(c => c.active !== false).slice().sort((a,b) => (a.name || '').localeCompare(b.name || '', 'fa'))
+    const opts = data.customers.slice().sort((a,b) => (a.name || '').localeCompare(b.name || '', 'fa'))
       .map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
     openSheet(`
       <h3>ثبت چک</h3>
@@ -135,6 +153,7 @@
       return `<button type="button" class="chip ${chkFilter === id ? 'active' : ''}" data-cf="${id}">${label}</button>`;
     };
     root.innerHTML = `
+      <h2 class="section-title">چک‌ها</h2>
       <div class="field"><input id="check-search" placeholder="جستجوی مشتری، شماره چک، مبلغ..." value="${esc(chkQuery)}" autocomplete="off"></div>
       <div class="chip-row" id="check-chips">
         ${chip('all','همه')}
@@ -194,19 +213,17 @@
       const id = btn.getAttribute('data-toggle-check');
       const chk = data.checks.find(x => x.id === id);
       if (!chk) return;
-      if(!(await appConfirm(chk.status === 'cleared' ? 'وضعیت این چک به «در جریان» برگردد؟' : 'این چک به‌عنوان «وصول‌شده» ثبت شود؟'))) return;
-      await withSubmitGuard(btn, async function(){
-        const prev = chk.status;
-        chk.status = chk.status === 'cleared' ? 'pending' : 'cleared';
-        try {
-          await saveData();
-          showToast(chk.status === 'cleared' ? 'چک وصول شد' : 'چک به حالت در جریان برگشت');
-          renderCheckListOnly();
-        } catch (err) {
-          chk.status = prev;
-          throw err;
-        }
-      });
+      btn.disabled = true;
+      const prev = chk.status;
+      chk.status = chk.status === 'cleared' ? 'pending' : 'cleared';
+      try {
+        await saveData();
+        showToast(chk.status === 'cleared' ? 'چک وصول شد' : 'چک به حالت در جریان برگشت');
+        renderCheckListOnly();
+      } catch (err) {
+        chk.status = prev;
+        try { btn.disabled = false; } catch (_e) {}
+      }
     });
 
     renderCheckListOnly();

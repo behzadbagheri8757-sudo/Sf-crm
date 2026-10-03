@@ -14,7 +14,16 @@
   let sortHandler = null;
   let fabHandler = null;
   function navigateToCustomer(cid) {
-    AppRouter.navigate('/customer', { id: cid });
+    if (
+      typeof isSpaShell === 'function' &&
+      isSpaShell() &&
+      typeof AppRouter !== 'undefined' &&
+      AppRouter.navigate
+    ) {
+      AppRouter.navigate('/customer', { id: cid });
+    } else {
+      location.href = '#/customer?id=' + encodeURIComponent(cid);
+    }
   }
 
   function paymentRows() {
@@ -197,7 +206,6 @@
     }
 
     const opts = data.customers
-      .filter(c => c.active !== false)
       .slice()
       .sort((a, b) =>
         (a.name || '').localeCompare(b.name || '', 'fa')
@@ -258,6 +266,10 @@
     };
 
     root.innerHTML = `
+      <h2 class="section-title">
+        پرداخت‌ها / دریافت‌ها
+      </h2>
+
       <div class="field">
         <input
           id="payment-search"

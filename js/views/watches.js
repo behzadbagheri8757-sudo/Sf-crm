@@ -28,11 +28,29 @@
   }
 
   function navigateToWatch(occId) {
-    AppRouter.navigate('/watch', { id: occId });
+    if (
+      typeof isSpaShell === 'function' &&
+      isSpaShell() &&
+      typeof AppRouter !== 'undefined' &&
+      AppRouter.navigate
+    ) {
+      AppRouter.navigate('/watch', { id: occId });
+    } else {
+      location.href = watchDetailHref(occId);
+    }
   }
 
   function navigateToWatches() {
-    AppRouter.navigate('/watches');
+    if (
+      typeof isSpaShell === 'function' &&
+      isSpaShell() &&
+      typeof AppRouter !== 'undefined' &&
+      AppRouter.navigate
+    ) {
+      AppRouter.navigate('/watches');
+    } else {
+      location.href = watchesHref();
+    }
   }
 
   function customerNameById(cid) {
@@ -79,15 +97,14 @@
 
   function watchReasonSheet(occurrenceId, onDone) {
     if (!occurrenceId || typeof recordWatchReason !== 'function' || typeof openSheet !== 'function') return;
-    var options = (typeof getWatchResponseOptions === 'function')
-      ? getWatchResponseOptions(occurrenceId)
-      : ((typeof WATCH_REASON_OPTIONS !== 'undefined' && Array.isArray(WATCH_REASON_OPTIONS)) ? WATCH_REASON_OPTIONS : []);
+    var options = (typeof WATCH_REASON_OPTIONS !== 'undefined' && Array.isArray(WATCH_REASON_OPTIONS))
+      ? WATCH_REASON_OPTIONS : [];
     var optsHtml = options.map(function (o) {
       return '<button type="button" class="btn secondary small watch-reason-option" data-watch-reason="' + esc(o.code) + '">' + esc(o.label) + '</button>';
     }).join('');
     openSheet(
       '<div class="sheet-title">ثبت علت هشدار</div>' +
-      '<div class="report-note watch-sheet-note">سه پاسخ اول هشدار را می‌بندند و همان مورد را فوراً برنمی‌گردانند؛ سایر علت‌ها فقط ثبت می‌شوند.</div>' +
+      '<div class="report-note watch-sheet-note">علت را ثبت کنید؛ این کار هشدار را حذف نمی‌کند.</div>' +
       '<div class="watch-reason-options">' + optsHtml + '</div>' +
       '<div class="field watch-sheet-note-field"><label>یادداشت (اختیاری)</label><input type="text" id="watch-detail-reason-note" autocomplete="off" placeholder="توضیح کوتاه..."></div>' +
       '<div class="btn-row watch-sheet-actions"><button type="button" class="btn secondary" id="watch-detail-dismiss">بستن هشدار</button><button type="button" class="btn secondary" id="watch-detail-cancel">انصراف</button></div>'
@@ -210,22 +227,16 @@
 
     var nav = document.getElementById('nav');
     if (nav) nav.style.display = '';
-    var ctx = typeof createComputationContext === 'function'
-      ? createComputationContext({ data: data })
-      : null;
 
     function refresh() {
       if (cancelled) return;
-      ctx = typeof createComputationContext === 'function'
-        ? createComputationContext({ data: data })
-        : null;
       renderWatchList(root);
     }
 
     // Reconcile first (existing lifecycle logic; fail-open) so a direct
     // deep link to #/watches shows current data, same as the Dashboard does.
     if (typeof reconcileWatchLifecycle === 'function') {
-      reconcileWatchLifecycle(null, ctx).then(refresh).catch(function (e) {
+      reconcileWatchLifecycle().then(refresh).catch(function (e) {
         console.warn('watch lifecycle reconcile failed', e);
         refresh();
       });
@@ -288,7 +299,7 @@
         '<button type="button" class="btn primary" data-watch-reason-open="' + esc(occ.id) + '">' + (occ.reason ? 'ویرایش علت' : 'ثبت علت') + '</button>' +
         '<button type="button" class="btn secondary" data-watch-dismiss="' + esc(occ.id) + '">بستن هشدار</button>' +
       '</div>' +
-      '<div class="watch-detail-footnote">علت‌های «قیمت»، «رقیب» و مانند آن فقط ثبت می‌شوند؛ «هنوز موجودی دارد»، «این محصول را نمی‌خواهد» و «بعداً پیگیری می‌کنم» هشدار را می‌بندند.</div>';
+      '<div class="watch-detail-footnote">ثبت علت، هشدار را حذف نمی‌کند؛ فقط کمک می‌کند وضعیت مشتری را بهتر ثبت کنید.</div>';
   }
 
   function watchDetailMount(root, params) {
@@ -299,20 +310,14 @@
 
     var nav = document.getElementById('nav');
     if (nav) nav.style.display = '';
-    var ctx = typeof createComputationContext === 'function'
-      ? createComputationContext({ data: data })
-      : null;
 
     function refresh() {
       if (cancelled) return;
-      ctx = typeof createComputationContext === 'function'
-        ? createComputationContext({ data: data })
-        : null;
       renderWatchDetail(root, detailOccId);
     }
 
     if (typeof reconcileWatchLifecycle === 'function') {
-      reconcileWatchLifecycle(null, ctx).then(refresh).catch(function (e) {
+      reconcileWatchLifecycle().then(refresh).catch(function (e) {
         console.warn('watch lifecycle reconcile failed', e);
         refresh();
       });
@@ -326,10 +331,7 @@
       var back = e.target.closest('[data-watch-back]');
       if (back) { e.preventDefault(); navigateToWatches(); return; }
       var reasonBtn = e.target.closest('[data-watch-reason-open]');
-      if (reasonBtn) { e.preventDefault(); watchReasonSheet(reasonBtn.getAttribute('data-watch-reason-open'), function () {
-        // A closing decision leaves nothing active to show here -> back to the list.
-        if (findActiveOccurrence(detailOccId)) refresh(); else navigateToWatches();
-      }); return; }
+      if (reasonBtn) { e.preventDefault(); watchReasonSheet(reasonBtn.getAttribute('data-watch-reason-open'), refresh); return; }
       var dismissBtn = e.target.closest('[data-watch-dismiss]');
       if (dismissBtn) {
         e.preventDefault();
@@ -342,7 +344,7 @@
       var card = e.target.closest('[data-watch-open-customer]');
       if (card && !e.target.closest('button,a')) {
         var cid = card.getAttribute('data-watch-open-customer');
-        if (cid) { AppRouter.navigate('/customer', {id: cid}); }
+        if (cid) { if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) AppRouter.navigate('/customer', {id: cid}); else location.href = '#/customer?id=' + encodeURIComponent(cid); }
       }
     }
     root.addEventListener('click', onDetailClick);
@@ -352,7 +354,7 @@
       if (!card) return;
       e.preventDefault();
       var cid = card.getAttribute('data-watch-open-customer');
-      if (cid) { AppRouter.navigate('/customer', {id: cid}); }
+      if (cid) { if (typeof isSpaShell === 'function' && isSpaShell() && typeof AppRouter !== 'undefined' && AppRouter.navigate) AppRouter.navigate('/customer', {id: cid}); else location.href = '#/customer?id=' + encodeURIComponent(cid); }
     }
     root.addEventListener('keydown', onDetailKeydown);
 
