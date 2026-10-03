@@ -1286,17 +1286,66 @@ function openAddVisit(cid){
     if (typeof customerBehavior === 'function') visitBehavior = customerBehavior(cid) || {};
   } catch (eVisitContext) { visitBehavior = {}; }
   let visitWatchCount = 0;
+  let visitFollowUps = [];
   try {
     if (typeof getActiveWatchOccurrences === 'function') {
       visitWatchCount = (getActiveWatchOccurrences(cid) || []).length;
     }
-  } catch (eVisitWatch) { visitWatchCount = 0; }
+    if (typeof getPendingWatchFollowUps === 'function') {
+      visitFollowUps = getPendingWatchFollowUps(cid) || [];
+    }
+  } catch (eVisitWatch) { visitWatchCount = 0; visitFollowUps = []; }
+  const followUpReminderHtml = visitFollowUps.length
+    ? '<div class="visit-watch-followups"><div class="visit-watch-followups-title">پیگیری‌های منتظر برای این مشتری</div>' +
+      visitFollowUps.map(function (o) {
+        return '<div class="visit-watch-followup-item"><div><strong>' + esc(o.productName ? ('«' + o.productName + '»') : 'همان موضوع قبلی') + '</strong> — ' + esc(o.generatedReason || 'سؤال قبلی را پیگیری کنید') + '</div>' +
+          (o.evidence && o.evidence.comparison ? '<div class="sub">شاهد: ' + esc(o.evidence.comparison) + '</div>' : '') +
+          (o.reason && o.reason.comment ? '<div class="sub">یادداشت: ' + esc(o.reason.comment) + '</div>' : '') +
+          '</div>';
+      }).join('') + '</div>'
+    : '';
   const lastVisitDate = visitBehavior.lastVisit && visitBehavior.lastVisit.date
     ? faDate(visitBehavior.lastVisit.date)
     : '—';
   const lastInvoiceDate = visitBehavior.lastInvoiceDate
     ? faDate(visitBehavior.lastInvoiceDate)
     : '—';
+
+  /* P1 (UI only) — extra pre-context lines. Read-only use of values that
+     already exist (customerBehavior / customerTotals / calculateCustomerAction).
+     No new computation of business logic; failures are swallowed (fail-open). */
+  let visitSinceLastText = '';
+  let visitRoutineText = '';
+  let visitLastResultText = '';
+  let visitBalanceText = '';
+  let visitActionText = '';
+  try {
+    if (visitBehavior.daysSinceLast != null && isFinite(visitBehavior.daysSinceLast)) {
+      visitSinceLastText = ' (' + Math.round(visitBehavior.daysSinceLast) + ' روز پیش)';
+    }
+    if (visitBehavior.avgIntervalDays != null && isFinite(visitBehavior.avgIntervalDays)) {
+      visitRoutineText = 'روال معمول: هر ' + Math.round(visitBehavior.avgIntervalDays) + ' روز';
+      if (visitBehavior.behindPattern === true && visitBehavior.daysSinceLast != null) {
+        const behindDays = Math.round(visitBehavior.daysSinceLast - visitBehavior.avgIntervalDays);
+        if (behindDays > 0) visitRoutineText += ' — ' + behindDays + ' روز عقب‌تر از روال';
+      }
+    }
+    if (visitBehavior.lastVisit && visitBehavior.lastVisit.result) {
+      visitLastResultText = ' — ' + visitBehavior.lastVisit.result;
+    }
+    if (typeof customerTotals === 'function') {
+      const visitTotals = customerTotals(cid);
+      if (visitTotals && visitTotals.balance > 0.5) {
+        visitBalanceText = 'بدهی: ' + toman(visitTotals.balance) + ' ت';
+      }
+    }
+    if (typeof calculateCustomerAction === 'function') {
+      const visitAction = calculateCustomerAction(cid);
+      if (visitAction && visitAction.actionType !== 'no_action' && visitAction.action) {
+        visitActionText = 'اقدام پیشنهادی: ' + visitAction.action;
+      }
+    }
+  } catch (eVisitExtra) { /* display-only: ignore */ }
 
   function chipBtn(group, value, label){
     return '<button type="button" class="chip-opt" data-vgroup="' + esc(group) + '" data-value="' + esc(value) + '">' + esc(label) + '</button>';
@@ -1307,10 +1356,14 @@ function openAddVisit(cid){
     '<div class="visit-precontext">' +
       '<div class="visit-precontext-title">' + esc(visitCustomer ? visitCustomer.name : 'مشتری') + '</div>' +
       '<div class="visit-precontext-grid">' +
-        '<span>آخرین خرید: ' + esc(lastInvoiceDate) + '</span>' +
-        '<span>آخرین ویزیت: ' + esc(lastVisitDate) + '</span>' +
+        '<span>آخرین خرید: ' + esc(lastInvoiceDate) + esc(visitSinceLastText) + '</span>' +
+        (visitRoutineText ? '<span>' + esc(visitRoutineText) + '</span>' : '') +
+        (visitBalanceText ? '<span>' + esc(visitBalanceText) + '</span>' : '') +
+        '<span>آخرین ویزیت: ' + esc(lastVisitDate) + esc(visitLastResultText) + '</span>' +
         '<span>هشدار فعال: ' + esc(String(visitWatchCount)) + ' مورد</span>' +
+        (visitActionText ? '<span>' + esc(visitActionText) + '</span>' : '') +
       '</div>' +
+      followUpReminderHtml +
     '</div>' +
     '<div style="display:flex;gap:8px;">' +
       '<div class="field" style="flex:1;"><label>تاریخ</label>' + shamsiDateInputHTML('f-date', todayISO()) + '</div>' +
@@ -1754,6 +1807,13 @@ function openInvoiceForm(cid, editInv, opts){
   let checkAmount = editInv ? (editInv.checkPaid||0) : 0;
   let checkDue = existingCheck ? existingCheck.dueDate : todayISO();
   const pendingPayment = { cash: cashPaid, card: cardPaid, transfer: transferPaid, check: checkAmount, checkDue };
+  // Display-only digit grouping for the payment amount inputs (same fa-IR grouping as toman()).
+  // Raw numbers stay in cashPaid/cardPaid/... / pendingPayment; faToEnDigits() strips the separators on read.
+  function payInputText(v){
+    v = Number(v) || 0;
+    if(!v) return '';
+    return Number.isInteger(v) ? toman(v) : v.toLocaleString('fa-IR', { maximumFractionDigits: 6 });
+  }
   opts = opts || {};
   let discount = editInv ? (editInv.discount||0) : 0;
   let discountType = (editInv && editInv.discountType==='percent') ? 'percent' : 'fixed';
@@ -2100,28 +2160,28 @@ function openInvoiceForm(cid, editInv, opts){
             <div class="inv-payment-panel" data-payment-panel="cash" hidden>
               <div class="inv-payment-panel-head"><div><strong>دریافت نقدی</strong><small>دارم نقدی می‌گیرم</small></div><button type="button" class="inv-payment-close" data-payment-close="cash" aria-label="بستن">×</button></div>
               <label for="f-cash">مبلغ نقدی</label>
-              <input id="f-cash" type="text" inputmode="decimal" value="${cashPaid||''}" placeholder="مبلغ را وارد کنید">
+              <input id="f-cash" type="text" inputmode="decimal" value="${payInputText(cashPaid)}" placeholder="مبلغ را وارد کنید">
               <button type="button" class="inv-payment-confirm" data-payment-confirm="cash">ثبت دریافت نقدی</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="card" hidden>
               <div class="inv-payment-panel-head"><div><strong>دریافت با کارت</strong><small>دارم با کارت دریافت می‌کنم</small></div><button type="button" class="inv-payment-close" data-payment-close="card" aria-label="بستن">×</button></div>
               <label for="f-card">مبلغ کارت</label>
-              <input id="f-card" type="text" inputmode="decimal" value="${cardPaid||''}" placeholder="مبلغ را وارد کنید">
+              <input id="f-card" type="text" inputmode="decimal" value="${payInputText(cardPaid)}" placeholder="مبلغ را وارد کنید">
               <button type="button" class="inv-payment-confirm" data-payment-confirm="card">ثبت دریافت کارت</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="transfer" hidden>
               <div class="inv-payment-panel-head"><div><strong>انتقال بانکی</strong><small>دارم انتقال بانکی می‌گیرم</small></div><button type="button" class="inv-payment-close" data-payment-close="transfer" aria-label="بستن">×</button></div>
               <label for="f-transfer">مبلغ انتقال</label>
-              <input id="f-transfer" type="text" inputmode="decimal" value="${transferPaid||''}" placeholder="مبلغ را وارد کنید">
+              <input id="f-transfer" type="text" inputmode="decimal" value="${payInputText(transferPaid)}" placeholder="مبلغ را وارد کنید">
               <button type="button" class="inv-payment-confirm" data-payment-confirm="transfer">ثبت انتقال بانکی</button>
             </div>
 
             <div class="inv-payment-panel" data-payment-panel="check" hidden>
               <div class="inv-payment-panel-head"><div><strong>دریافت چک</strong><small>دارم چک دریافت می‌کنم</small></div><button type="button" class="inv-payment-close" data-payment-close="check" aria-label="بستن">×</button></div>
               <label for="f-check">مبلغ چک</label>
-              <input id="f-check" type="text" inputmode="decimal" value="${checkAmount||''}" placeholder="مبلغ چک را وارد کنید">
+              <input id="f-check" type="text" inputmode="decimal" value="${payInputText(checkAmount)}" placeholder="مبلغ چک را وارد کنید">
               <button type="button" class="inv-payment-confirm" data-payment-confirm="check">ثبت دریافت چک</button>
               <div class="inv-payment-check-due" id="check-due-wrap" style="display:${checkAmount>0?'block':'none'};">
                 <label for="f-check-due">تاریخ سررسید چک</label>
@@ -2497,7 +2557,7 @@ function openInvoiceForm(cid, editInv, opts){
           btn.setAttribute('aria-expanded','true');
           const input = panel.querySelector('input[type="text"]');
           if(input){
-            input.value = pendingPayment[method] > 0 ? enToFaDigits(String(pendingPayment[method])) : '';
+            input.value = pendingPayment[method] > 0 ? payInputText(pendingPayment[method]) : '';
             setTimeout(()=>input.focus(), 0);
           }
           if(method==='check'){
@@ -2527,9 +2587,29 @@ function openInvoiceForm(cid, editInv, opts){
       const id = method==='cash' ? 'f-cash' : method==='card' ? 'f-card' : method==='transfer' ? 'f-transfer' : 'f-check';
       const input = document.getElementById(id);
       if(input) input.addEventListener('input', e=>{
-        const v = parseFloat(faToEnDigits(e.target.value))||0;
+        const el = e.target;
+        const v = parseFloat(faToEnDigits(el.value))||0;
         pendingPayment[method] = v;
-        e.target.value = v ? enToFaDigits(String(v)) : '';
+        // keep the caret on the same digit after regrouping (counts digits/decimal point left of the caret)
+        let caret = null, digitsLeft = 0;
+        try {
+          if(document.activeElement === el && el.selectionStart != null){
+            caret = el.selectionStart;
+            digitsLeft = faToEnDigits(el.value.slice(0, caret)).replace(/[^0-9.]/g,'').length;
+          }
+        } catch(_e){ caret = null; }
+        const formatted = payInputText(v);
+        if(el.value !== formatted){
+          el.value = formatted;
+          if(caret != null){
+            let pos = 0, seen = 0;
+            while(pos < formatted.length && seen < digitsLeft){
+              if(/[0-9.]/.test(faToEnDigits(formatted.charAt(pos)))) seen++;
+              pos++;
+            }
+            try { el.setSelectionRange(pos, pos); } catch(_e2){}
+          }
+        }
         if(method==='check'){
           const dueWrap = document.getElementById('check-due-wrap');
           if(dueWrap) dueWrap.style.display = v>0 ? 'block' : 'none';
