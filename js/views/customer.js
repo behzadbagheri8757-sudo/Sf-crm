@@ -769,17 +769,21 @@
        (the same functions power the Dashboard Action Queue). */
     let unifiedSummaryHtml = '';
     let recommendedAction = null;
+    let customerRiskLevel = null;
+    let customerHealthLabel = 'وضعیت عادی';
     {
       let priority = null, action = null;
       try { if (typeof calculateCustomerPriority === 'function') priority = calculateCustomerPriority(c.id, { ctx: ctx }); } catch (eP) { priority = null; }
       try { if (typeof calculateCustomerAction === 'function') action = calculateCustomerAction(c.id, priority, { ctx: ctx }); } catch (eA) { action = null; }
       recommendedAction = action && action.actionType !== 'no_action' ? action : null;
       const riskLevel = priority ? priority.riskLevel : null;
+      customerRiskLevel = riskLevel;
+      customerHealthLabel = riskLevel === 'critical' ? 'نیاز به رسیدگی فوری' : riskLevel === 'high' ? 'نیاز به توجه' : riskLevel === 'medium' ? 'قابل بررسی' : 'وضعیت عادی';
       const storyText = (priority && priority.customerStory && priority.customerStory.summary) ? priority.customerStory.summary : '';
       if (storyText) {
         unifiedSummaryHtml =
           '<div class="cust-summary ' + (riskLevel ? 'radar-risk-' + esc(riskLevel) : '') + '">' +
-          '<div class="cust-summary-story">' + esc(storyText) + '</div>' +
+          '<div class="cust-summary-label">خلاصه وضعیت</div><div class="cust-summary-story">' + esc(storyText) + '</div>' +
           '</div>';
       }
     }
@@ -1134,6 +1138,7 @@
       (c.address ? '<div>آدرس: ' + esc(c.address) + '</div>' : '') +
       (c.note ? '<div>یادداشت: ' + esc(c.note) + '</div>' : '') +
       '</div>' +
+      '<div class="bp-customer-health"><span class="bp-customer-health-label">وضعیت مشتری</span><span class="bp-customer-health-value ' + (customerRiskLevel ? 'radar-risk-' + esc(customerRiskLevel) : '') + '">' + esc(customerHealthLabel) + '</span></div>' +
       '<div class="customer-balance-block">' +
       '<div class="label">مانده حساب</div>' +
       '<div class="value ' +
@@ -1157,13 +1162,14 @@
       '<button type="button" class="btn secondary" id="act-pay">ثبت پرداخت</button>' +
       '<button type="button" class="btn secondary" id="act-visit">ثبت ویزیت</button>' +
       '</div>' +
+      '<details class="bp-customer-secondary-actions"><summary>سایر عملیات</summary>' +
       '<div class="btn-row cust-actions-secondary" style="margin-bottom:16px;">' +
       '<button type="button" class="btn small secondary" id="act-check">ثبت چک</button>' +
       '<button type="button" class="btn small secondary" id="act-edit">ویرایش مشتری</button>' +
       '<button type="button" class="btn small secondary" id="act-location">اختصاص موقعیت</button>' +
       '<button type="button" class="btn small secondary" id="act-print-statement">صورت‌حساب</button>' +
       '<button type="button" class="btn small secondary" id="act-toggle-active">' + (c.active === false ? 'فعال‌سازی مشتری' : 'غیرفعال‌سازی مشتری') + '</button>' +
-      '</div>' +
+      '</div></details>' +
       '<div class="cards" style="margin-bottom:14px;">' +
       '<div class="card"><div class="label">مجموع خرید (فاکتورها)</div><div class="value">' +
       toman(t.invTotal) +

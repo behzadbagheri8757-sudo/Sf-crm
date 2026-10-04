@@ -6,8 +6,8 @@
 
 (function (global) {
   let custQuery = '';
-  let custFilter = 'all'; // all | debt | settled | credit
-  let custSortByDebt = false;
+  let custFilter = 'all'; // all | attention | unvisited | check_due | followup | debt | settled | credit
+  let custSortBy = 'name'; // name | debt | last_visit | priority
   let locFilter = { regionId: '', routeId: '', neighborhoodId: '', unassigned: false };
 
   let searchHandler = null;
@@ -68,6 +68,26 @@
     else if (custFilter === 'settled') rows = rows.filter(function (x) { return x.t.balance === 0; });
     else if (custFilter === 'credit') rows = rows.filter(function (x) { return x.t.balance < 0; });
 
+    if (custFilter === 'attention') {
+      rows = rows.filter(function (x) {
+        const pr = priorityMap[x.c.id];
+        return pr && (pr.riskLevel === 'critical' || pr.riskLevel === 'high');
+      });
+    } else if (custFilter === 'unvisited') {
+      rows = rows.filter(function (x) { return !(Array.isArray(x.c.visits) && x.c.visits.length); });
+    } else if (custFilter === 'check_due') {
+      const dueIds = Object.create(null);
+      if (typeof checksDueSoon === 'function') {
+        try { (checksDueSoon() || []).forEach(function (ch) { if (ch && ch.customerId) dueIds[ch.customerId] = true; }); } catch (e) {}
+      }
+      rows = rows.filter(function (x) { return !!dueIds[x.c.id]; });
+    } else if (custFilter === 'followup') {
+      rows = rows.filter(function (x) {
+        if (typeof getPendingWatchFollowUps !== 'function') return false;
+        try { return (getPendingWatchFollowUps(x.c.id) || []).length > 0; } catch (e) { return false; }
+      });
+    }
+
     if (locFilter.unassigned) {
       rows = rows.filter(function (x) { return !x.c.locationId; });
     } else if (locFilter.neighborhoodId) {
@@ -82,8 +102,25 @@
       rows = rows.filter(function (x) { return x.c.locationId && (routeIds.indexOf(x.c.locationId) !== -1 || neighIds.indexOf(x.c.locationId) !== -1); });
     }
 
-    if (custSortByDebt) {
-      rows.sort(function (a, b) { return b.t.balance - a.t.balance; });
+    function lastVisitTime(c) {
+      const visits = Array.isArray(c.visits) ? c.visits : [];
+      if (!visits.length) return 0;
+      const v = visits.slice().sort(function (a, b) {
+        return (b.date || '').localeCompare(a.date || '') || (b.time || '').localeCompare(a.time || '');
+      })[0];
+      const d = v && v.date ? new Date(v.date + (v.time ? 'T' + v.time : 'T00:00:00')).getTime() : 0;
+      return Number.isFinite(d) ? d : 0;
+    }
+    if (custSortBy === 'debt') {
+      rows.sort(function (a, b) { return b.t.balance - a.t.balance || (a.c.name || '').localeCompare(b.c.name || '', 'fa'); });
+    } else if (custSortBy === 'last_visit') {
+      rows.sort(function (a, b) { return lastVisitTime(b.c) - lastVisitTime(a.c) || (a.c.name || '').localeCompare(b.c.name || '', 'fa'); });
+    } else if (custSortBy === 'priority') {
+      rows.sort(function (a, b) {
+        const ap = priorityMap[a.c.id] ? Number(priorityMap[a.c.id].priorityScore) || 0 : 0;
+        const bp = priorityMap[b.c.id] ? Number(priorityMap[b.c.id].priorityScore) || 0 : 0;
+        return bp - ap || (a.c.name || '').localeCompare(b.c.name || '', 'fa');
+      });
     } else {
       rows.sort(function (a, b) { return (a.c.name || '').localeCompare(b.c.name || '', 'fa'); });
     }
@@ -134,6 +171,11 @@
         const daysText = Number.isFinite(days)
           ? ('آخرین خرید: ' + Math.max(0, Math.round(days)) + ' روز پیش')
           : 'هنوز خریدی ثبت نشده';
+        const lastVisit = Array.isArray(c.visits) && c.visits.length
+          ? c.visits.slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || (b.time || '').localeCompare(a.time || ''); })[0]
+          : null;
+        const lastVisitText = lastVisit && lastVisit.date ? 'ویزیت: ' + faDate(lastVisit.date) : 'هنوز ویزیت نشده';
+        const storyText = pr && pr.customerStory && pr.customerStory.summary ? pr.customerStory.summary : '';
         const watchTitle = watchCount > 0 ? 'هشدار فعال: ' + watchCount + ' مورد' : '';
 
         return (
@@ -147,11 +189,12 @@
           '<span class="customer-row-title-line">' +
           '<span class="customer-row-name tx-row-title">' + esc(c.name) + '</span>' +
           '</span>' +
+          (storyText ? '<span class="customer-row-story">' + esc(storyText) + '</span>' : '') +
           '<span class="customer-row-meta-line">' +
           (badgeLabel
             ? '<span class="customer-row-status badge tone-' + badgeTone + '">' + esc(badgeLabel) + '</span>'
             : '') +
-          '<span class="customer-row-meta">' + esc(daysText) + '</span>' +
+          '<span class="customer-row-meta">' + esc(daysText) + '</span>' + '<span class="customer-row-meta">' + esc(lastVisitText) + '</span>' +
           (watchCount > 0
             ? '<span class="customer-row-watch" aria-label="هشدار فعال" title="' + esc(watchTitle) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>'
             : '') +
@@ -252,10 +295,19 @@
     };
     root.innerHTML =
       '<div class="field"><input id="customer-search" placeholder="جستجوی نام، آدرس، تلفن، منطقه و…" value="' + esc(custQuery) + '" autocomplete="off"></div>' +
-      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
+      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('attention','نیازمند توجه') + chip('unvisited','ندیده‌شده') + chip('check_due','چک سررسید') + chip('followup','پیگیری باز') + '</div>' +
+      '<div class="bp-customer-secondary-filters">' +
       '<div class="btn-row" style="margin-bottom:8px;align-items:center;flex-wrap:wrap;">' +
-      '<button type="button" class="btn small secondary" id="customer-filter">فیلتر</button>' +
-      '<button type="button" class="btn small secondary" id="sort-debt">' + (custSortByDebt ? '✓ ' : '') + 'مرتب‌سازی بر اساس بدهی</button>' +
+      '<button type="button" class="btn small secondary" id="customer-filter">فیلتر منطقه</button>' +
+      '<label class="bp-sort-label" for="customer-sort">مرتب‌سازی</label>' +
+      '<select class="tx-toolbar-select" id="customer-sort">' +
+      '<option value="priority" ' + (custSortBy === 'priority' ? 'selected' : '') + '>اولویت</option>' +
+      '<option value="last_visit" ' + (custSortBy === 'last_visit' ? 'selected' : '') + '>آخرین ویزیت</option>' +
+      '<option value="debt" ' + (custSortBy === 'debt' ? 'selected' : '') + '>بدهی</option>' +
+      '<option value="name" ' + (custSortBy === 'name' ? 'selected' : '') + '>نام</option>' +
+      '</select>' +
+      '</div>' +
+      '<div class="chip-row bp-customer-financial-chips" id="customer-financial-chips">' + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
       '</div>' +
       '<div id="customer-filter-indicator" class="customer-filter-indicator" aria-live="polite"></div>' +
       '<div id="customer-list"></div>';
@@ -265,10 +317,10 @@
     searchEl.addEventListener('input', searchHandler);
 
     chipHandlers = [];
-    document.querySelectorAll('#customer-chips [data-filter]').forEach(function (btn) {
+    document.querySelectorAll('#customer-chips [data-filter], #customer-financial-chips [data-filter]').forEach(function (btn) {
       const fn = function () {
         custFilter = btn.getAttribute('data-filter');
-        document.querySelectorAll('#customer-chips [data-filter]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-filter') === custFilter); });
+        document.querySelectorAll('#customer-chips [data-filter], #customer-financial-chips [data-filter]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-filter') === custFilter); });
         renderCustomerListOnly();
       };
       btn.addEventListener('click', fn); chipHandlers.push({el:btn, fn:fn});
@@ -277,9 +329,9 @@
     const filterBtn = document.getElementById('customer-filter');
     filterBtn.addEventListener('click', renderLocationFilterSheet);
 
-    const sortBtn = document.getElementById('sort-debt');
-    sortHandler = function () { custSortByDebt = !custSortByDebt; sortBtn.textContent = (custSortByDebt ? '✓ ' : '') + 'مرتب‌سازی بر اساس بدهی'; renderCustomerListOnly(); };
-    sortBtn.addEventListener('click', sortHandler);
+    const sortEl = document.getElementById('customer-sort');
+    sortHandler = function (e) { custSortBy = e.target.value; renderCustomerListOnly(); };
+    if (sortEl) sortEl.addEventListener('change', sortHandler);
 
     const list = document.getElementById('customer-list');
     listClickHandler = function (e) {
@@ -307,7 +359,7 @@
 
     custQuery = '';
     custFilter = (params && ['debt', 'settled', 'credit'].indexOf(params.filter) !== -1) ? params.filter : 'all';
-    custSortByDebt = false;
+    custSortBy = 'priority';
     locFilter = { regionId: '', routeId: '', neighborhoodId: '', unassigned: false };
     custCtx = typeof createComputationContext === 'function'
       ? createComputationContext({ data: data })
@@ -345,8 +397,8 @@
       chipHandlers = [];
 
       if (sortHandler) {
-        const sb = document.getElementById('sort-debt');
-        if (sb) sb.removeEventListener('click', sortHandler);
+        const sb = document.getElementById('customer-sort');
+        if (sb) sb.removeEventListener('change', sortHandler);
       }
       sortHandler = null;
 

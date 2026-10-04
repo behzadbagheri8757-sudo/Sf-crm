@@ -58,7 +58,7 @@
   }
 
   function quickActionsHtml() {
-    const gameShortcut = '<a class="section-action" href="#/game">Sales Game ←</a>';
+    const gameShortcut = '<a class="section-action" href="#/game">بازی فروش ←</a>';
   function qaIco(name) { return dashboardIcon(name, 20); }
 
   return '<div class="dashboard-block dash-quick-actions-block">' +
@@ -119,8 +119,8 @@
     // Max Top 5 by unifiedScore (already sorted by calculateAllActions)
     items = items.slice(0, 5);
 
-    const visibleItems = items.slice(0, 2);
-    const hiddenItems = items.slice(2);
+    const visibleItems = items.slice(0, 3);
+    const hiddenItems = items.slice(3);
 
     function renderRow(a) {
       const isProspect = a.type === 'prospect';
@@ -217,41 +217,80 @@
   }
 
   function watchSummaryHtml(ctx) {
-    var count = 0;
-    var haveCount = false;
-
-    if (typeof getWatchLifecycleSummary === 'function') {
-      try {
-        var summary = getWatchLifecycleSummary();
-        if (summary && typeof summary.active === 'number') {
-          count = summary.active;
-          haveCount = true;
-        }
-      } catch (eS) { /* fall through to fallback below */ }
-    }
-
-    if (!haveCount && typeof extractWatchObservations === 'function' && typeof data !== 'undefined' && Array.isArray(data.customers)) {
-      // Fallback when lifecycle module not loaded (mirrors prior behavior)
-      var customers = data.customers.filter(function (c) { return c && c.active !== false; });
-      for (var ci = 0; ci < customers.length; ci++) {
-         try { count += (extractWatchObservations(customers[ci].id, undefined, ctx) || []).length; } catch (e) { /* skip */ }
+    var rows = [];
+    try { rows = typeof getActiveWatchOccurrences === 'function' ? (getActiveWatchOccurrences() || []) : []; } catch (e) { rows = []; }
+    if (!rows.length) return '';
+    rows = rows.slice().sort(function (a, b) {
+      var rank = { critical: 4, high: 3, medium: 2, low: 1 };
+      return (rank[b.level || b.severity] || 0) - (rank[a.level || a.severity] || 0) || String(b.lastEvaluatedAt || '').localeCompare(String(a.lastEvaluatedAt || ''));
+    }).slice(0, 2);
+    var total = 0;
+    try { var sum = typeof getWatchLifecycleSummary === 'function' ? getWatchLifecycleSummary() : null; total = sum && Number.isFinite(sum.active) ? sum.active : rows.length; } catch (e2) { total = rows.length; }
+    function label(o) {
+      var product = o && o.productName;
+      if (!product && o && o.productId && Array.isArray(data.products)) {
+        var p = data.products.find(function (x) { return x && x.id === o.productId; });
+        product = p && p.name;
       }
-      haveCount = true;
+      if (product) return product;
+      if (o && o.watchCategory && global.BagheriPresent && global.BagheriPresent.watchLabel) {
+        try { return global.BagheriPresent.watchLabel(o.watchCategory); } catch (e) {}
+      }
+      return 'هشدار نیازمند بررسی';
     }
-
-    if (!count) return '';
-
-    return '<div class="dashboard-block">' + dashSectionHead(dashboardIcon('actions',20), 'هشدارهای زودهنگام', '', '') +
-      '<a class="dash-watch-compact" href="#/watches">' +
-        '<span class="dash-watch-compact-ico" aria-hidden="true">' + dashboardIcon('actions',20) + '</span>' +
-        '<span class="dash-watch-compact-body">' +
-          '<span class="dash-watch-compact-count">' + faDigits(count) + ' مورد</span>' +
-          '<span class="dash-watch-compact-label">هشدارهای فعال</span>' +
-        '</span>' +
-        '<span class="dash-watch-compact-chevron" aria-hidden="true">‹</span>' +
-      '</a>' +
+    function body(o) {
+      if (global.BagheriPresent && global.BagheriPresent.watchSentence) {
+        try { return global.BagheriPresent.watchSentence(o) || ''; } catch (e) {}
+      }
+      return (o && o.generatedReason) || 'یک نشانه در رفتار خرید این مشتری دیده شده است.';
+    }
+    var cards = rows.map(function (o) {
+      var cid = o.customerId || '';
+      var customer = (data.customers || []).find(function (c) { return c.id === cid; });
+      var sev = o.severity || o.level || 'medium';
+      var sevLabel = sev === 'critical' ? 'فوری' : sev === 'high' ? 'زیاد' : sev === 'medium' ? 'متوسط' : 'کم';
+      return '<a class="bp-dashboard-watch-card" href="#/watch?id=' + encodeURIComponent(o.id || '') + '">' +
+        '<span class="bp-dashboard-watch-main"><span class="bp-dashboard-watch-title">' + esc(label(o)) + '</span>' +
+        '<span class="bp-dashboard-watch-reason">' + esc(body(o)) + '</span>' +
+        (customer ? '<span class="bp-dashboard-watch-customer">' + esc(customer.name) + '</span>' : '') +
+        '</span><span class="bp-dashboard-watch-severity">' + esc(sevLabel) + '</span></a>';
+    }).join('');
+    return '<div class="dashboard-block bp-dashboard-watch-block">' +
+      dashSectionHead(dashboardIcon('actions',20), 'هشدارهای زودهنگام', '#/watches', 'همه ' + faDigits(total) + ' مورد') +
+      '<div class="bp-dashboard-watch-list">' + cards + '</div>' +
       '</div>';
   }
+
+  function dashboardAlertBar(ctx) {
+    var checks = 0, followups = 0, lowStock = 0;
+    try { checks = typeof checksDueSoon === 'function' ? (checksDueSoon() || []).length : 0; } catch (e) {}
+    try { followups = typeof getPendingWatchFollowUps === 'function' ? (getPendingWatchFollowUps() || []).length : 0; } catch (e2) {}
+    try { lowStock = typeof lowStockProducts === 'function' ? (lowStockProducts() || []).length : 0; } catch (e3) {}
+    if (!(checks || followups || lowStock)) return '';
+    var bits = [];
+    if (checks) bits.push('<a href="#/checks"><strong>' + faDigits(checks) + '</strong> چک نزدیک سررسید</a>');
+    if (followups) bits.push('<a href="#/watches"><strong>' + faDigits(followups) + '</strong> پیگیری باز</a>');
+    if (lowStock) bits.push('<a href="#/inventory"><strong>' + faDigits(lowStock) + '</strong> کالای کم‌موجودی</a>');
+    return '<div class="bp-dashboard-alert" role="status"><span class="bp-dashboard-alert-dot" aria-hidden="true"></span><span class="bp-dashboard-alert-label">الان مهمه</span><span class="bp-dashboard-alert-items">' + bits.join('<span class="bp-dashboard-alert-sep">·</span>') + '</span></div>';
+  }
+
+  function todaySnapshotHtml(ctx) {
+    var now = new Date();
+    var sales = 0, invoices = 0, received = 0, visits = 0;
+    try {
+      var invs = data.invoices || [];
+      invs.forEach(function (i) { if (typeof isSameDay === 'function' && isSameDay(i.date, now)) { sales += Number(i.total) || 0; invoices++; } });
+      (data.payments || []).forEach(function (p) { if (typeof isSameDay === 'function' && isSameDay(p.date, now) && ['cash','card','transfer'].indexOf(p.method) !== -1) received += Number(p.amount) || 0; });
+      (data.customers || []).forEach(function (c) { (c.visits || []).forEach(function (v) { if (typeof isSameDay === 'function' && isSameDay(v.date, now)) visits++; }); });
+    } catch (e) {}
+    return '<div class="dashboard-block bp-dashboard-snapshot"><div class="dashboard-block-head"><div class="dash-section-label"><span class="dash-section-ico" aria-hidden="true">' + dashboardIcon('summary',20) + '</span><span>خلاصه امروز</span></div></div>' +
+      '<div class="bp-dashboard-snapshot-grid">' +
+      '<div class="bp-dashboard-snapshot-item"><span>فروش</span><strong>' + money(sales) + '</strong><small>' + faDigits(invoices) + ' فاکتور</small></div>' +
+      '<div class="bp-dashboard-snapshot-item"><span>ویزیت</span><strong>' + faDigits(visits) + '</strong><small>امروز</small></div>' +
+      '<div class="bp-dashboard-snapshot-item"><span>وصول</span><strong>' + money(received) + '</strong><small>امروز</small></div>' +
+      '</div></div>';
+  }
+
 
   function recentInvoicesHtml(ctx) {
     const invs = (data.invoices || []).slice().sort(function (a, b) {
@@ -407,8 +446,11 @@
          C. Quick Actions — tools (de-emphasized)
          D. Recent Activity — invoices + visits (one activity surface)
          Data sources, helpers, IDs, and event bindings are unchanged. */
-     const focusActions = todaysActionsHtml(ctx);
-     const activityInvoices = recentInvoicesHtml(ctx);
+     const alertBar = dashboardAlertBar(ctx);
+    const todaySnapshot = todaySnapshotHtml(ctx);
+    const focusActions = todaysActionsHtml(ctx);
+    const watchSummary = watchSummaryHtml(ctx);
+    const activityInvoices = recentInvoicesHtml(ctx);
     const activityVisits = recentVisitsHtml();
     const activityBody = activityInvoices + activityVisits;
     const activityBlock = activityBody
@@ -421,12 +463,15 @@
     root.innerHTML =
       '<div class="dashboard-shell">' +
       '<div class="dashboard-eyebrow">مرکز فرماندهی روزانه</div>' +
+      alertBar +
+      todaySnapshot +
 
       /* A — Today's Focus */
       '<div class="dash-focus">' +
-        '<div class="dash-focus-target">' + targetHtml(metrics) + '</div>' +
         '<div class="dash-focus-actions">' + focusActions + '</div>' +
       '</div>' +
+      targetHtml(metrics) +
+      watchSummary +
 
       /* B — Financial Health (same metrics; stacked rows for mobile) */
       '<div class="dashboard-block dash-health">' +
