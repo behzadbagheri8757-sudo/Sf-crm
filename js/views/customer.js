@@ -299,6 +299,8 @@
     return level === 'critical' ? 'بحرانی' : level === 'high' ? 'زیاد' : level === 'medium' ? 'متوسط' : 'کم';
   }
 
+  var POSITIVE_SIGNAL_CATEGORIES = ['PURCHASE_GROWTH'];
+
   var CONFIRMED_TITLES = {
     PURCHASE_DECLINE_MILD: 'خرید کمتر شده',
     PURCHASE_DECLINE_SEVERE: 'خرید به‌طور محسوسی کمتر شده',
@@ -508,9 +510,15 @@
     var confirmedHtml = '';
     if (activeConfirmed.length) {
       var crows = activeConfirmed.map(function (sg) {
+        /* فقط سیگنال‌هایی که واقعاً خبر خوب‌اند سبز می‌شوند. type==='opportunity'
+           به‌تنهایی کافی نیست: «مدت زیادی ویزیت نشده» و (در حالت بازطبقه‌بندی)
+           «کالای کلیدی خریده نشده/افت سبد» هم opportunity هستند ولی خبر خوب نیستند. */
+        var isGood = sg.type === 'opportunity' && POSITIVE_SIGNAL_CATEGORIES.indexOf(sg.category) !== -1;
+        var cls = isGood ? 'watch-level-opportunity' : levelClass(sg.severity);
+        var lbl = isGood ? 'فرصت' : levelLabel(sg.severity);
         return '<div class="watch-confirmed-row">' +
           '<span class="bp-conf-text">' + (sg.productName ? '<strong>' + esc(sg.productName) + '</strong> — ' : '') + esc(sg.reason || '') + '</span>' +
-          '<span class="watch-level-label ' + levelClass(sg.severity) + '">' + esc(levelLabel(sg.severity)) + '</span>' +
+          '<span class="watch-level-label ' + cls + '">' + esc(lbl) + '</span>' +
           '</div>';
       }).join('');
       confirmedHtml = '<div class="card wide watch-confirmed-card">' +
@@ -790,6 +798,13 @@
 
     // P0 (what matters now) + follow-ups waiting for this customer — presentation of existing Truth.
     const watchData = loadWatchData(c.id, ctx);
+    var attRow = null;
+    try {
+      if (ctx && typeof ctx.receivableAttention === 'function') {
+        var attData = ctx.receivableAttention();
+        attRow = (attData.byCustomerId && attData.byCustomerId[c.id]) ? attData.byCustomerId[c.id] : null;
+      }
+    } catch (eAtt) { attRow = null; }
     const focus = customerFocusHtml(c.id, ctx, watchData);
     const followUpTopHtml = pendingFollowUpHtml(c.id);
 
@@ -1145,7 +1160,19 @@
       color +
       ' customer-balance-value">' +
       balanceLine +
-      '</div></div></div>' +
+      '</div></div>' +
+      (attRow
+        ? '<div class="bp-customer-attention">' +
+            '<span class="bp-attention-icon" aria-hidden="true">⚠️</span>' +
+            '<span>نیازمند پیگیری — ' +
+              toman(attRow.balance) + ' ت' +
+              (attRow.refKind === 'no_payment_history'
+                ? '، ' + toman(attRow.daysSince) + ' روز از آخرین فاکتور، بدون پرداخت'
+                : '، ' + toman(attRow.daysSince) + ' روز از آخرین پرداخت') +
+            '</span>' +
+          '</div>'
+        : '') +
+      '</div>' +
       unifiedSummaryHtml +
       focus.html +
       followUpTopHtml +

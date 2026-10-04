@@ -250,9 +250,10 @@
       var sev = o.severity || o.level || 'medium';
       var sevLabel = sev === 'critical' ? 'فوری' : sev === 'high' ? 'زیاد' : sev === 'medium' ? 'متوسط' : 'کم';
       return '<a class="bp-dashboard-watch-card" href="#/watch?id=' + encodeURIComponent(o.id || '') + '">' +
-        '<span class="bp-dashboard-watch-main"><span class="bp-dashboard-watch-title">' + esc(label(o)) + '</span>' +
+        '<span class="bp-dashboard-watch-main"><span class="bp-dashboard-watch-title">' +
+          (customer ? '<strong class="bp-watch-customer-name">' + esc(customer.name) + '</strong><span class="bp-watch-sep"> · </span>' : '') +
+          esc(label(o)) + '</span>' +
         '<span class="bp-dashboard-watch-reason">' + esc(body(o)) + '</span>' +
-        (customer ? '<span class="bp-dashboard-watch-customer">' + esc(customer.name) + '</span>' : '') +
         '</span><span class="bp-dashboard-watch-severity">' + esc(sevLabel) + '</span></a>';
     }).join('');
     return '<div class="dashboard-block bp-dashboard-watch-block">' +
@@ -262,16 +263,130 @@
   }
 
   function dashboardAlertBar(ctx) {
-    var checks = 0, followups = 0, lowStock = 0;
-    try { checks = typeof checksDueSoon === 'function' ? (checksDueSoon() || []).length : 0; } catch (e) {}
-    try { followups = typeof getPendingWatchFollowUps === 'function' ? (getPendingWatchFollowUps() || []).length : 0; } catch (e2) {}
-    try { lowStock = typeof lowStockProducts === 'function' ? (lowStockProducts() || []).length : 0; } catch (e3) {}
-    if (!(checks || followups || lowStock)) return '';
+    var att = { count: 0, totalBalance: 0, rows: [] };
+    var overdueChecks = [];
+    var dueSoonChecks = [];
+    var followups = 0, lowStock = 0;
+
+    try {
+      if (ctx && typeof ctx.receivableAttention === 'function') {
+        att = ctx.receivableAttention();
+      }
+    } catch (e1) {}
+
+    try {
+      var todayMs = new Date(todayISO() + 'T00:00:00').getTime();
+      var allChecks = (typeof data !== 'undefined' && Array.isArray(data.checks)) ? data.checks : [];
+      allChecks.forEach(function (c) {
+        if (!c || !c.dueDate) return;
+        // همان تعریف checkStatusLabel در checks.js: فقط 'cleared' نادیده گرفته می‌شود
+        if (c.status === 'cleared') return;
+
+        var dueMs = new Date(c.dueDate + 'T00:00:00').getTime();
+        if (!isFinite(dueMs)) return;
+
+        var diffDays = Math.round((dueMs - todayMs) / 86400000);
+
+        if (diffDays < 0) overdueChecks.push(c);
+        else if (diffDays <= 3) dueSoonChecks.push(c);
+      });
+    } catch (e2) {}
+
+    // موارد قبلی نوار (حفظ شده تا رگرسیون ایجاد نشود)
+    try { followups = typeof getPendingWatchFollowUps === 'function' ? (getPendingWatchFollowUps() || []).length : 0; } catch (e3) {}
+    try { lowStock = typeof lowStockProducts === 'function' ? (lowStockProducts() || []).length : 0; } catch (e4) {}
+
+    if (!(att.count || overdueChecks.length || dueSoonChecks.length || followups || lowStock)) return '';
+
     var bits = [];
-    if (checks) bits.push('<a href="#/checks"><strong>' + faDigits(checks) + '</strong> چک نزدیک سررسید</a>');
+
+    if (att.count > 0) {
+      bits.push(
+        '<a href="#" data-attention="1">' +
+          '<strong>' + faDigits(att.count) + '</strong> مشتری نیازمند پیگیری' +
+          ' — ' + money(att.totalBalance) +
+        '</a>'
+      );
+    }
+
+    if (overdueChecks.length > 0) {
+      bits.push(
+        '<a href="#/checks?filter=overdue">' +
+          '<strong>' + faDigits(overdueChecks.length) + '</strong> چک سررسیدگذشته' +
+        '</a>'
+      );
+    }
+
+    if (dueSoonChecks.length > 0) {
+      bits.push(
+        '<a href="#/checks?filter=dueSoon">' +
+          '<strong>' + faDigits(dueSoonChecks.length) + '</strong> چک نزدیک سررسید' +
+        '</a>'
+      );
+    }
+
     if (followups) bits.push('<a href="#/watches"><strong>' + faDigits(followups) + '</strong> پیگیری باز</a>');
     if (lowStock) bits.push('<a href="#/inventory"><strong>' + faDigits(lowStock) + '</strong> کالای کم‌موجودی</a>');
-    return '<div class="bp-dashboard-alert" role="status"><span class="bp-dashboard-alert-dot" aria-hidden="true"></span><span class="bp-dashboard-alert-label">الان مهمه</span><span class="bp-dashboard-alert-items">' + bits.join('<span class="bp-dashboard-alert-sep">·</span>') + '</span></div>';
+
+    return '<div class="bp-dashboard-alert" role="status">' +
+      '<span class="bp-dashboard-alert-dot" aria-hidden="true"></span>' +
+      '<span class="bp-dashboard-alert-label">نیازمند رسیدگی</span>' +
+      '<span class="bp-dashboard-alert-items">' +
+        bits.join('<span class="bp-dashboard-alert-sep">·</span>') +
+      '</span></div>';
+  }
+
+  function openAttentionSheet(ctx) {
+    var att = { count: 0, rows: [] };
+    try {
+      if (ctx && typeof ctx.receivableAttention === 'function') {
+        att = ctx.receivableAttention();
+      }
+    } catch (e) {}
+    if (!att.rows.length) return;
+
+    var rowsHtml = att.rows.map(function (r) {
+      var line = r.refKind === 'no_payment_history'
+        ? faDigits(r.daysSince) + ' روز از آخرین فاکتور، بدون پرداخت'
+        : faDigits(r.daysSince) + ' روز از آخرین پرداخت';
+      return '<button type="button" class="bp-attention-row" data-attention-cid="' + esc(r.customerId) + '">' +
+        '<span class="bp-attention-row-name">' + esc(r.name) + '</span>' +
+        '<span class="bp-attention-row-meta">' + money(r.balance) + ' · ' + line + '</span>' +
+      '</button>';
+    }).join('');
+
+    openSheet(
+      '<h3>مشتریان نیازمند پیگیری</h3>' +
+      '<div class="empty" style="padding:0 0 10px;text-align:right;font-size:.78rem;">' +
+        faDigits(att.count) + ' مشتری با مانده حداقل ۱۰ میلیون تومان و نیازمند بررسی پرداخت' +
+      '</div>' +
+      '<div class="bp-attention-list">' + rowsHtml + '</div>'
+    );
+
+    var root = document.getElementById('modalRoot');
+    if (!root) return;
+    root.querySelectorAll('[data-attention-cid]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var cid = btn.getAttribute('data-attention-cid');
+        try {
+          if (typeof closeModal === 'function') closeModal();
+        } catch (e) {}
+        setTimeout(function () {
+          if (typeof openCustomerQuickView === 'function') {
+            openCustomerQuickView(cid);
+          }
+        }, 330);
+      });
+    });
+  }
+
+  function bindAttentionLink(root, ctx) {
+    var attLink = root.querySelector('[data-attention]');
+    if (!attLink) return;
+    attLink.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (typeof openAttentionSheet === 'function') openAttentionSheet(ctx);
+    });
   }
 
   function todaySnapshotHtml(ctx) {
@@ -340,11 +455,21 @@
       return toman(n);
     }
 
+    /* فقط دکمهٔ آیکون قابل کلیک است؛ بقیهٔ نوار صرفاً نمایشی است. */
+    function targetTitleHtml() {
+      return '<div class="bp-target-strip-title">' +
+        '<button type="button" class="bp-target-strip-settings-btn" data-monthly-target aria-label="تنظیم هدف فروش این ماه">' +
+          dashboardIcon('target',20) +
+        '</button>' +
+        '<strong>هدف فروش این ماه</strong>' +
+      '</div>';
+    }
+
     if (!(target > 0)) {
-      return '<div class="bp-target-strip is-empty" data-monthly-target role="button" tabindex="0" aria-label="تنظیم هدف فروش این ماه">' +
+      return '<div class="bp-target-strip is-empty">' +
         '<div class="bp-target-strip-head">' +
-          '<div class="bp-target-strip-title"><span aria-hidden="true">' + dashboardIcon('target',20) + '</span><strong>هدف فروش این ماه</strong></div>' +
-          '<span class="bp-target-strip-settings">تنظیم ›</span>' +
+          targetTitleHtml() +
+          '<button type="button" class="bp-target-strip-settings" data-monthly-target>تنظیم ›</button>' +
         '</div>' +
         '<div class="bp-target-strip-empty-text">هنوز هدفی برای این ماه تعیین نشده</div>' +
       '</div>';
@@ -366,9 +491,9 @@
       }
     }
 
-    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + '" data-monthly-target role="button" tabindex="0" aria-label="هدف فروش این ماه">' +
+    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + '">' +
       '<div class="bp-target-strip-head">' +
-        '<div class="bp-target-strip-title"><span aria-hidden="true">' + dashboardIcon('target',20) + '</span><strong>هدف فروش این ماه</strong></div>' +
+        targetTitleHtml() +
         '<span class="bp-target-strip-status">' + (done ? '✓ رسید' : status.icon + ' ' + status.text) + '</span>' +
       '</div>' +
       '<div class="bp-target-strip-figures">' +
@@ -382,9 +507,10 @@
   }
 
   function bindMonthlyTarget(root, refresh) {
-    const btn = root.querySelector('[data-monthly-target]');
-    if (!btn) return;
-    btn.addEventListener('click', function (e) {
+    const targetBtns = root.querySelectorAll('[data-monthly-target]');
+    if (!targetBtns.length) return;
+    targetBtns.forEach(function (btn) { btn.addEventListener('click', onMonthlyTargetClick); });
+    function onMonthlyTargetClick(e) {
       e.preventDefault(); e.stopPropagation();
       const current = typeof getMonthlySalesTarget === 'function' ? getMonthlySalesTarget() : 0;
       openSheet(
@@ -412,7 +538,7 @@
         closeModal();
         refresh();
       });
-    });
+    }
   }
 
   function formatAmountForInput(value){
@@ -482,6 +608,7 @@
      bindMonthlyTarget(root, function () { renderInto(root, isStale, ctx); });
     bindActionQueueToggle(root);
     bindQuickActions(root);
+    bindAttentionLink(root, ctx);
   }
 
   function mount(root, params) {
