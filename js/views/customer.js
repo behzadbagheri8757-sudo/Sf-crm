@@ -218,7 +218,8 @@
         rejectedCount: rejected,
         rejectionRatio: ratio,
         topRejectionReason: topReason,
-        lastOfferedDate: st.lastOfferedDate || null
+        lastOfferedDate: st.lastOfferedDate || null,
+        stillStockSources: st.stillStockSources || null
       });
     }
 
@@ -230,6 +231,37 @@
     return out;
   }
 
+  /* Human cause phrase used after «به‌خاطر». Presentation text only. */
+  var REJECTION_CAUSE = {
+    price: 'قیمت', quality: 'کیفیت', competitor: 'خرید از رقیب',
+    unavailable: 'نبود موجودی', no_need: 'نیاز نداشتن', still_stock: 'داشتن موجودی'
+  };
+
+  function dominantStockSource(ss) {
+    if (!ss) return null;
+    var best = null, bn = 0;
+    ['competitor', 'ours', 'unknown'].forEach(function (k) {
+      var n = Number(ss[k]) || 0;
+      if (n > bn) { bn = n; best = k; }
+    });
+    return best;
+  }
+
+  /* One human sentence for a rejection insight.
+     short=true  -> single sentence for the top-of-page topic list.
+     short=false -> detail list: count/cause sentence + stock-source sentence when stored. */
+  function rejectionSentence(it, short) {
+    var P = global.BagheriPresent;
+    if (!P || !it) return '';
+    var src = dominantStockSource(it.stillStockSources);
+    var stockTxt = src ? P.stockSentence(src) : '';
+    if (short && stockTxt && it.topRejectionReason === 'still_stock') return stockTxt;
+    var cause = REJECTION_CAUSE[it.topRejectionReason];
+    var base = P.n0(it.rejectedCount) + ' بار از ' + P.n0(it.offeredCount) + ' پیشنهاد رد شده' + (cause ? '؛ بیشتر به‌خاطر ' + cause : '') + '.';
+    if (short) return base;
+    return stockTxt ? base + ' ' + stockTxt : base;
+  }
+
   function productRejectionInsightsHtml(customerId, ctx) {
     var items = [];
     try {
@@ -237,182 +269,85 @@
     } catch (e) {
       return '';
     }
-    if (!items.length) return ''; // rule 15: hide section entirely
+    if (!items.length) return ''; // hide section entirely
+    var P = global.BagheriPresent;
 
     var rows = items.map(function (it) {
-      var reasonTxt = it.topRejectionReason
-        ? ('دلیل غالب: ' + rejectionReasonLabel(it.topRejectionReason))
-        : 'دلیل غالب: —';
       return '<div class="ledger-row customer-static-row">' +
         '<span class="name">' + esc(it.productName) +
-          '<span class="sub">' + reasonTxt + '</span></span>' +
+          '<span class="sub">' + esc(rejectionSentence(it, false)) + '</span></span>' +
         '<span class="filler"></span>' +
         '<span class="amount customer-static-value">' +
-          esc(String(it.rejectedCount)) + ' بار رد شده</span></div>';
+          esc(P ? P.n0(it.rejectedCount) : String(it.rejectedCount)) + ' بار رد شده</span></div>';
     }).join('');
 
-    return '<h3 class="sub-title">کالاهای ردشده توسط مشتری</h3>' +
-      '<div class="dash-activity customer-rejection-list">' + rows + '</div>';
+    return '<details class="customer-rejection-details">' +
+      '<summary class="customer-behavior-summary">کالاهای ردشده توسط مشتری (' + esc(P ? P.n0(items.length) : String(items.length)) + ')</summary>' +
+      '<div class="dash-activity customer-rejection-list">' + rows + '</div></details>';
   }
 
-  function watchQtyText(q, productId) {
-    if (q == null || !isFinite(Number(q))) return '';
-    var p = (typeof data !== 'undefined' && Array.isArray(data.products))
-      ? data.products.find(function (x) { return x && x.id === productId; }) : null;
-    var unit = p && p.packageWeight ? 'بسته' : 'کیلو';
-    return String(q) + ' ' + unit;
+  /* ============================================================
+     Delivery patch — Customer Detail presentation
+     Level 0: one human sentence.  Level 1: short list / summary.
+     Level 2: raw evidence inside a single «جزئیات» disclosure.
+     Nothing here generates, scores or resolves a Watch/Signal.
+     ============================================================ */
+  function levelClass(level) {
+    return level === 'critical' ? 'watch-level-critical' : level === 'high' ? 'watch-level-high' : level === 'medium' ? 'watch-level-medium' : 'watch-level-low';
+  }
+  function levelLabel(level) {
+    return level === 'critical' ? 'بحرانی' : level === 'high' ? 'زیاد' : level === 'medium' ? 'متوسط' : 'کم';
   }
 
-  function pendingFollowUpHtml(cid) {
-    if (typeof getPendingWatchFollowUps !== 'function') return '';
-    var rows = [];
-    try { rows = getPendingWatchFollowUps(cid) || []; } catch (e) { rows = []; }
-    if (!rows.length) return '';
-    var html = rows.map(function (o) {
-      var human = humanizeWatch(o);
-      var followEv = human.evidence;
-      return '<div class="watch-followup-row" data-followup-id="' + esc(o.id) + '">' +
-        '<div class="watch-followup-main"><div><strong>پیگیری بعدی</strong> · ' + esc(human.title) + '</div>' +
-        (followEv ? '<div class="watch-evidence"><span class="watch-evidence-label">شاهد:</span> ' + esc(followEv) + '</div>' : '') +
-        (o.reason && o.reason.comment ? '<div class="watch-reason">یادداشت قبلی: ' + esc(o.reason.comment) + '</div>' : '') + '</div>' +
-        '<div class="watch-followup-actions"><button type="button" class="btn secondary small" data-followup-complete="' + esc(o.id) + '">ثبت نتیجه</button>' +
-        '<button type="button" class="btn secondary small" data-followup-cancel="' + esc(o.id) + '">لغو پیگیری</button></div></div>';
-    }).join('');
-    return '<div class="card wide watch-followup-card"><div class="label">پیگیری‌های منتظر</div>' +
-      '<div class="report-note watch-note">این موارد فقط هنگام مواجهه با همین مشتری یادآوری می‌شوند و تا ثبت نتیجه یا لغو صریح باقی می‌مانند.</div>' + html + '</div>';
-  }
+  var CONFIRMED_TITLES = {
+    PURCHASE_DECLINE_MILD: 'خرید کمتر شده',
+    PURCHASE_DECLINE_SEVERE: 'خرید به‌طور محسوسی کمتر شده',
+    BEHIND_PATTERN: 'از زمان معمول خرید عقب افتاده',
+    BASKET_SHRINK: 'افت مقدار خرید',
+    KEY_PRODUCT_LOST: 'کالای کلیدی خریده نشده',
+    PAYMENT_OVERDUE: 'پرداخت معوق',
+    CHECK_BOUNCED: 'چک برگشتی',
+    CONSECUTIVE_NO_ORDER: 'ویزیت‌های اخیر بدون سفارش',
+    VISIT_CONVERSION_LOW: 'نرخ سفارش از ویزیت پایین است',
+    VISIT_OVERDUE: 'زمان ویزیت گذشته',
+    LONG_NO_VISIT: 'مدت زیادی ویزیت نشده',
+    SKU_DELAY: 'دیرتر از معمول خریده شده',
+    SKU_QUANTITY_DROP: 'مقدار خرید کمتر شده',
+    SKU_FREQUENCY_DROP: 'کمتر از قبل خریده می‌شود',
+    LINE_DROP: 'در سبد اخیر کم‌رنگ شده',
+    COMBINED_SKU_DETERIORATION: 'چند نشانه کاهش در یک کالا',
+    MULTI_SKU_DECLINE: 'کاهش هم‌زمان چند کالا',
+    SKU_CHURN: 'خرید این کالا متوقف شده'
+  };
+  /* Presentation-only grouping so the same subject (e.g. a Confirmed signal and its
+     earlier Watch) is shown once. Not a business rule; source data is never changed. */
+  var TOPIC_GROUPS = {
+    PURCHASE_DECLINE_MILD: 'volume', PURCHASE_DECLINE_SEVERE: 'volume', BASKET_SHRINK: 'volume',
+    MULTI_SKU_DECLINE: 'volume', PURCHASE_DECLINE_WATCH: 'volume', BASKET_SHRINK_WATCH: 'volume',
+    BEHIND_PATTERN: 'timing', BEHIND_PATTERN_WATCH: 'timing',
+    KEY_PRODUCT_LOST: 'keylost', KEY_PRODUCT_LOST_WATCH: 'keylost',
+    PAYMENT_OVERDUE: 'money', CHECK_BOUNCED: 'money',
+    CONSECUTIVE_NO_ORDER: 'visits', VISIT_CONVERSION_LOW: 'visits',
+    VISIT_OVERDUE: 'visitgap', LONG_NO_VISIT: 'visitgap'
+  };
 
-  function humanizeWatch(o) {
-    o = o || {};
-    var category = o.watchCategory || o.category || '';
-    var product = o.productName ? ('«' + o.productName + '»') : '';
-    var e = o.evidence || {};
-
-    var title = '';
-    var days = (e.daysSinceLast != null) ? Math.round(e.daysSinceLast) : null;
-    var avg = (e.averageIntervalDays != null) ? Math.round(e.averageIntervalDays) : null;
-    var gap = (e.currentGap != null) ? Math.round(e.currentGap) : null;
-    var cycle = (e.typicalCycle != null) ? Math.round(e.typicalCycle) : null;
-
-    switch (category) {
-      case 'SKU_DELAY_WATCH':
-        title = product
-          ? ('خرید ' + product + ' به تأخیر افتاده')
-          : 'خرید یک کالا به تأخیر افتاده';
-        break;
-      case 'SKU_QUANTITY_DROP_WATCH':
-        title = product
-          ? ('مقدار خرید ' + product + ' کم شده')
-          : 'مقدار خرید یک کالا کم شده';
-        break;
-      case 'SKU_FREQUENCY_DROP_WATCH':
-        title = product
-          ? ('تعداد خرید ' + product + ' کمتر شده')
-          : 'تعداد خرید یک کالا کمتر شده';
-        break;
-      case 'LINE_DROP_WATCH':
-        title = product
-          ? ('حضور ' + product + ' در سبد خرید کم شده')
-          : 'حضور یک کالا در سبد خرید کم شده';
-        break;
-      case 'BASKET_SHRINK_WATCH':
-        title = 'حجم خرید سبد مشتری کم شده';
-        break;
-      case 'KEY_PRODUCT_LOST_WATCH':
-        title = product
-          ? (product + ' دیگر خریده نمی‌شود')
-          : 'یک کالای کلیدی دیگر خریده نمی‌شود';
-        break;
-      case 'COMBINED_SKU_WATCH':
-        title = product
-          ? ('چند کالا همزمان در خرید ضعیف شده — ' + product)
-          : 'چند کالا همزمان در خرید ضعیف شده';
-        break;
-      case 'PURCHASE_DECLINE_WATCH':
-        title = 'خرید این مشتری کاهش یافته';
-        break;
-      case 'BEHIND_PATTERN_WATCH':
-        title = 'از الگوی معمول خرید عقب افتاده';
-        break;
-      default:
-        title = String(o.generatedReason || o.reason || 'مورد نیازمند توجه').trim();
-        // Display-only fallback: do not expose technical category/ID tokens.
-        title = title.replace(/\b[A-Z][A-Z0-9_-]{5,}\b/g, '').replace(/\b[a-z0-9]{8,}\b/gi, function (m) {
-          return /[A-Z]/.test(m) || /[0-9_-]/.test(m) ? '' : m;
-        }).replace(/\s{2,}/g, ' ').trim() || 'مورد نیازمند توجه';
-        break;
-    }
-
-    var parts = [];
-    if (days != null && avg != null) {
-      parts.push('آخرین خرید ' + enToFaDigits(String(days)) + ' روز پیش بود؛ روال معمول این مشتری خرید هر ' + enToFaDigits(String(avg)) + ' روز است');
-    } else if (gap != null && cycle != null) {
-      parts.push('فاصله فعلی ' + enToFaDigits(String(gap)) + ' روز است، در حالی که چرخه معمول خرید این کالا ' + enToFaDigits(String(cycle)) + ' روز بود');
-    }
-    if (e.salesPrevious30 != null && e.salesRecent30 != null) {
-      parts.push('خرید ۳۰ روز اخیر ' + toman(e.salesRecent30) + ' تومان در برابر ' + toman(e.salesPrevious30) + ' تومان دوره قبل');
-    }
-    if (Array.isArray(e.affectedProducts) && e.affectedProducts.length) {
-      var list = e.affectedProducts.slice(0, 3).map(function (x) {
-        var nm = x.productName || x.productId || 'کالا';
-        var early = watchQtyText(x.earlyQty, x.productId);
-        var late = watchQtyText(x.lateQty, x.productId);
-        return '«' + nm + '» از ' + early + ' به ' + late + ' رسیده';
-      });
-      parts.push(list.join('؛ '));
-    }
-    if (Array.isArray(e.lostProducts) && e.lostProducts.length) {
-      var lp = e.lostProducts.slice(0, 3).map(function (x) {
-        return '«' + (x.productName || x.productId || 'کالا') + '» کاملاً از سبد حذف شده';
-      });
-      parts.push(lp.join('؛ '));
-    }
-    if (e.recentQuantity != null && e.typicalQuantity != null) {
-      parts.push('مقدار خرید اخیر ' + watchQtyText(e.recentQuantity, o.productId) + ' بود، در برابر ' + watchQtyText(e.typicalQuantity, o.productId) + ' مورد انتظار');
-    }
-    if (e.recentFrequency != null && e.expectedFrequency != null) {
-      parts.push('تعداد دفعات خرید اخیر ' + enToFaDigits(String(e.recentFrequency)) + ' بار بود، در برابر ' + enToFaDigits(String(Math.round(e.expectedFrequency * 10) / 10)) + ' بار مورد انتظار');
-    }
-    if (e.historicalPresenceRate != null && e.currentBasketPresence != null) {
-      parts.push('حضور در سبد از ' + enToFaDigits(String(Math.round(e.historicalPresenceRate * 100))) + '٪ به ' + enToFaDigits(String(Math.round(e.currentBasketPresence * 100))) + '٪ کاهش یافته');
-    }
-
-    return { title: title, evidence: parts.join('؛ ') };
-  }
-
-  function attentionEvidenceHtml(text) {
-    return text ? '<div class="customer-focus-why">' + esc(text) + '</div>' : '';
-  }
-
-  function buildCustomerAttentionItems(cid, ctx) {
-    var out = [], occs = [];
-    try { if (typeof getActiveWatchOccurrences === 'function') occs = getActiveWatchOccurrences(cid) || []; } catch (e) { occs = []; }
-    occs.forEach(function(o){ var h=humanizeWatch(o); out.push({title:h.title,evidence:h.evidence,watchId:o.id||null,level:o.level||'low'}); });
-    if (typeof extractCustomerSignals === 'function') {
-      var signals=[]; try { signals=extractCustomerSignals(cid,ctx)||[]; } catch(e2) { signals=[]; }
-      signals.filter(function(s){return s&&s.status==='active';}).forEach(function(s){ var h=humanizeWatch({watchCategory:s.category,productName:s.productName,generatedReason:s.reason,evidence:s.evidence}); out.push({title:h.title,evidence:h.evidence,watchId:null,level:s.severity||'low'}); });
-    }
-    return out;
-  }
-
-  function intelligenceWatchHtml(cid, ctx) {
-    if (typeof extractCustomerSignals !== 'function' && typeof extractWatchObservations !== 'function' && typeof getActiveWatchOccurrences !== 'function') return '';
+  /* Reads existing Truth only (same sources the page used before). */
+  function loadWatchData(cid, ctx) {
+    var out = { activeConfirmed: [], occs: [] };
+    if (typeof extractCustomerSignals !== 'function' && typeof extractWatchObservations !== 'function' && typeof getActiveWatchOccurrences !== 'function') return out;
 
     var confirmed = [];
     if (typeof extractCustomerSignals === 'function') {
       try { confirmed = extractCustomerSignals(cid, ctx) || []; } catch (e) { confirmed = []; }
     }
-    var activeConfirmed = confirmed.filter(function (s) { return s && s.status === 'active'; });
+    out.activeConfirmed = confirmed.filter(function (s) { return s && s.status === 'active'; });
 
-    // Lifecycle occurrences (preferred) — already reconciled by caller when possible
     var occs = [];
     if (typeof getActiveWatchOccurrences === 'function') {
       try { occs = getActiveWatchOccurrences(cid) || []; } catch (eOcc) { occs = []; }
     }
-    // Fallback to raw generation if lifecycle absent. Guarded against
-    // inactive customers too (W-BUG-02): this path bypasses
-    // reconcileWatchLifecycle's own active-customer check entirely, so an
-    // inactive customer must never reach it even as a display-only fallback.
+    // Fallback to raw generation if lifecycle absent. Guarded against inactive customers
+    // (W-BUG-02): this path bypasses reconcileWatchLifecycle's active-customer check.
     var custIsActive = true;
     if (typeof data !== 'undefined' && Array.isArray(data.customers)) {
       var custRec = data.customers.find(function (x) { return x && x.id === cid; });
@@ -421,12 +356,10 @@
     if (!occs.length && custIsActive && typeof extractWatchObservations === 'function') {
       try {
         var raw = extractWatchObservations(cid, confirmed, ctx) || [];
-        // id:null fallback must honor seller decisions (dismiss / still stock /
-        // not wanted / follow-up) exactly like the lifecycle does.
         if (typeof filterSuppressedWatchObservations === 'function') {
           try { raw = filterSuppressedWatchObservations(cid, raw, ctx) || []; } catch (eF) { /* fail-open */ }
         }
-        occs = raw.map(function (w, idx) {
+        occs = raw.map(function (w) {
           return {
             id: null,
             customerId: cid,
@@ -443,76 +376,215 @@
         });
       } catch (e2) { occs = []; }
     }
+    // Presentation-level de-duplication (new array; source objects untouched).
+    var seen = Object.create(null);
+    out.occs = occs.filter(function (o) {
+      if (!o) return false;
+      var k = o.id || ((o.watchCategory || '') + '|' + (o.productId || ''));
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    return out;
+  }
 
+  function watchTitleText(o) {
+    var P = global.BagheriPresent;
+    var label = P ? P.watchLabel(o.watchCategory) : (o.generatedReason || '');
+    return o.productName ? (o.productName + ' · ' + label) : label;
+  }
+
+  /* ---- Pending follow-ups: surfaced near the top; raw evidence stays behind «جزئیات». ---- */
+  function pendingFollowUpHtml(cid) {
+    if (typeof getPendingWatchFollowUps !== 'function') return '';
+    var P = global.BagheriPresent;
+    var rows = [];
+    try { rows = getPendingWatchFollowUps(cid) || []; } catch (e) { rows = []; }
+    if (!rows.length) return '';
+    var html = rows.map(function (o) {
+      var sentence = P ? P.watchSentence(o) : (o.generatedReason || '');
+      return '<div class="watch-followup-row bp-followup" data-followup-id="' + esc(o.id) + '">' +
+        '<div class="watch-followup-main">' +
+          '<div class="bp-row-title">' + esc(o.productName || 'همان موضوع قبلی') + '</div>' +
+          (sentence ? '<div class="bp-row-text">' + esc(sentence) + '</div>' : '') +
+          (o.reason && o.reason.comment ? '<div class="bp-row-note">یادداشت قبلی: ' + esc(o.reason.comment) + '</div>' : '') +
+          (P ? P.detailsHtml(P.watchDetailLines(o)) : '') +
+        '</div>' +
+        '<div class="watch-followup-actions"><button type="button" class="btn secondary small" data-followup-complete="' + esc(o.id) + '">ثبت نتیجه</button>' +
+        '<button type="button" class="btn secondary small" data-followup-cancel="' + esc(o.id) + '">لغو پیگیری</button></div></div>';
+    }).join('');
+    return '<div class="card wide watch-followup-card"><div class="label">پیگیری‌های منتظر</div>' + html + '</div>';
+  }
+
+  /* ---- P0: a few genuinely different, important topics. Hidden when there are none. ---- */
+  function customerFocusHtml(cid, ctx, wd) {
+    var P = global.BagheriPresent;
+    var result = { html: '', groups: {} };
+    if (!P) return result;
+    var cands = [];
+    var order = 0;
+
+    wd.activeConfirmed.forEach(function (sg) {
+      if (!sg || sg.type !== 'risk') return;
+      var grp = TOPIC_GROUPS[sg.category];
+      var key = sg.productId ? 'p:' + sg.productId : 'c:' + (grp || sg.category);
+      var label = CONFIRMED_TITLES[sg.category] || 'نیاز به بررسی';
+      cands.push({
+        key: key, group: grp || null, order: order++, src: 2,
+        rank: P.lvRank(sg.severity), level: sg.severity,
+        title: sg.productName ? (sg.productName + ' · ' + label) : label,
+        text: sg.reason || '', occId: null,
+        lowConf: (typeof sg.confidence === 'number' && sg.confidence < 0.5)
+      });
+    });
+    wd.occs.forEach(function (o) {
+      var grp = TOPIC_GROUPS[o.watchCategory];
+      var key = o.productId ? 'p:' + o.productId : 'c:' + (grp || o.watchCategory);
+      cands.push({
+        key: key, group: grp || null, order: order++, src: 1,
+        rank: P.lvRank(o.level), level: o.level,
+        title: watchTitleText(o), text: P.watchSentence(o), occId: o.id || null, lowConf: false
+      });
+    });
+    var rejItems = [];
+    try { rejItems = buildProductRejectionInsights(cid, undefined, ctx) || []; } catch (eR) { rejItems = []; }
+    rejItems.forEach(function (it) {
+      cands.push({
+        key: 'rej:' + it.productId, group: null, order: order++, src: 0,
+        rank: 1, level: 'low',
+        title: it.productName + ' · چند بار رد شده',
+        text: rejectionSentence(it, true), occId: null, lowConf: false
+      });
+    });
+
+    // Keep the strongest candidate per subject, then the top 3 overall.
+    var best = Object.create(null);
+    cands.forEach(function (c) {
+      var cur = best[c.key];
+      var score = c.rank * 10 + c.src;
+      if (!cur || score > cur.score) best[c.key] = { c: c, score: score };
+    });
+    // Fold a stored stock-source answer into the topic of the same product (one subject, one block).
+    var stockByPid = Object.create(null);
+    rejItems.forEach(function (it) {
+      var src = dominantStockSource(it.stillStockSources);
+      if (src) stockByPid[it.productId] = P.stockSentence(src);
+    });
+    var topics = Object.keys(best).map(function (k) { return best[k]; })
+      .sort(function (a, b) { return (b.score - a.score) || (a.c.order - b.c.order); })
+      .slice(0, 3)
+      .map(function (x) { return x.c; })
+      .filter(function (t) { return t.text || t.title; });
+    topics.forEach(function (t) {
+      var pid = t.key.indexOf('p:') === 0 ? t.key.slice(2) : (t.key.indexOf('rej:') === 0 ? t.key.slice(4) : null);
+      if (pid && stockByPid[pid] && t.text.indexOf(stockByPid[pid]) < 0) t.text = (t.text ? t.text + ' ' : '') + stockByPid[pid];
+    });
+    if (!topics.length) return result;
+
+    topics.forEach(function (t) { if (t.group) result.groups[t.group] = true; });
+    result.html = '<div class="bp-focus">' +
+      '<div class="bp-focus-head">الان مهم است</div>' +
+      '<div class="bp-focus-list">' + topics.map(function (t) {
+        var tap = !!t.occId;
+        return '<div class="bp-topic' + (tap ? ' is-tap' : '') + '"' + (tap ? ' data-watch-occ="' + esc(t.occId) + '" role="button" tabindex="0"' : '') + '>' +
+          '<span class="bp-topic-dot is-' + esc(t.level || 'low') + '" aria-hidden="true"></span>' +
+          '<div class="bp-topic-main">' +
+            '<div class="bp-topic-title">' + esc(t.title) + (t.lowConf ? ' <span class="bp-topic-flag">اطمینان پایین</span>' : '') + '</div>' +
+            (t.text ? '<div class="bp-topic-text">' + esc(t.text) + '</div>' : '') +
+          '</div>' +
+          (tap ? '<span class="bp-topic-chev" aria-hidden="true">›</span>' : '') +
+        '</div>';
+      }).join('') + '</div></div>';
+    return result;
+  }
+
+  /* ---- Level 2: full list of confirmed signals + early warnings, collapsed by default. ---- */
+  function intelligenceWatchHtml(cid, ctx, wd) {
+    wd = wd || loadWatchData(cid, ctx);
+    var P = global.BagheriPresent;
+    var activeConfirmed = wd.activeConfirmed, occs = wd.occs;
     if (!occs.length && !activeConfirmed.length) return '';
-
-    function levelClass(level) {
-      return level === 'critical' ? 'watch-level-critical' : level === 'high' ? 'watch-level-high' : level === 'medium' ? 'watch-level-medium' : 'watch-level-low';
-    }
-    function levelLabel(level) {
-      return level === 'critical' ? 'بحرانی' : level === 'high' ? 'زیاد' : level === 'medium' ? 'متوسط' : 'کم';
-    }
 
     var confirmedHtml = '';
     if (activeConfirmed.length) {
-      var crows = activeConfirmed.map(function (s) {
-        var label = (s.productName ? ('«' + esc(s.productName) + '» — ') : '') + esc(s.reason || '');
-        /* P3 (UI only) — explainability inside the existing row. Reads existing
-           fields only; no raw confidence/riskModifier. The seasonal note is added
-           only if the reason text does not already carry it (seasonality.js appends
-           «کاهش فصلی مورد انتظار» to reason), so it is never shown twice. */
-        var explainBits = [];
-        if (s.occurrenceCount >= 2) explainBits.push('تکرار: ' + esc(String(s.occurrenceCount)) + ' بار');
-        if (s.seasonallySuppressed === true && String(s.reason || '').indexOf('فصلی') === -1) explainBits.push('کاهش فصلی مورد انتظار');
-        if (explainBits.length) {
-          label += ' <span style="color:var(--vg-color-text-muted);font-size:.78rem;">· ' + explainBits.join(' · ') + '</span>';
-        }
+      var crows = activeConfirmed.map(function (sg) {
         return '<div class="watch-confirmed-row">' +
-          '<span>• ' + label + '</span>' +
-          '<span class="watch-level-label ' + levelClass(s.severity) + '">' + esc(levelLabel(s.severity)) + '</span>' +
+          '<span class="bp-conf-text">' + (sg.productName ? '<strong>' + esc(sg.productName) + '</strong> — ' : '') + esc(sg.reason || '') + '</span>' +
+          '<span class="watch-level-label ' + levelClass(sg.severity) + '">' + esc(levelLabel(sg.severity)) + '</span>' +
           '</div>';
       }).join('');
       confirmedHtml = '<div class="card wide watch-confirmed-card">' +
-        '<div class="label">هوش تجاری — تأییدشده</div>' +
+        '<div class="label">تأییدشده</div>' +
         '<div class="watch-confirmed-list">' + crows + '</div></div>';
     }
 
     var watchHtml = '';
     if (occs.length) {
       var wrows = occs.map(function (o) {
-        var human = humanizeWatch(o);
-        var label = esc(human.title);
-        var reviewed = !!(o.reason);
-        var badge = reviewed
-          ? '<span class="watch-reviewed">بررسی شده</span>'
-          : '<span class="watch-level-unreviewed">بررسی نشده</span>';
+        var sentence = P ? P.watchSentence(o) : (o.generatedReason || '');
+        var reviewed = !!o.reason;
         var reasonBit = '';
         if (reviewed && o.reason) {
           var rlabel = (typeof watchReasonLabel === 'function') ? watchReasonLabel(o.reason.code) : (o.reason.code || '');
-          reasonBit = '<div class="watch-reason">علت: ' + esc(rlabel) +
-            (o.reason.comment ? (' — ' + esc(o.reason.comment)) : '') + '</div>';
+          reasonBit = '<div class="bp-row-note">علت ثبت‌شده: ' + esc(rlabel) + (o.reason.comment ? (' — ' + esc(o.reason.comment)) : '') + '</div>';
         }
-        var clickable = o.id
-          ? (' data-watch-occ="' + esc(o.id) + '" role="button" tabindex="0"')
-          : '';
-        var ev = human.evidence;
-        return '<div class="watch-occ-row"' + clickable + '>' +
-          '<div class="watch-occ-head">' +
-            '<span>• ' + label + '</span>' +
-            '<span class="watch-occ-status">' + badge +
-              '<div class="watch-level-label ' + levelClass(o.level) + '">' + esc(levelLabel(o.level)) + '</div>' +
-            '</span>' +
-          '</div>' + reasonBit + (ev ? '<div class="watch-evidence"><span class="watch-evidence-label">شاهد:</span> ' + esc(ev) + '</div>' : '') +
+        var clickable = o.id ? (' data-watch-occ="' + esc(o.id) + '" role="button" tabindex="0"') : '';
+        return '<div class="watch-occ-item">' +
+          '<div class="watch-occ-row bp-occ"' + clickable + '>' +
+            '<div class="bp-occ-main">' +
+              '<div class="bp-row-title">' + esc(watchTitleText(o)) + '</div>' +
+              (sentence ? '<div class="bp-row-text">' + esc(sentence) + '</div>' : '') +
+              reasonBit +
+            '</div>' +
+            '<div class="bp-occ-side"><span class="watch-level-label ' + levelClass(o.level) + '">' + esc(levelLabel(o.level)) + '</span>' +
+              (reviewed ? '<span class="watch-reviewed">بررسی شده</span>' : '') + '</div>' +
+          '</div>' +
+          (P ? P.detailsHtml(P.watchDetailLines(o)) : '') +
         '</div>';
       }).join('');
       watchHtml = '<div class="card wide watch-lifecycle-card" id="watch-lifecycle-card">' +
         '<div class="label">هشدارهای زودهنگام</div>' +
-        '<div class="report-note watch-note">برای ثبت پاسخ، روی مورد بزنید. «هنوز موجودی دارد»، «این محصول را نمی‌خواهد» و «بعداً پیگیری می‌کنم» هشدار را می‌بندند؛ سایر علت‌ها فقط ثبت می‌شوند.</div>' +
+        '<div class="report-note watch-note">برای ثبت پاسخ، روی هر مورد بزنید.</div>' +
         '<div class="watch-occ-list">' + wrows + '</div></div>';
     }
 
-    var followUpHtml = pendingFollowUpHtml(cid);
-    return followUpHtml + confirmedHtml + watchHtml;
+    var total = occs.length + activeConfirmed.length;
+    return '<details class="customer-watch-details">' +
+      '<summary class="customer-behavior-summary">همه نشانه‌ها و هشدارها (' + esc(P ? P.n0(total) : String(total)) + ')</summary>' +
+      '<div class="customer-detail-watch-body">' + confirmedHtml + watchHtml + '</div></details>';
+  }
+
+  /* Short Level-1 glance for the behavior section. Uses only values customerBehavior() already returns. */
+  function behaviorGlanceHtml(b, groups) {
+    var P = global.BagheriPresent;
+    if (!P || !b) return '';
+    var lines = [];
+    if (b.amountTrend === 'up') lines.push('خرید ۳۰ روز اخیر نسبت به ۳۰ روز قبل بیشتر شده.');
+    else if (b.amountTrend === 'down' && !groups.volume) lines.push('خرید ۳۰ روز اخیر نسبت به ۳۰ روز قبل کمتر شده.');
+    if (b.behindPattern === true && !groups.timing && b.daysSinceLast != null && b.avgIntervalDays != null) {
+      lines.push(P.n0(b.daysSinceLast) + ' روز از آخرین خرید گذشته؛ این مشتری معمولاً هر ' + P.n0(b.avgIntervalDays) + ' روز خرید می‌کند.');
+    }
+    var vis = b.visitInvoiceStats;
+    if (vis && vis.linkedInvoiceCount > 0 && b.visitCount > 0) {
+      var line = 'از ' + P.n0(b.visitCount) + ' ویزیت ثبت‌شده، ' + P.n0(vis.linkedInvoiceCount) + ' فاکتور از همان ویزیت صادر شده';
+      if (vis.avgDaysBetweenVisitAndInvoice != null) {
+        line += vis.avgDaysBetweenVisitAndInvoice < 0.5 ? '؛ معمولاً همان روز.' : '؛ معمولاً حدود ' + P.n1(vis.avgDaysBetweenVisitAndInvoice) + ' روز بعد.';
+      } else line += '.';
+      lines.push(line);
+    }
+    if (b.lastNextAction) lines.push('اقدام بعدی از ویزیت قبل: ' + b.lastNextAction);
+    if (b.topProducts && b.topProducts.length) {
+      lines.push('کالاهای اصلی: ' + b.topProducts.slice(0, 3).map(function (x) { return x.name; }).join('، '));
+    }
+    if (!lines.length) return '';
+    return '<div class="bp-glance">' + lines.map(function (l) { return '<div class="bp-glance-line">' + esc(l) + '</div>'; }).join('') + '</div>';
+  }
+
+  function watchSheetContextHtml(o) {
+    var P = global.BagheriPresent;
+    if (!P || !o) return '';
+    var sentence = P.watchSentence(o);
+    return (sentence ? '<div class="bp-row-text bp-sheet-text">' + esc(sentence) + '</div>' : '') + P.detailsHtml(P.watchDetailLines(o));
   }
 
   function openWatchReasonSheet(occurrenceId, onDone) {
@@ -601,8 +673,7 @@
       { code: 'other', label: 'سایر' }
     ].filter(function (x) { return x.code !== 'not_wanted' || !!occ.productId; });
     var buttons = options.map(function (o) { return '<button type="button" class="btn secondary small" data-followup-result="' + esc(o.code) + '" style="width:100%;margin-bottom:6px;text-align:right;">' + esc(o.label) + '</button>'; }).join('');
-    var followEv = humanizeWatch(occ).evidence;
-    openSheet('<div class="sheet-title">ثبت نتیجه پیگیری</div>' + (followEv ? '<div class="watch-evidence"><span class="watch-evidence-label">شاهد:</span> ' + esc(followEv) + '</div>' : '') + '<div id="watch-followup-results">' + buttons + '</div>' + '<div class="field" style="margin-top:10px;"><label>یادداشت (اختیاری)</label><input id="watch-followup-note" type="text" autocomplete="off"></div>' + '<div class="btn-row" style="margin-top:10px;"><button type="button" class="btn secondary" id="watch-followup-cancel-sheet">انصراف</button></div>');
+    openSheet('<div class="sheet-title">ثبت نتیجه پیگیری</div>' + watchSheetContextHtml(occ) + '<div id="watch-followup-results">' + buttons + '</div>' + '<div class="field" style="margin-top:10px;"><label>یادداشت (اختیاری)</label><input id="watch-followup-note" type="text" autocomplete="off"></div>' + '<div class="btn-row" style="margin-top:10px;"><button type="button" class="btn secondary" id="watch-followup-cancel-sheet">انصراف</button></div>');
     var cancel = document.getElementById('watch-followup-cancel-sheet');
     if (cancel) cancel.onclick = function () { if (typeof closeModal === 'function') closeModal(); };
     var list = document.getElementById('watch-followup-results');
@@ -712,6 +783,11 @@
           '</div>';
       }
     }
+
+    // P0 (what matters now) + follow-ups waiting for this customer — presentation of existing Truth.
+    const watchData = loadWatchData(c.id, ctx);
+    const focus = customerFocusHtml(c.id, ctx, watchData);
+    const followUpTopHtml = pendingFollowUpHtml(c.id);
 
     const invs = customerInvoices(c.id, ctx)
       .slice()
@@ -857,10 +933,8 @@
       : '<div class="empty" style="padding:12px 0;">ویزیتی ثبت نشده</div>';
 
     let behaviorHtml = '';
-    let behaviorData = null;
     if (typeof customerBehavior === 'function') {
       const b = customerBehavior(c.id, ctx);
-      behaviorData = b;
       // customerBehaviorSummary's own bullet lines now render lower on the
       // page, inside "جزئیات کامل رفتار خرید" progressive disclosure —
       // the headline decision (risk/opportunity + next action) already
@@ -905,7 +979,7 @@
             ? '<div style="font-size:.85rem;line-height:1.9;margin-top:8px;padding-top:8px;border-top:1px dotted var(--line);color:var(--ink);">' +
               extraLines
                 .map(function (x) {
-                  return '🔹 ' + esc(x);
+                  return esc(x);
                 })
                 .join('<br>') +
               '</div>'
@@ -947,9 +1021,9 @@
                 return (
                   '<div class="ledger-row" style="cursor:default;"><span class="name">' +
                   esc(p.name) +
-                  '<span class="sub">از ' +
+                  '<span class="sub">قبلاً ' +
                   fmtQtyDisplay(p.earlyQty) +
-                  ' به ' +
+                  ' ← اخیراً ' +
                   fmtQtyDisplay(p.lateQty) +
                   '</span></span></div>'
                 );
@@ -973,17 +1047,12 @@
             ? '—'
             : 'ویزیتی ثبت نشده';
 
-      const watchHtmlBlock = intelligenceWatchHtml(c.id, ctx);
       behaviorHtml =
-        '<div class="customer-section-kicker">نشانه‌ها و هشدارها</div>' +
-        (watchHtmlBlock
-          ? '<details open class="customer-watch-details">' +
-            '<summary class="customer-behavior-summary">جزئیات هشدارها</summary>' +
-            '<div class="customer-detail-watch-body">' + watchHtmlBlock + '</div></details>'
-          : '') +
-        '<div class="customer-section-kicker">تحلیل رفتار خرید</div>' +
+        '<h3 class="sub-title">رفتار خرید و هوش تجاری</h3>' +
+        behaviorGlanceHtml(b, focus.groups) +
+        intelligenceWatchHtml(c.id, ctx, watchData) +
         '<details class="customer-behavior-details">' +
-        '<summary class="customer-behavior-summary">جزئیات رفتار خرید</summary>' +
+        '<summary class="customer-behavior-summary">تحلیل رفتار خرید</summary>' +
         summaryHtml +
         '<div class="cards">' +
         '<div class="card"><div class="label">اولین خرید</div><div class="value">' +
@@ -1046,72 +1115,97 @@
         '</details>';
     }
 
-    /* P2 (UI only) — Identity card extras: read-only use of customerStatus()
-       and customerBehavior() (same memoized ctx). No logic touched. */
-    let identityStatusHtml = '';
-    let identityBehindHtml = '';
-    try {
-      let stKey = (typeof customerStatus === 'function') ? customerStatus(c.id, ctx) : null;
-      let stLabel = '';
-      if (c.active === false) stLabel = 'غیرفعال شده';
-      else if (stKey === 'active') stLabel = 'فعال';
-      else if (stKey === 'new') stLabel = 'جدید';
-      else if (stKey === 'inactive') stLabel = 'سرد شده';
-      else if (stKey === 'lost') stLabel = 'از دست رفته';
-      if (stLabel) identityStatusHtml = '<div>وضعیت: ' + esc(stLabel) + '</div>';
-      if (typeof customerBehavior === 'function') {
-        const idb = customerBehavior(c.id, ctx);
-        if (idb && idb.behindPattern === true && idb.daysSinceLast != null && idb.avgIntervalDays != null) {
-          const idBehind = Math.round(idb.daysSinceLast - idb.avgIntervalDays);
-          if (idBehind > 0) identityBehindHtml = '<div>' + esc(String(idBehind)) + ' روز عقب‌تر از روال</div>';
-        }
-      }
-    } catch (eIdentity) { /* display-only: ignore */ }
-
-    var attentionItems = buildCustomerAttentionItems(c.id, ctx);
-    var storyText = '';
-    try {
-      var pNow = (typeof calculateCustomerPriority === 'function') ? calculateCustomerPriority(c.id, { ctx: ctx }) : null;
-      storyText = pNow && pNow.customerStory && pNow.customerStory.summary ? pNow.customerStory.summary : '';
-    } catch (eStory) { storyText = ''; }
-    var rejectionInsightsHtml = productRejectionInsightsHtml(c.id, ctx);
-    var basketHtml = '';
-    if (behaviorData && behaviorData.decliningProducts && behaviorData.decliningProducts.length) {
-      basketHtml = '<div class="customer-basket-insight"><div class="customer-detail-subtitle">کالاهای با کاهش خرید</div><div class="customer-tx-list customer-declining-products">' + behaviorData.decliningProducts.slice(0,8).map(function(p){ return '<div class="ledger-row customer-static-row"><span class="name">' + esc(p.name) + '<span class="sub">از ' + fmtQtyDisplay(p.earlyQty) + ' به ' + fmtQtyDisplay(p.lateQty) + '</span></span></div>'; }).join('') + '</div></div>';
-    }
-    var focusItems = attentionItems.slice(0, recommendedAction ? 2 : 3);
-    var focusHtml = '<section class="customer-section customer-focus-section"><div class="customer-section-kicker">نیازمند توجه</div><div class="customer-focus-list">' +
-      (recommendedAction ? '<div class="customer-focus-item is-primary"><div class="customer-focus-title">' + esc(recommendedAction.action) + '</div><div class="customer-focus-why">' + esc(recommendedAction.reason || storyText || '') + '</div><button type="button" class="btn small" id="cust-recommended-action">انجام</button></div>' : '') +
-      focusItems.map(function(it){ return '<div class="customer-focus-item' + (it.watchId ? ' is-actionable' : '') + '"' + (it.watchId ? ' data-watch-occ="' + esc(it.watchId) + '" role="button" tabindex="0"' : '') + '><div class="customer-focus-title">' + esc(it.title) + '</div>' + attentionEvidenceHtml(it.evidence) + '</div>'; }).join('') +
-      '</div></section>';
-    if (!recommendedAction && !focusItems.length) focusHtml = '';
-    var behavior = behaviorData || {};
-    var trendText = behavior.amountTrend === 'up' ? 'افزایشی' : behavior.amountTrend === 'down' ? 'کاهشی' : behavior.amountTrend === 'flat' ? 'ثابت' : '—';
-    var summaryHtml = '<section class="customer-section customer-summary-section"><div class="customer-section-kicker">خلاصه</div><div class="customer-summary-grid">' +
-      '<div><span>آخرین خرید</span><strong>' + (behavior.lastInvoiceDate ? faDate(behavior.lastInvoiceDate) : '—') + '</strong></div>' +
-      '<div><span>روال معمول</span><strong>' + (behavior.avgIntervalDays != null ? enToFaDigits(String(Math.round(behavior.avgIntervalDays * 10) / 10)) + ' روز' : '—') + '</strong></div>' +
-      '<div><span>روند مبلغ</span><strong>' + trendText + '</strong></div>' +
-      '<div><span>مانده</span><strong class="' + color + '">' + (t.balance === 0 ? 'تسویه' : toman(Math.abs(t.balance)) + ' ت') + '</strong></div>' +
-      '<div><span>خرید</span><strong>' + toman(t.invTotal) + ' ت</strong></div>' +
-      '<div><span>پرداخت</span><strong>' + toman(t.payTotal) + ' ت</strong></div>' +
-      '<div><span>چک</span><strong>' + toman(t.checkTotal) + ' ت</strong></div>' +
-      '<div><span>سود</span><strong>' + toman(profit) + ' ت</strong></div></div></section>';
-    var analysisDetails = '<section class="customer-details-section"><details class="customer-analysis-details"><summary>تحلیل کالا</summary>' + (basketHtml || '') + (rejectionInsightsHtml ? '<div class="customer-secondary-insight">' + rejectionInsightsHtml + '</div>' : '') + '</details>' +
-      (behaviorHtml ? '<div class="customer-behavior-details-wrap">' + behaviorHtml + '</div>' : '') +
-      '<details><summary>فاکتورها (' + invs.length + ')</summary><div class="customer-tx-list customer-invoice-list">' + invRows + '</div></details>' +
-      '<details><summary>پرداخت‌ها (' + pays.length + ')</summary><div class="customer-tx-list customer-payment-list">' + payRows + '</div></details>' +
-      '<details><summary>چک‌ها (' + chks.length + ')</summary><div class="customer-tx-list customer-check-list">' + chkRows + '</div></details>' +
-      '<details><summary>ویزیت‌ها و ارزیابی‌ها (' + visits.length + ')</summary><div class="btn-row" style="margin-bottom:8px;"><button type="button" class="btn small" id="act-visit-section">ثبت ویزیت برای این مشتری</button><a class="btn small secondary" href="#/visits">همه ویزیت‌ها</a></div><div class="customer-tx-list customer-visit-list">' + visitRows + '</div></details>' +
-      '</section>';
-
     root.innerHTML =
-      '<div class="customer-master">' +
-      '<div class="customer-topline"><a class="btn secondary small" href="' + customersHref() + '">مشتریان</a></div>' +
-      '<section class="customer-section customer-identity-section"><div class="customer-identity-name">' + esc(c.name) + '</div><div class="customer-identity-meta">' + identityStatusHtml + (c.phone ? '<div>' + esc(c.phone) + '</div>' : '') + (c.locationId ? '<div>' + esc(getLocationDisplayString(c.locationId)) + '</div>' : ((c.region ? '<div>' + esc(c.region) + '</div>' : '') + (c.route ? '<div>' + esc(c.route) + '</div>' : ''))) + '</div></section>' +
-      focusHtml +
-      '<section class="customer-section customer-actions-section"><div class="customer-section-kicker">اقدام</div><div class="btn-row cust-actions-primary"><button type="button" class="btn" id="act-invoice">ثبت فاکتور</button><button type="button" class="btn secondary" id="act-visit">ثبت ویزیت</button><button type="button" class="btn secondary" id="act-pay">ثبت پرداخت</button><button type="button" class="btn secondary" id="act-more">سایر</button></div></section>' +
-      summaryHtml + analysisDetails + '</div>';
-
+      '<div class="btn-row" style="margin-bottom:10px;">' +
+      '<a class="btn secondary small" href="' +
+      customersHref() +
+      '">← مشتریان</a></div>' +
+      '<div class="card customer-identity-card">' +
+      '<div class="customer-identity-name">' +
+      esc(c.name) +
+      '</div>' +
+      '<div class="customer-identity-meta">' +
+      (c.ownerName ? '<div>مسئول فروشگاه: ' + esc(c.ownerName) + '</div>' : '') +
+      (c.phone ? '<div>تلفن: ' + esc(c.phone) + '</div>' : '') +
+      (c.locationId
+        ? '<div>موقعیت: ' + esc(getLocationDisplayString(c.locationId)) + '</div>'
+        : ((c.region ? '<div>منطقه: ' + esc(c.region) + '</div>' : '') +
+           (c.route ? '<div>مسیر: ' + esc(c.route) + '</div>' : ''))) +
+      (c.address ? '<div>آدرس: ' + esc(c.address) + '</div>' : '') +
+      (c.note ? '<div>یادداشت: ' + esc(c.note) + '</div>' : '') +
+      '</div>' +
+      '<div class="customer-balance-block">' +
+      '<div class="label">مانده حساب</div>' +
+      '<div class="value ' +
+      color +
+      ' customer-balance-value">' +
+      balanceLine +
+      '</div></div></div>' +
+      unifiedSummaryHtml +
+      focus.html +
+      followUpTopHtml +
+      (recommendedAction
+        ? '<div class="cust-recommended-action">' +
+          '<div class="cust-recommended-action-label">اقدام پیشنهادی</div>' +
+          '<button type="button" class="btn cust-recommended-action-btn" id="cust-recommended-action">' +
+          esc(recommendedAction.action) +
+          '</button></div>'
+        : '') +
+      '<h3 class="sub-title">عملیات</h3>' +
+      '<div class="btn-row cust-actions-primary" style="margin-bottom:8px;">' +
+      '<button type="button" class="btn" id="act-invoice">ثبت فاکتور</button>' +
+      '<button type="button" class="btn secondary" id="act-pay">ثبت پرداخت</button>' +
+      '<button type="button" class="btn secondary" id="act-visit">ثبت ویزیت</button>' +
+      '</div>' +
+      '<div class="btn-row cust-actions-secondary" style="margin-bottom:16px;">' +
+      '<button type="button" class="btn small secondary" id="act-check">ثبت چک</button>' +
+      '<button type="button" class="btn small secondary" id="act-edit">ویرایش مشتری</button>' +
+      '<button type="button" class="btn small secondary" id="act-location">اختصاص موقعیت</button>' +
+      '<button type="button" class="btn small secondary" id="act-print-statement">صورت‌حساب</button>' +
+      '<button type="button" class="btn small secondary" id="act-toggle-active">' + (c.active === false ? 'فعال‌سازی مشتری' : 'غیرفعال‌سازی مشتری') + '</button>' +
+      '</div>' +
+      '<div class="cards" style="margin-bottom:14px;">' +
+      '<div class="card"><div class="label">مجموع خرید (فاکتورها)</div><div class="value">' +
+      toman(t.invTotal) +
+      ' ت</div></div>' +
+      '<div class="card"><div class="label">مجموع پرداخت‌ها</div><div class="value">' +
+      toman(t.payTotal) +
+      ' ت</div></div>' +
+      '<div class="card"><div class="label">جمع چک‌ها</div><div class="value">' +
+      toman(t.checkTotal) +
+      ' ت</div></div>' +
+      '<div class="card"><div class="label">مانده اولیه</div><div class="value">' +
+      toman(t.openingBalance) +
+      ' ت</div></div>' +
+      '<div class="card"><div class="label">تعداد فاکتور</div><div class="value">' +
+      invs.length +
+      '</div></div>' +
+      '<div class="card"><div class="label">سود مشتری</div><div class="value accent-amber">' +
+      toman(profit) +
+      ' ت</div></div>' +
+      '</div>' +
+      behaviorHtml +
+      productRejectionInsightsHtml(c.id, ctx) +
+      '<h3 class="sub-title">فاکتورها (' +
+      invs.length +
+      ')</h3>' +
+      '<div class="customer-tx-list customer-invoice-list">' + invRows + '</div>' +
+      '<h3 class="sub-title">پرداخت‌ها (' +
+      pays.length +
+      ')</h3>' +
+      '<div class="customer-tx-list customer-payment-list">' + payRows + '</div>' +
+      '<h3 class="sub-title">چک‌ها (' +
+      chks.length +
+      ')</h3>' +
+      '<div class="customer-tx-list customer-check-list">' + chkRows + '</div>' +
+      '<h3 class="sub-title">ویزیت‌ها و ارزیابی‌ها (' +
+      visits.length +
+      ')</h3>' +
+      '<div class="btn-row" style="margin-bottom:8px;">' +
+      '<button type="button" class="btn small" id="act-visit-section">ثبت ویزیت برای این مشتری</button>' +
+      '<a class="btn small secondary" href="#/visits">همه ویزیت‌ها</a>' +
+      '</div>' +
+      '<div class="customer-tx-list customer-visit-list">' + visitRows + '</div>';
 
     document.getElementById('act-invoice').onclick = function () {
       openAddInvoice(c.id);
@@ -1127,29 +1221,28 @@
       visitSecBtn.onclick = function () {
         openAddVisit(c.id);
       };
-    document.getElementById('act-more').onclick = function () {
-      openSheet('<h3>سایر اقدام‌ها</h3><div class="btn-row" style="flex-direction:column;gap:8px;">' +
-        '<button type="button" class="btn secondary" id="act-check">ثبت چک</button>' +
-        '<button type="button" class="btn secondary" id="act-edit">ویرایش مشتری</button>' +
-        '<button type="button" class="btn secondary" id="act-location">اختصاص موقعیت</button>' +
-        '<button type="button" class="btn secondary" id="act-print-statement">صورت‌حساب</button>' +
-        '<button type="button" class="btn secondary" id="act-toggle-active">' + (c.active === false ? 'فعال‌سازی' : 'غیرفعال‌سازی') + '</button></div>');
-      document.getElementById('act-check').onclick = function () { openAddCheck(c.id); };
-      document.getElementById('act-edit').onclick = function () { openAddCustomer(c.id); };
-      document.getElementById('act-location').onclick = function () { openLocationAssignSheet({ title:'اختصاص موقعیت — ' + c.name, currentLocationId:c.locationId || null, onSave:async function(locationId){ await setCustomerLocation(c.id, locationId); showToast('موقعیت ذخیره شد'); render(); } }); };
-      var printBtn = document.getElementById('act-print-statement');
-      if (printBtn) printBtn.onclick = function () { if (typeof printCustomerStatement === 'function') printCustomerStatement(c.id); };
-      var toggle = document.getElementById('act-toggle-active');
-      if (toggle) toggle.onclick = toggleCustomerActive;
+    document.getElementById('act-check').onclick = function () {
+      openAddCheck(c.id);
     };
-    function toggleCustomerActive(ev) {
-      return withSubmitGuard(ev && ev.currentTarget, async function () {
-        var willDeactivate = c.active !== false;
-        var msg = willDeactivate ? 'این مشتری غیرفعال شود؟ اطلاعات، فاکتورها، پرداخت‌ها، چک‌ها و سوابق او حذف نخواهد شد.' : 'مشتری «' + c.name + '» دوباره فعال شود؟';
-        if (!(await appConfirm(msg))) throw new Error('validation');
-        c.active = (c.active === false) ? true : false;
-        await saveData(); drawCustomerPage(rootEl || root); showToast(c.active === false ? 'مشتری غیرفعال شد' : 'مشتری فعال شد');
+    document.getElementById('act-edit').onclick = function () {
+      openAddCustomer(c.id);
+    };
+    document.getElementById('act-location').onclick = function () {
+      openLocationAssignSheet({
+        title: 'اختصاص موقعیت — ' + c.name,
+        currentLocationId: c.locationId || null,
+        onSave: async function (locationId) {
+          await setCustomerLocation(c.id, locationId);
+          showToast('موقعیت ذخیره شد');
+          render();
+        },
       });
+    };
+    const printBtn = document.getElementById('act-print-statement');
+    if (printBtn) {
+      printBtn.onclick = function () {
+        if (typeof printCustomerStatement === 'function') printCustomerStatement(c.id);
+      };
     }
     const recommendedBtn = document.getElementById('cust-recommended-action');
     if (recommendedBtn && recommendedAction) {

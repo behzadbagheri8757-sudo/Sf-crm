@@ -171,9 +171,11 @@
         '</button>';
     }
 
-    const total = items.length;
-    const riskBadge = total > 0
-      ? '<span class="dash-risk-badge">' + enToFaDigits(String(total)) + ' کار</span>'
+    const riskCount = items.filter(function (a) {
+      return a && (a.urgency === 'critical' || a.urgency === 'high');
+    }).length;
+    const riskBadge = riskCount > 0
+      ? '<span class="dash-risk-badge" title="تعداد موارد بحرانی/پراهمیت در همین لیست">' + riskCount + ' مورد مهم</span>'
       : '';
 
     return '<div class="dashboard-block">' + dashSectionHead(dashboardIcon('actions',20), 'کارهای پیشنهادی امروز', '', '', riskBadge) + '<div class="dash-activity dash-action-queue">' + visibleRows + hiddenBlock + '</div></div>';
@@ -269,13 +271,13 @@
   function recentVisitsHtml() {
     const items = [];
     (data.customers || []).forEach(function (c) {
-      (c.visits || []).forEach(function (v) { items.push({ customerId: c.id, name: c.name, date: v.date, time: v.time, result: v.result, ordered: v.ordered === true || (typeof VISIT_RESULTS !== 'undefined' && v.result === VISIT_RESULTS[0]) }); });
+      (c.visits || []).forEach(function (v) { items.push({ customerId: c.id, name: c.name, date: v.date, time: v.time, result: v.result }); });
     });
     items.sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || (b.time || '').localeCompare(a.time || ''); });
     const top = items.slice(0, 5);
     if (!top.length) return '';
     const rows = top.map(function (v) {
-      return '<a class="ledger-row" href="#/customer?id=' + encodeURIComponent(v.customerId) + '"><span class="name">' + esc(v.name) + '<span class="sub">' + faDate(v.date) + (v.time ? ' ' + esc(v.time) : '') + '</span></span><span class="filler"></span><span class="amount' + (v.ordered ? ' accent-olive' : '') + '">' + esc(v.result || '—') + '</span></a>';
+      return '<a class="ledger-row" href="#/customer?id=' + encodeURIComponent(v.customerId) + '"><span class="name">' + esc(v.name) + '<span class="sub">' + faDate(v.date) + (v.time ? ' ' + esc(v.time) : '') + (v.result ? ' — ' + esc(v.result) : '') + '</span></span><span class="filler"></span><span class="amount">ویزیت</span></a>';
     }).join('');
     /* Inner section only — parent .dash-activity-group provides the surface */
     return '<div class="dash-activity-section">' + dashSectionHead(dashboardIcon('visitSection',20), 'آخرین ویزیت‌ها', '#/visits', 'همه ←') + '<div class="dash-activity">' + rows + '</div></div>';
@@ -416,15 +418,6 @@
         '</div>')
       : '';
 
-    /* P4 (UI only) — checks due soon: read-only use of checksDueSoon(). */
-    let dueChecksRowHtml = '';
-    try {
-      const dueChecksCount = (typeof checksDueSoon === 'function') ? (checksDueSoon() || []).length : 0;
-      if (dueChecksCount > 0) {
-        dueChecksRowHtml = '<a class="dash-health-row dash-health-link dash-health-due" href="#/checks"><span class="dash-health-label">چک نزدیک سررسید</span><span class="dash-health-value">' + dueChecksCount + ' مورد</span></a>';
-      }
-    } catch (eDueChecks) { dueChecksRowHtml = ''; }
-
     root.innerHTML =
       '<div class="dashboard-shell">' +
       '<div class="dashboard-eyebrow">مرکز فرماندهی روزانه</div>' +
@@ -442,7 +435,6 @@
           '<div class="dash-health-row"><span class="dash-health-label">سود این ماه</span><span class="dash-health-value">' + money(metrics.mtdProfit) + '</span></div>' +
           '<div class="dash-health-row"><span class="dash-health-label">ارزش موجودی</span><span class="dash-health-value">' + money(invVal) + '</span></div>' +
           '<a class="dash-health-row dash-health-link" href="#/customers?filter=debt"><span class="dash-health-label">بدهی مشتریان</span><span class="dash-health-value debt">' + money(g.customerDebt) + '</span></a>' +
-          dueChecksRowHtml +
         '</div>' +
       '</div>' +
 
