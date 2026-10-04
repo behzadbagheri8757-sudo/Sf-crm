@@ -1306,6 +1306,14 @@ window.BagheriPresent = (function () {
     LINE_DROP_WATCH: 'در سبد اخیر کم‌رنگ شده',
     COMBINED_SKU_WATCH: 'چند نشانه کاهش خرید دارد'
   };
+  /* Confirmed SKU-level signals that may speak about ONE product. Anything not listed here
+     (payment, check, visit, general decline ...) is never shown in a product hint. */
+  var CONFIRMED_PRODUCT_SHORT = {
+    SKU_DELAY: WATCH_SHORT.SKU_DELAY_WATCH,
+    SKU_QUANTITY_DROP: WATCH_SHORT.SKU_QUANTITY_DROP_WATCH,
+    SKU_FREQUENCY_DROP: WATCH_SHORT.SKU_FREQUENCY_DROP_WATCH,
+    LINE_DROP: WATCH_SHORT.LINE_DROP_WATCH
+  };
   var COMPONENT_LABELS = {
     SKU_DELAY_WATCH: 'تأخیر در خرید',
     SKU_QUANTITY_DROP_WATCH: 'کاهش مقدار',
@@ -1347,8 +1355,14 @@ window.BagheriPresent = (function () {
     e = e || {};
     switch (cat) {
       case 'SKU_DELAY_WATCH':
-        if (e.currentGap != null && e.typicalCycle != null)
-          return n0(e.currentGap) + ' روز از آخرین خرید گذشته؛ این مشتری معمولاً هر ' + n0(e.typicalCycle) + ' روز خرید می‌کند.';
+        if (e.typicalCycle != null) {
+          // Real "days since last purchase" when the evidence carries it.
+          if (e.daysSinceLast != null)
+            return n0(e.daysSinceLast) + ' روز از آخرین خرید گذشته؛ این مشتری معمولاً هر ' + n0(e.typicalCycle) + ' روز خرید می‌کند.';
+          // currentGap is the delay relative to the usual cycle (daysSinceLast - typicalCycle).
+          if (e.currentGap != null && e.currentGap > 0)
+            return n0(e.currentGap) + ' روز از زمان معمول خرید گذشته؛ این مشتری معمولاً هر ' + n0(e.typicalCycle) + ' روز خرید می‌کند.';
+        }
         break;
       case 'BEHIND_PATTERN_WATCH':
         if (e.daysSinceLast != null && e.averageIntervalDays != null)
@@ -1414,7 +1428,7 @@ window.BagheriPresent = (function () {
         out.push('«' + (x.productName || x.productId || '') + '»: قبلاً ' + qtyText(x.earlyQty, x.productId) + ' ← اخیراً ۰');
       });
     }
-    if (e.currentGap != null && e.typicalCycle != null) out.push('فاصله فعلی: ' + n0(e.currentGap) + ' روز؛ چرخه معمول: ' + n0(e.typicalCycle) + ' روز');
+    if (e.currentGap != null && e.typicalCycle != null) out.push('تأخیر فعلی: ' + n0(e.currentGap) + ' روز؛ چرخه معمول: ' + n0(e.typicalCycle) + ' روز');
     if (e.recentQuantity != null && e.typicalQuantity != null) out.push('مقدار اخیر: ' + qtyText(e.recentQuantity, pid) + '؛ مقدار معمول: ' + qtyText(e.typicalQuantity, pid));
     if (e.recentFrequency != null && e.expectedFrequency != null) out.push('دفعات اخیر: ' + n0(e.recentFrequency) + '؛ مورد انتظار: ' + n1(e.expectedFrequency));
     if (e.historicalPresenceRate != null && e.currentBasketPresence != null) out.push('حضور در سبد: ' + pct01(e.historicalPresenceRate) + ' ← ' + pct01(e.currentBasketPresence));
@@ -1486,7 +1500,7 @@ window.BagheriPresent = (function () {
   /* Returns pid -> up to 2 lines [{t, tone:'warn'|'info'|'muted'}]. Built once per sheet. */
   function productHints(cid, opts) {
     opts = opts || {};
-    var offers = {}, buys = {}, watchByPid = Object.create(null);
+    var offers = {}, buys = {}, watchByPid = Object.create(null), sigByPid = Object.create(null);
     try { offers = lastOfferMap(cid); } catch (e1) { offers = {}; }
     try { buys = lastPurchaseMap(cid, opts.excludeInvoiceId); } catch (e2) { buys = {}; }
     try {
@@ -1497,6 +1511,18 @@ window.BagheriPresent = (function () {
         if (!cur || lvRank(o.level) > lvRank(cur.level)) watchByPid[o.productId] = o;
       });
     } catch (e3) { watchByPid = Object.create(null); }
+    /* Confirmed signals that still hold for a specific product even when its Watch is no longer
+       active (e.g. resolved). Only signals whose own productId matches are kept. */
+    try {
+      var sigs = typeof extractCustomerSignals === 'function' ? (extractCustomerSignals(cid) || []) : [];
+      sigs.forEach(function (sg) {
+        if (!sg || sg.status !== 'active' || sg.type !== 'risk') return;
+        if (!sg.productId || sg.productId === 'multi') return;
+        if (!CONFIRMED_PRODUCT_SHORT[sg.category]) return;
+        var cur = sigByPid[sg.productId];
+        if (!cur || lvRank(sg.severity) > lvRank(cur.severity)) sigByPid[sg.productId] = sg;
+      });
+    } catch (e4) { sigByPid = Object.create(null); }
 
     return function (pid) {
       var lines = [];
@@ -1517,7 +1543,9 @@ window.BagheriPresent = (function () {
         }
       }
       var w = watchByPid[pid];
+      var sgp = sigByPid[pid];
       if (w && WATCH_SHORT[w.watchCategory]) lines.push({ t: WATCH_SHORT[w.watchCategory], tone: 'warn' });
+      else if (sgp) lines.push({ t: CONFIRMED_PRODUCT_SHORT[sgp.category], tone: 'warn' });
       if (buys[pid]) {
         var r = relDays(buys[pid]);
         if (r) lines.push({ t: 'آخرین خرید: ' + r, tone: 'muted' });
