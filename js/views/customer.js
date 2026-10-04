@@ -1293,6 +1293,112 @@
     bindWatchFollowUps(root, id);
   }
 
+
+  /* Central quick view for the Customers list. Presentation-only: it reuses
+     the frozen Priority/Watch/Balance outputs and existing action APIs. */
+  function openCustomerQuickView(cid) {
+    var c = (data.customers || []).find(function (x) { return x && x.id === cid; });
+    if (!c) return;
+    var ctx = typeof createComputationContext === 'function'
+      ? createComputationContext({ data: data })
+      : { aggregatePairMapCache: Object.create(null) };
+    var totals = customerTotals(cid, ctx) || { balance: 0 };
+    var priority = null;
+    try { priority = typeof calculateCustomerPriority === 'function' ? calculateCustomerPriority(cid, { ctx: ctx }) : null; } catch (e) { priority = null; }
+    var story = priority && priority.customerStory && priority.customerStory.summary ? priority.customerStory.summary : '';
+    var riskLevel = priority ? priority.riskLevel : null;
+    var health = riskLevel === 'critical' ? 'نیاز به رسیدگی فوری' : riskLevel === 'high' ? 'نیاز به توجه' : riskLevel === 'medium' ? 'قابل بررسی' : 'وضعیت عادی';
+    var watchData = loadWatchData(cid, ctx);
+    var focus = customerFocusHtml(cid, ctx, watchData).html || '';
+    // Quick View is deliberately non-destructive: no occurrence opens from here.
+    focus = focus
+      .replace(/\sdata-watch-occ="[^"]*"/g, '')
+      .replace(/\srole="button"/g, '')
+      .replace(/\stabindex="0"/g, '')
+      .replace(/\sclass="bp-topic is-tap"/g, ' class="bp-topic"')
+      .replace(/<span class="bp-topic-chev"[^>]*>.*?<\/span>/g, '');
+
+    var overlay = document.createElement('div');
+    overlay.className = 'bp-qv-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+      '<div class="bp-qv-card" role="document">' +
+        '<button type="button" class="bp-qv-close" aria-label="بستن">×</button>' +
+        '<div class="bp-qv-head">' +
+          '<div class="bp-qv-name">' + esc(c.name || 'مشتری') + '</div>' +
+          (c.ownerName ? '<div class="bp-qv-meta">' + esc(c.ownerName) + '</div>' : '') +
+          (c.phone ? '<div class="bp-qv-meta">' + esc(c.phone) + '</div>' : '') +
+          '<div class="bp-qv-balance ' + (totals.balance > 0 ? 'is-debt' : '') + '">' + esc(balanceStatusWord(totals.balance)) + (totals.balance !== 0 ? ': ' + toman(Math.abs(totals.balance)) + ' ت' : '') + '</div>' +
+          '<div class="bp-qv-health radar-risk-' + esc(riskLevel || 'normal') + '">' + esc(health) + '</div>' +
+        '</div>' +
+        (story ? '<div class="bp-qv-story"><div class="bp-qv-section-label">خلاصه وضعیت</div><div>' + esc(story) + '</div></div>' : '') +
+        (focus ? '<div class="bp-qv-focus">' + focus + '</div>' : '') +
+        '<div class="bp-qv-actions">' +
+          '<button type="button" class="btn primary" data-action="visit">ثبت ویزیت</button>' +
+          '<button type="button" class="btn secondary" data-action="invoice">ثبت فاکتور</button>' +
+          '<button type="button" class="btn secondary" data-action="payment">ثبت پرداخت</button>' +
+        '</div>' +
+        '<button type="button" class="bp-qv-full">مشاهده پروفایل کامل ›</button>' +
+      '</div>';
+    var modalRoot = document.getElementById('modalRoot');
+    if (!modalRoot) return;
+    modalRoot.innerHTML = '';
+    modalRoot.appendChild(overlay);
+    try { document.body.classList.add('modal-open'); } catch(_e) {}
+
+    var card = overlay.querySelector('.bp-qv-card');
+    var previousFocus = document.activeElement;
+    var closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      overlay.classList.add('is-closing');
+      setTimeout(function () {
+        try { document.body.classList.remove('modal-open'); } catch(_e) {}
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+      }, 180);
+      document.removeEventListener('keydown', onKeydown);
+    }
+    function onKeydown(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay || e.target.closest('.bp-qv-close')) { e.preventDefault(); close(); return; }
+      var action = e.target.closest('[data-action]');
+      if (action) {
+        e.preventDefault();
+        var type = action.getAttribute('data-action');
+        close();
+        setTimeout(function () {
+          if (type === 'visit' && typeof openAddVisit === 'function') openAddVisit(cid);
+          else if (type === 'invoice' && typeof openAddInvoice === 'function') openAddInvoice(cid);
+          else if (type === 'payment' && typeof openAddTransaction === 'function') openAddTransaction(cid);
+        }, 185);
+        return;
+      }
+      if (e.target.closest('.bp-qv-full') || e.target.closest('.bp-topic')) {
+        e.preventDefault();
+        close();
+        setTimeout(function () { if (typeof AppRouter !== 'undefined' && AppRouter.navigate) AppRouter.navigate('/customer', { id: cid }); }, 185);
+      }
+    });
+    document.addEventListener('keydown', onKeydown);
+    requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+    var closeBtn = overlay.querySelector('.bp-qv-close');
+    if (closeBtn) closeBtn.focus();
+
+    // Lightweight downward swipe-to-close; no document-level gesture handling.
+    var startY = null;
+    if (card) {
+      card.addEventListener('touchstart', function (e) { if (e.touches && e.touches[0]) startY = e.touches[0].clientY; }, { passive: true });
+      card.addEventListener('touchend', function (e) {
+        if (startY == null || !e.changedTouches || !e.changedTouches[0]) return;
+        if (e.changedTouches[0].clientY - startY > 70) close();
+        startY = null;
+      }, { passive: true });
+    }
+  }
+
   function mount(root, params) {
     let refreshToken = null;
     if (!root) return function () {};
@@ -1332,6 +1438,7 @@
   }
 
   global.CustomerView = { mount: mount, unmount: function () {} };
+  global.openCustomerQuickView = openCustomerQuickView;
   // Test / settings seams for Product Rejection Insight (UI-only)
   global.getProductRejectionThreshold = getProductRejectionThreshold;
   global.setProductRejectionThreshold = setProductRejectionThreshold;

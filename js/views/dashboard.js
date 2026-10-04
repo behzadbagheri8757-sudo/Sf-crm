@@ -325,71 +325,60 @@
   function targetHtml(metrics) {
     const target = typeof getMonthlySalesTarget === 'function' ? getMonthlySalesTarget() : 0;
     const sales = Number(metrics.mtdSales) || 0;
-    const pct = target > 0 ? Math.round((sales / target) * 100) : 0;
-    const capped = Math.min(100, Math.max(0, pct));
+    const rawPct = target > 0 ? Math.round((sales / target) * 100) : 0;
+    const pct = Math.min(100, Math.max(0, rawPct));
+    const capped = pct;
     const done = target > 0 && sales >= target;
 
-    // Figures + pace/status line: derived only from existing commandCenterMetrics
-    // (jy/jm/jd) and the existing jalaliMonthLength() helper. No new data source.
-    let figuresHtml = '';
-    let statusRowHtml = '';
-    if (target > 0) {
-      figuresHtml = '<div class="dmt-figures"><span class="dmt-figures-num">' + toman(sales) + '</span>' +
-        ' <span class="dmt-figures-sep">از</span> ' +
-        '<span class="dmt-figures-num">' + toman(target) + '</span>' +
-        ' <span class="dmt-figures-unit">تومان</span></div>';
+    function compactMoney(value) {
+      const n = Math.abs(Number(value) || 0);
+      if (n >= 1000000) {
+        const m = n / 1000000;
+        const text = Number.isInteger(m) ? String(m) : m.toFixed(1).replace(/\.0$/, '');
+        return enToFaDigits(text) + 'M';
+      }
+      return toman(n);
+    }
 
-      if (!done) {
-        const monthLen = (metrics.jy && metrics.jm && typeof jalaliMonthLength === 'function')
-          ? jalaliMonthLength(metrics.jy, metrics.jm) : null;
-        const remaining = Math.max(0, target - sales);
-        let paceHtml = '';
-        let statusMeta = null;
-        if (monthLen) {
-          const daysLeft = Math.max(0, monthLen - (metrics.jd || 0));
-          const expectedFraction = Math.min(1, (metrics.jd || 0) / monthLen);
-          const expectedSales = target * expectedFraction;
-          if (sales >= expectedSales * 1.05) statusMeta = { cls: 'ahead', icon: '↑', text: 'جلوتر از برنامه' };
-          else if (sales <= expectedSales * 0.95) statusMeta = { cls: 'behind', icon: '⚠', text: 'عقب‌تر از برنامه' };
-          else statusMeta = { cls: 'ontrack', icon: '✓', text: 'روی برنامه' };
-          if (daysLeft > 0) {
-            const requiredDaily = Math.round(remaining / daysLeft);
-            paceHtml = '<span class="dmt-pace">نیاز روزانه ' + toman(requiredDaily) + ' ت' +
-              ' <span class="dmt-pace-days">(' + enToFaDigits(String(daysLeft)) + ' روز مانده)</span></span>';
-          }
-        }
-        if (statusMeta) {
-          statusRowHtml = '<div class="dmt-status-row">' +
-            '<span class="dmt-status-chip dmt-status-' + statusMeta.cls + '">' + statusMeta.icon + ' ' + statusMeta.text + '</span>' +
-            paceHtml +
-            '</div>';
-        }
+    if (!(target > 0)) {
+      return '<div class="bp-target-strip is-empty" data-monthly-target role="button" tabindex="0" aria-label="تنظیم هدف فروش این ماه">' +
+        '<div class="bp-target-strip-head">' +
+          '<div class="bp-target-strip-title"><span aria-hidden="true">' + dashboardIcon('target',20) + '</span><strong>هدف فروش این ماه</strong></div>' +
+          '<span class="bp-target-strip-settings">تنظیم ›</span>' +
+        '</div>' +
+        '<div class="bp-target-strip-empty-text">هنوز هدفی برای این ماه تعیین نشده</div>' +
+      '</div>';
+    }
+
+    let status = { cls: 'ontrack', icon: '✓', text: 'روی برنامه' };
+    let daysLeft = 0;
+    let requiredDaily = 0;
+    if (!done) {
+      const monthLen = (metrics.jy && metrics.jm && typeof jalaliMonthLength === 'function')
+        ? jalaliMonthLength(metrics.jy, metrics.jm) : null;
+      if (monthLen) {
+        daysLeft = Math.max(0, monthLen - (metrics.jd || 0));
+        const expectedFraction = Math.min(1, (metrics.jd || 0) / monthLen);
+        const expectedSales = target * expectedFraction;
+        if (sales >= expectedSales * 1.05) status = { cls: 'ahead', icon: '↑', text: 'جلوتر از برنامه' };
+        else if (sales <= expectedSales * 0.95) status = { cls: 'behind', icon: '⚠', text: 'عقب‌تر از برنامه' };
+        requiredDaily = daysLeft > 0 ? Math.round(Math.max(0, target - sales) / daysLeft) : 0;
       }
     }
 
-    return (
-      '<div class="dash-target-block">' +
-        '<div class="dash-target-fab-row">' +
-          '<button type="button" class="dash-target-fab" data-monthly-target aria-label="تنظیم هدف فروش">' +
-            dashboardIcon('target',20) +
-          '</button>' +
-        '</div>' +
-        '<div class="dash-monthly-target ' + (done ? 'is-done' : '') + '">' +
-          '<div class="dmt-top">' +
-            '<div class="dmt-heading">' +
-              '<span class="dmt-growth" aria-hidden="true">' + dashboardIcon('growth',20) + '</span>' +
-              '<span class="dmt-title">هدف فروش این ماه</span>' +
-            '</div>' +
-          '</div>' +
-          figuresHtml +
-          '<div class="dmt-row">' +
-            '<div class="dmt-progress"><div class="dmt-bar"><span style="width:' + capped + '%"></span></div></div>' +
-            '<span class="dmt-pct">' + (target > 0 ? pct + '٪' : '—') + '</span>' +
-          '</div>' +
-          statusRowHtml +
-        '</div>' +
-      '</div>'
-    );
+    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + '" data-monthly-target role="button" tabindex="0" aria-label="هدف فروش این ماه">' +
+      '<div class="bp-target-strip-head">' +
+        '<div class="bp-target-strip-title"><span aria-hidden="true">' + dashboardIcon('target',20) + '</span><strong>هدف فروش این ماه</strong></div>' +
+        '<span class="bp-target-strip-status">' + (done ? '✓ رسید' : status.icon + ' ' + status.text) + '</span>' +
+      '</div>' +
+      '<div class="bp-target-strip-figures">' +
+        '<span><strong>' + compactMoney(sales) + '</strong> / ' + compactMoney(target) + ' <small>تومان</small></span>' +
+        '<span><strong>' + enToFaDigits(String(pct)) + '٪</strong></span>' +
+        (done ? '<span class="bp-target-strip-congrats">آفرین!</span>' : '<span>نیاز روزانه <strong>' + compactMoney(requiredDaily) + '</strong> ت</span>') +
+      '</div>' +
+      '<div class="bp-target-strip-bar"><span style="width:' + capped + '%"></span></div>' +
+      (!done && daysLeft > 0 ? '<div class="bp-target-strip-days">' + enToFaDigits(String(daysLeft)) + ' روز مانده</div>' : '') +
+    '</div>';
   }
 
   function bindMonthlyTarget(root, refresh) {
