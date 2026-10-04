@@ -1113,3 +1113,54 @@ html[data-theme="dark"] #main.customer-detail-view .watch-level-high{
 /* Dark: warning-toned text on the soft warning chip keeps contrast (tokens already swap),
    but the legacy hard-coded amber used by .watch-detail-reason is too dark on dark surfaces. */
 html[data-theme="dark"] .watch-detail-reason .watch-detail-value{color:var(--vg-color-warning);}
+
+
+/* ---------- BAGHERI P0/P1 presentation additions — additive bp-* only ---------- */
+.bp-dashboard-alert{
+  display:flex;align-items:center;gap:8px;min-height:42px;padding:9px 11px;margin:0 0 16px;
+  border:1px solid var(--vg-color-divider);border-radius:14px;background:var(--vg-color-surface);
+  overflow:auto;white-space:nowrap;
+}
+.bp-dashboard-alert-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--vg-color-danger);}
+.bp-dashboard-alert-label{font-size:.72rem;font-weight:700;color:var(--vg-color-text);}
+.bp-dashboard-alert-items{display:inline-flex;align-items:center;gap:7px;min-width:0;font-size:.72rem;color:var(--vg-color-text-muted);}
+.bp-dashboard-alert-items a{color:inherit;text-decoration:none;}
+.bp-dashboard-alert-items strong{font-weight:700;color:var(--vg-color-text);}
+.bp-dashboard-alert-sep{opacity:.45;}
+.bp-dashboard-snapshot{margin-bottom:22px;}
+.bp-dashboard-snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.bp-dashboard-snapshot-item{display:flex;flex-direction:column;gap:5px;min-width:0;padding:12px 11px;border:1px solid var(--vg-color-divider);border-radius:14px;background:var(--vg-color-surface);}
+.bp-dashboard-snapshot-item span{font-size:.68rem;color:var(--vg-color-text-muted);}
+.bp-dashboard-snapshot-item strong{font-size:clamp(.82rem,3.5vw,1rem);line-height:1.2;font-weight:700;color:var(--vg-color-text);white-space:nowrap;}
+.bp-dashboard-snapshot-item small{font-size:.62rem;color:var(--vg-color-text-muted);}
+.bp-dashboard-watch-block{margin-bottom:24px;}
+.bp-dashboard-watch-list{display:flex;flex-direction:column;gap:7px;}
+.bp-dashboard-watch-card{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px;border:1px solid var(--vg-color-divider);border-radius:14px;background:var(--vg-color-surface);text-decoration:none;color:inherit;}
+.bp-dashboard-watch-main{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.bp-dashboard-watch-title{font-size:.8rem;font-weight:650;color:var(--vg-color-text);}
+.bp-dashboard-watch-reason{font-size:.72rem;line-height:1.65;color:var(--vg-color-text-muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.bp-dashboard-watch-customer{font-size:.66rem;color:var(--vg-color-text-muted);}
+.bp-dashboard-watch-severity{flex:0 0 auto;font-size:.64rem;font-weight:650;color:var(--vg-color-text-muted);padding:3px 7px;border-radius:999px;background:var(--vg-color-surface-2,var(--vg-color-bg));}
+.bp-sort-label{font-size:.72rem;color:var(--vg-color-text-muted);align-self:center;}
+.bp-customer-financial-chips{margin-top:0;}
+.bp-customer-secondary-filters{margin-bottom:8px;}
+.vg-route-customers .customer-row-story{display:block;min-width:0;margin-top:2px;font-size:.72rem;line-height:1.45;color:var(--vg-color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bp-customer-health{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-top:10px;border:1px solid var(--vg-color-divider);border-radius:12px;background:var(--vg-color-surface);}
+.bp-customer-health-label{font-size:.7rem;color:var(--vg-color-text-muted);}
+.bp-customer-health-value{font-size:.78rem;font-weight:700;color:var(--vg-color-text);}
+.bp-customer-health-value.radar-risk-critical{color:var(--vg-color-danger,#D52B36);}
+.bp-customer-health-value.radar-risk-high{color:var(--vg-color-warning,#C47B00);}
+.bp-customer-health-value.radar-risk-medium{color:var(--vg-color-warning,#C47B00);}
+#main.customer-detail-view .cust-summary-label{font-size:.68rem;font-weight:650;color:var(--vg-color-text-muted);margin-bottom:4px;}
+.bp-customer-secondary-actions{margin:0 0 16px;border-top:1px solid var(--vg-color-divider);padding-top:2px;}
+.bp-customer-secondary-actions summary{padding:10px 2px;font-size:.75rem;font-weight:600;color:var(--vg-color-text-muted);cursor:pointer;list-style:none;}
+.bp-customer-secondary-actions summary::-webkit-details-marker{display:none;}
+.bp-customer-secondary-actions summary::after{content:'›';float:left;transition:transform .18s ease;}
+.bp-customer-secondary-actions[open] summary::after{transform:rotate(90deg);}
+.bp-customer-secondary-actions .cust-actions-secondary{margin-top:6px;}
+@media(max-width:380px){
+  .bp-dashboard-snapshot-grid{gap:6px;}
+  .bp-dashboard-snapshot-item{padding-inline:9px;}
+  .bp-dashboard-snapshot-item strong{font-size:.78rem;}
+  .vg-route-customers .customer-row-story{font-size:.68rem;}
+}
