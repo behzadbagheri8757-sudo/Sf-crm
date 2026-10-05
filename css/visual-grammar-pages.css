@@ -1363,7 +1363,11 @@ html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
 .bp-watch-chip.is-zero{opacity:.6;}
 
 
-/* Customers: invisible hit area over the existing disclosure chevron. */
+/* Customers: invisible hit area over the existing disclosure chevron.
+   Geometry, position, z-index and behavior are unchanged (44x44 tap target,
+   same click handler). Only the *paint* is locked down: the control must never
+   draw a surface, border, ring, shadow or tap flash in any state/engine, so no
+   grey square can appear next to the chevron. */
 .vg-route-customers .customer-list-row{
   position:relative;
 }
@@ -1376,16 +1380,35 @@ html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
   margin:0;
   padding:0;
   transform:translateY(-50%);
-  border:0;
-  background:transparent;
+  border:0 !important;
+  border-radius:0;
+  background:none !important;
+  background-color:transparent !important;
+  background-image:none !important;
+  box-shadow:none !important;
+  outline:none !important;
   color:transparent;
+  font-size:0;
+  line-height:0;
   appearance:none;
   -webkit-appearance:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
   cursor:pointer;
   z-index:2;
 }
+.vg-route-customers .customer-row-detail-hitarea:hover,
+.vg-route-customers .customer-row-detail-hitarea:active,
+.vg-route-customers .customer-row-detail-hitarea:focus,
 .vg-route-customers .customer-row-detail-hitarea:focus-visible{
-  outline:2px solid currentColor;
-  outline-offset:-2px;
-  color:var(--vg-color-text-muted);
+  background:none !important;
+  background-color:transparent !important;
+  box-shadow:none !important;
+  outline:none !important;
+}
+.vg-route-customers .customer-row-detail-hitarea::before,
+.vg-route-customers .customer-row-detail-hitarea::after{
+  content:none;
 }
