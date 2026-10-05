@@ -1364,14 +1364,15 @@ html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
 
 
 /* Customers: invisible hit area over the existing disclosure chevron.
-   Geometry, position, z-index and behavior are unchanged (44x44 tap target,
-   same click handler). Only the *paint* is locked down: the control must never
-   draw a surface, border, ring, shadow or tap flash in any state/engine, so no
-   grey square can appear next to the chevron. */
-.vg-route-customers .customer-list-row{
+   NOT scoped to .vg-route-customers: nothing in the app ever sets that class
+   on <html>/<body>, so a scoped rule never matched and the <button> rendered
+   with the browser's default grey control surface (iOS Safari). The class
+   .customer-row-detail-hitarea is used only by the Customers list, so an
+   unscoped selector is safe. Geometry/behavior unchanged (44x44 tap target). */
+.customer-list-row{
   position:relative;
 }
-.vg-route-customers .customer-row-detail-hitarea{
+.customer-row-detail-hitarea{
   position:absolute;
   inset-inline-end:-15px;
   top:50%;
@@ -1399,16 +1400,16 @@ html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
   cursor:pointer;
   z-index:2;
 }
-.vg-route-customers .customer-row-detail-hitarea:hover,
-.vg-route-customers .customer-row-detail-hitarea:active,
-.vg-route-customers .customer-row-detail-hitarea:focus,
-.vg-route-customers .customer-row-detail-hitarea:focus-visible{
+.customer-row-detail-hitarea:hover,
+.customer-row-detail-hitarea:active,
+.customer-row-detail-hitarea:focus,
+.customer-row-detail-hitarea:focus-visible{
   background:none !important;
   background-color:transparent !important;
   box-shadow:none !important;
   outline:none !important;
 }
-.vg-route-customers .customer-row-detail-hitarea::before,
-.vg-route-customers .customer-row-detail-hitarea::after{
+.customer-row-detail-hitarea::before,
+.customer-row-detail-hitarea::after{
   content:none;
 }
