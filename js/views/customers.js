@@ -6,7 +6,7 @@
 
 (function (global) {
   let custQuery = '';
-  let custFilter = 'all'; // all | attention | unvisited | check_due | followup | debt | settled | credit
+  let custFilter = 'all'; // all | debt | settled | credit
   let custSortBy = 'name'; // name | debt | last_visit | priority
   let locFilter = { regionId: '', routeId: '', neighborhoodId: '', unassigned: false };
 
@@ -67,26 +67,6 @@
     if (custFilter === 'debt') rows = rows.filter(function (x) { return x.t.balance > 0; });
     else if (custFilter === 'settled') rows = rows.filter(function (x) { return x.t.balance === 0; });
     else if (custFilter === 'credit') rows = rows.filter(function (x) { return x.t.balance < 0; });
-
-    if (custFilter === 'attention') {
-      rows = rows.filter(function (x) {
-        const pr = priorityMap[x.c.id];
-        return pr && (pr.riskLevel === 'critical' || pr.riskLevel === 'high');
-      });
-    } else if (custFilter === 'unvisited') {
-      rows = rows.filter(function (x) { return !(Array.isArray(x.c.visits) && x.c.visits.length); });
-    } else if (custFilter === 'check_due') {
-      const dueIds = Object.create(null);
-      if (typeof checksDueSoon === 'function') {
-        try { (checksDueSoon() || []).forEach(function (ch) { if (ch && ch.customerId) dueIds[ch.customerId] = true; }); } catch (e) {}
-      }
-      rows = rows.filter(function (x) { return !!dueIds[x.c.id]; });
-    } else if (custFilter === 'followup') {
-      rows = rows.filter(function (x) {
-        if (typeof getPendingWatchFollowUps !== 'function') return false;
-        try { return (getPendingWatchFollowUps(x.c.id) || []).length > 0; } catch (e) { return false; }
-      });
-    }
 
     if (locFilter.unassigned) {
       rows = rows.filter(function (x) { return !x.c.locationId; });
@@ -289,7 +269,7 @@
     };
     root.innerHTML =
       '<div class="field"><input id="customer-search" placeholder="جستجوی نام، آدرس، تلفن، منطقه و…" value="' + esc(custQuery) + '" autocomplete="off"></div>' +
-      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('attention','نیازمند توجه') + chip('unvisited','ندیده‌شده') + chip('check_due','چک سررسید') + chip('followup','پیگیری باز') + '</div>' +
+      '<div class="chip-row" id="customer-chips">' + chip('all','همه') + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
       '<div class="bp-customer-secondary-filters">' +
       '<div class="btn-row" style="margin-bottom:8px;align-items:center;flex-wrap:wrap;">' +
       '<button type="button" class="btn small secondary" id="customer-filter">فیلتر منطقه</button>' +
@@ -301,7 +281,6 @@
       '<option value="name" ' + (custSortBy === 'name' ? 'selected' : '') + '>نام</option>' +
       '</select>' +
       '</div>' +
-      '<div class="chip-row bp-customer-financial-chips" id="customer-financial-chips">' + chip('debt','بدهکار') + chip('settled','تسویه') + chip('credit','بستانکار') + '</div>' +
       '</div>' +
       '<div id="customer-filter-indicator" class="customer-filter-indicator" aria-live="polite"></div>' +
       '<div id="customer-list"></div>';
@@ -311,10 +290,10 @@
     searchEl.addEventListener('input', searchHandler);
 
     chipHandlers = [];
-    document.querySelectorAll('#customer-chips [data-filter], #customer-financial-chips [data-filter]').forEach(function (btn) {
+    document.querySelectorAll('#customer-chips [data-filter]').forEach(function (btn) {
       const fn = function () {
         custFilter = btn.getAttribute('data-filter');
-        document.querySelectorAll('#customer-chips [data-filter], #customer-financial-chips [data-filter]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-filter') === custFilter); });
+        document.querySelectorAll('#customer-chips [data-filter]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-filter') === custFilter); });
         renderCustomerListOnly();
       };
       btn.addEventListener('click', fn); chipHandlers.push({el:btn, fn:fn});

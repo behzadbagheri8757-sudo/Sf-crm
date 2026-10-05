@@ -293,47 +293,42 @@
     } catch (e2) {}
 
     // موارد قبلی نوار (حفظ شده تا رگرسیون ایجاد نشود)
-    try { followups = typeof getPendingWatchFollowUps === 'function' ? (getPendingWatchFollowUps() || []).length : 0; } catch (e3) {}
+    try {
+      followups = typeof getPendingWatchFollowUps === 'function'
+        ? (getPendingWatchFollowUps() || []).filter(function (o) {
+            // همان قاعده‌ی صفحه‌ی هشدارها: مشتری غیرفعال شمرده نمی‌شود
+            var cu = (data.customers || []).find(function (x) { return x && x.id === o.customerId; });
+            return !!cu && cu.active !== false;
+          }).length
+        : 0;
+    } catch (e3) {}
     try { lowStock = typeof lowStockProducts === 'function' ? (lowStockProducts() || []).length : 0; } catch (e4) {}
 
     if (!(att.count || overdueChecks.length || dueSoonChecks.length || followups || lowStock)) return '';
 
+    /* هر مورد یک ردیف کامل (iOS list row): متن راست، مقدار/توضیح کنار آن، فلش در انتها. */
+    function row(href, count, label, meta, extraAttr) {
+      return '<a class="bp-alert-row" href="' + href + '"' + (extraAttr || '') + '>' +
+        '<span class="bp-alert-row-text"><strong>' + faDigits(count) + '</strong> ' + label + '</span>' +
+        (meta ? '<span class="bp-alert-row-meta">' + meta + '</span>' : '') +
+        '<span class="bp-alert-row-chev" aria-hidden="true"></span>' +
+      '</a>';
+    }
+
     var bits = [];
-
-    if (att.count > 0) {
-      bits.push(
-        '<a href="#" data-attention="1">' +
-          '<strong>' + faDigits(att.count) + '</strong> مشتری نیازمند پیگیری' +
-          ' — ' + money(att.totalBalance) +
-        '</a>'
-      );
-    }
-
-    if (overdueChecks.length > 0) {
-      bits.push(
-        '<a href="#/checks?filter=overdue">' +
-          '<strong>' + faDigits(overdueChecks.length) + '</strong> چک سررسیدگذشته' +
-        '</a>'
-      );
-    }
-
-    if (dueSoonChecks.length > 0) {
-      bits.push(
-        '<a href="#/checks?filter=dueSoon">' +
-          '<strong>' + faDigits(dueSoonChecks.length) + '</strong> چک نزدیک سررسید' +
-        '</a>'
-      );
-    }
-
-    if (followups) bits.push('<a href="#/watches"><strong>' + faDigits(followups) + '</strong> پیگیری باز</a>');
-    if (lowStock) bits.push('<a href="#/inventory"><strong>' + faDigits(lowStock) + '</strong> کالای کم‌موجودی</a>');
+    if (att.count > 0) bits.push(row('#', att.count, 'مشتری نیازمند پیگیری', money(att.totalBalance), ' data-attention="1"'));
+    if (overdueChecks.length > 0) bits.push(row('#/checks?filter=overdue', overdueChecks.length, 'چک سررسیدگذشته'));
+    if (dueSoonChecks.length > 0) bits.push(row('#/checks?filter=dueSoon', dueSoonChecks.length, 'چک نزدیک سررسید'));
+    if (followups) bits.push(row('#/watches?filter=followup', followups, 'پیگیری باز'));
+    if (lowStock) bits.push(row('#/inventory', lowStock, 'کالای کم‌موجودی'));
 
     return '<div class="bp-dashboard-alert" role="status">' +
-      '<span class="bp-dashboard-alert-dot" aria-hidden="true"></span>' +
-      '<span class="bp-dashboard-alert-label">نیازمند رسیدگی</span>' +
-      '<span class="bp-dashboard-alert-items">' +
-        bits.join('<span class="bp-dashboard-alert-sep">·</span>') +
-      '</span></div>';
+      '<div class="bp-dashboard-alert-head">' +
+        '<span class="bp-dashboard-alert-dot" aria-hidden="true"></span>' +
+        '<span class="bp-dashboard-alert-label">نیازمند رسیدگی</span>' +
+      '</div>' +
+      '<div class="bp-dashboard-alert-items">' + bits.join('') + '</div>' +
+    '</div>';
   }
 
   function openAttentionSheet(ctx) {
@@ -402,7 +397,7 @@
       '<div class="bp-dashboard-snapshot-grid">' +
       '<div class="bp-dashboard-snapshot-item"><span>فروش</span><strong>' + money(sales) + '</strong><small>' + faDigits(invoices) + ' فاکتور</small></div>' +
       '<div class="bp-dashboard-snapshot-item"><span>ویزیت</span><strong>' + faDigits(visits) + '</strong><small>امروز</small></div>' +
-      '<div class="bp-dashboard-snapshot-item"><span>وصول</span><strong>' + money(received) + '</strong><small>امروز</small></div>' +
+      '<div class="bp-dashboard-snapshot-item"><span>دریافتی</span><strong>' + money(received) + '</strong><small>امروز</small></div>' +
       '</div></div>';
   }
 
