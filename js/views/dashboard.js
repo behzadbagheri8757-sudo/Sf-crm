@@ -437,6 +437,7 @@
     const sales = Number(metrics.mtdSales) || 0;
     const rawPct = target > 0 ? Math.round((sales / target) * 100) : 0;
     const pct = Math.min(100, Math.max(0, rawPct));
+    const capped = pct;
     const done = target > 0 && sales >= target;
 
     function compactMoney(value) {
@@ -444,59 +445,60 @@
       if (n >= 1000000) {
         const m = n / 1000000;
         const text = Number.isInteger(m) ? String(m) : m.toFixed(1).replace(/\.0$/, '');
-        return enToFaDigits(text) + ' میلیون';
+        return enToFaDigits(text) + 'M';
       }
-      return money(n);
+      return toman(n);
     }
 
-    function titleHtml() {
-      return '<div class="bp-target-card-title"><span class="bp-target-card-icon" aria-hidden="true">'
-        + dashboardIcon('target', 20) + '</span><strong>هدف فروش ماه</strong></div>';
+    /* فقط دکمهٔ آیکون قابل کلیک است؛ بقیهٔ نوار صرفاً نمایشی است. */
+    function targetTitleHtml() {
+      return '<div class="bp-target-strip-title">' +
+        '<button type="button" class="bp-target-strip-settings-btn" data-monthly-target aria-label="تنظیم هدف فروش این ماه">' +
+          dashboardIcon('target',20) +
+        '</button>' +
+        '<strong>هدف فروش این ماه</strong>' +
+      '</div>';
     }
 
-    if (!target || target <= 0) {
-      return '<div class="dashboard-block bp-target-card bp-target-card-empty">'
-        + '<div class="bp-target-card-head">' + titleHtml()
-        + '<button type="button" class="bp-target-card-settings" data-monthly-target aria-label="تنظیم هدف فروش ماهانه">' + dashboardIcon('gear', 20) + '</button></div>'
-        + '<button type="button" class="bp-target-card-empty-action" data-monthly-target>تنظیم هدف فروش ماهانه</button>'
-        + '</div>';
+    if (!(target > 0)) {
+      return '<div class="bp-target-strip is-empty">' +
+        '<div class="bp-target-strip-head">' +
+          targetTitleHtml() +
+          '<button type="button" class="bp-target-strip-settings" data-monthly-target>تنظیم ›</button>' +
+        '</div>' +
+        '<div class="bp-target-strip-empty-text">هنوز هدفی برای این ماه تعیین نشده</div>' +
+      '</div>';
     }
 
-    let statusCls = 'ontrack';
-    let statusText = 'طبق برنامه پیش می‌روید';
+    let status = { cls: 'ontrack', icon: '✓', text: 'روی برنامه' };
     let daysLeft = 0;
     let requiredDaily = 0;
-    let difference = 0;
-
-    if (done) {
-      statusCls = 'done';
-      statusText = 'هدف ماه محقق شد';
-    } else {
-      const monthLen = metrics.jy && metrics.jm && typeof jalaliMonthLength === 'function'
-        ? jalaliMonthLength(metrics.jy, metrics.jm) : 0;
+    if (!done) {
+      const monthLen = (metrics.jy && metrics.jm && typeof jalaliMonthLength === 'function')
+        ? jalaliMonthLength(metrics.jy, metrics.jm) : null;
       if (monthLen) {
         daysLeft = Math.max(0, monthLen - (metrics.jd || 0));
-        const expectedSales = target * Math.min(1, Math.max(0, (metrics.jd || 0) / monthLen));
-        difference = Math.round(sales - expectedSales);
-        if (sales > expectedSales * 1.05) statusCls = 'ahead';
-        else if (sales < expectedSales * 0.95) statusCls = 'behind';
-        if (statusCls === 'ahead') statusText = compactMoney(Math.abs(difference)) + ' جلوتر از برنامه';
-        else if (statusCls === 'behind') statusText = compactMoney(Math.abs(difference)) + ' عقب از برنامه';
+        const expectedFraction = Math.min(1, (metrics.jd || 0) / monthLen);
+        const expectedSales = target * expectedFraction;
+        if (sales >= expectedSales * 1.05) status = { cls: 'ahead', icon: '↑', text: 'جلوتر از برنامه' };
+        else if (sales <= expectedSales * 0.95) status = { cls: 'behind', icon: '⚠', text: 'عقب‌تر از برنامه' };
+        requiredDaily = daysLeft > 0 ? Math.round(Math.max(0, target - sales) / daysLeft) : 0;
       }
-      requiredDaily = daysLeft > 0 ? Math.round(Math.max(0, target - sales) / daysLeft) : 0;
     }
 
-    return '<div class="dashboard-block bp-target-card is-' + statusCls + '">'
-      + '<div class="bp-target-card-head">' + titleHtml()
-      + '<button type="button" class="bp-target-card-settings" data-monthly-target aria-label="تنظیم هدف فروش ماهانه">' + dashboardIcon('gear', 20) + '</button></div>'
-      + '<div class="bp-target-card-main"><div class="bp-target-card-amount"><strong>' + compactMoney(sales) + '</strong><span>از ' + compactMoney(target) + ' تومان</span></div>'
-      + '<span class="bp-target-card-percent">' + enToFaDigits(String(pct)) + '٪</span></div>'
-      + '<div class="bp-target-card-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span class="bp-target-card-fill" style="width:' + pct + '%"></span></div>'
-      + '<div class="bp-target-card-status"><span class="bp-target-card-status-dot" aria-hidden="true"></span><span>' + statusText + '</span></div>'
-      + (done
-        ? '<div class="bp-target-card-footer"><span>هدف ماهانه کامل شده است</span><span>' + enToFaDigits(String(rawPct)) + '٪ تحقق</span></div>'
-        : '<div class="bp-target-card-footer"><span>نیاز روزانه: <strong>' + compactMoney(requiredDaily) + ' تومان</strong></span><span>' + enToFaDigits(String(daysLeft)) + ' روز مانده</span></div>')
-      + '</div>';
+    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + '">' +
+      '<div class="bp-target-strip-head">' +
+        targetTitleHtml() +
+        '<span class="bp-target-strip-status">' + (done ? '✓ رسید' : status.icon + ' ' + status.text) + '</span>' +
+      '</div>' +
+      '<div class="bp-target-strip-figures">' +
+        '<span><strong>' + compactMoney(sales) + '</strong> / ' + compactMoney(target) + ' <small>تومان</small></span>' +
+        '<span><strong>' + enToFaDigits(String(pct)) + '٪</strong></span>' +
+        (done ? '<span class="bp-target-strip-congrats">آفرین!</span>' : '<span>نیاز روزانه <strong>' + compactMoney(requiredDaily) + '</strong> ت</span>') +
+      '</div>' +
+      '<div class="bp-target-strip-bar"><span style="width:' + capped + '%"></span></div>' +
+      (!done && daysLeft > 0 ? '<div class="bp-target-strip-days">' + enToFaDigits(String(daysLeft)) + ' روز مانده</div>' : '') +
+    '</div>';
   }
 
   function bindMonthlyTarget(root, refresh) {
@@ -574,11 +576,11 @@
       alertBar +
       todaySnapshot +
 
-      /* A — Monthly target, then today's focus */
-      targetHtml(metrics) +
+      /* A — Today's Focus */
       '<div class="dash-focus">' +
         '<div class="dash-focus-actions">' + focusActions + '</div>' +
       '</div>' +
+      targetHtml(metrics) +
       watchSummary +
 
       /* B — Financial Health (same metrics; stacked rows for mobile) */
