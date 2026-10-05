@@ -154,9 +154,11 @@
         const watchTitle = watchCount > 0 ? 'هشدار فعال: ' + watchCount + ' مورد' : '';
 
         return (
-          '<div class="ledger-row customer-list-row ' + riskCls + '" data-open-customer="' +
+          '<a class="ledger-row customer-list-row ' + riskCls + '" data-open-customer="' +
           esc(c.id) +
-          '" style="color:inherit;"' +
+          '" href="' +
+          customerHref(c.id) +
+          '" style="text-decoration:none;color:inherit;"' +
           (watchTitle ? ' title="' + esc(watchTitle) + '"' : '') + '>' +
           '<span class="customer-row-main">' +
           '<span class="customer-row-title-line">' +
@@ -178,8 +180,8 @@
           (t.balance !== 0 ? toman(Math.abs(t.balance)) + ' ت' : '') +
           '</span>' +
           '</span>' +
-          '<button type="button" class="customer-row-detail-chevron" data-customer-detail="' + esc(c.id) + '" aria-label="مشاهده جزئیات مشتری" title="مشاهده جزئیات مشتری"><span aria-hidden="true"></span></button>' +
-          '</div>'
+          '<button type="button" class="customer-row-detail-hitarea" data-customer-detail="' + esc(c.id) + '" aria-label="مشاهده جزئیات مشتری" title="مشاهده جزئیات مشتری"></button>' +
+          '</a>'
         );
       })
       .join('');
