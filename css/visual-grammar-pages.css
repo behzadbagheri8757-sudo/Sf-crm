@@ -1117,18 +1117,31 @@ html[data-theme="dark"] .watch-detail-reason .watch-detail-value{color:var(--vg-
 
 /* ---------- BAGHERI P0/P1 presentation additions — additive bp-* only ---------- */
 .bp-dashboard-alert{
-  display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 8px;min-height:42px;padding:9px 11px;margin:0 0 16px;
+  display:block;padding:11px 14px 2px;margin:0 0 16px;
   border:1px solid var(--vg-color-divider);border-radius:14px;background:var(--vg-color-surface);
-  white-space:normal;
 }
-.bp-dashboard-alert-dot{width:7px;height:7px;flex:0 0 7px;margin-top:7px;border-radius:50%;background:var(--vg-color-danger);}
-.bp-dashboard-alert-label{flex:none;font-size:.72rem;line-height:1.7;font-weight:700;color:var(--vg-color-text);white-space:nowrap;}
-/* موارد کنار عنوان می‌نشینند؛ اگر جا کم بود، زیر آن می‌روند و داخل خودشان هم wrap می‌شوند. */
-.bp-dashboard-alert-items{flex:1 1 150px;display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;min-width:0;font-size:.72rem;line-height:1.7;color:var(--vg-color-text-muted);}
-.bp-dashboard-alert-items a{color:inherit;text-decoration:none;}
-.bp-dashboard-alert-items strong{font-weight:700;color:var(--vg-color-text);}
-/* جداکننده‌ی «·» هنگام wrap شدن سر یا ته خط می‌ماند؛ فاصله‌ی gap جایش را می‌گیرد. */
-.bp-dashboard-alert-sep{display:none;}
+.bp-dashboard-alert-head{display:flex;align-items:center;gap:8px;padding-bottom:8px;}
+.bp-dashboard-alert-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--vg-color-danger);}
+.bp-dashboard-alert-label{font-size:.74rem;line-height:1.5;font-weight:700;color:var(--vg-color-text);}
+/* هر مورد یک ردیف کامل؛ جداکننده‌ی نازک بین ردیف‌ها (الگوی لیست iOS) */
+.bp-dashboard-alert-items{display:flex;flex-direction:column;}
+.bp-alert-row{
+  display:flex;align-items:center;gap:10px;min-height:44px;padding:9px 0;
+  border-top:1px solid var(--vg-color-divider);
+  color:var(--vg-color-text-secondary);text-decoration:none;
+  font-size:.8rem;line-height:1.6;
+  -webkit-tap-highlight-color:transparent;
+  transition:opacity .12s ease;
+}
+.bp-alert-row:active{opacity:.55;}
+.bp-alert-row-text{flex:1 1 auto;min-width:0;}
+.bp-alert-row-text strong{font-weight:700;color:var(--vg-color-text);}
+.bp-alert-row-meta{flex:none;font-size:.74rem;font-weight:600;color:var(--vg-color-text-muted);white-space:nowrap;}
+.bp-alert-row-chev{
+  flex:none;width:7px;height:7px;margin-inline-start:2px;
+  border-left:1.6px solid var(--vg-color-text-muted);border-bottom:1.6px solid var(--vg-color-text-muted);
+  opacity:.55;transform:rotate(45deg);
+}
 .bp-dashboard-snapshot{margin-bottom:22px;}
 .bp-dashboard-snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .bp-dashboard-snapshot-item{display:flex;flex-direction:column;gap:5px;min-width:0;padding:12px 11px;border:1px solid var(--vg-color-divider);border-radius:14px;background:var(--vg-color-surface);}
@@ -1320,3 +1333,31 @@ html[data-theme="dark"] .bp-attention-row{
   color:var(--vg-color-success);
   font-weight:700;
 }
+
+/* Watches page filter chips — one horizontal iOS-style scroller, never wraps.
+   Bleeds to the screen edge (matches main's 14px side padding) so a partly
+   visible chip hints that the row scrolls. */
+.bp-watch-filters{
+  display:flex;flex-wrap:nowrap;align-items:center;gap:8px;
+  margin:0 -14px 14px;padding:2px 14px;
+  overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+  scrollbar-width:none;
+  scroll-snap-type:x proximity;
+}
+.bp-watch-filters::-webkit-scrollbar{display:none;}
+.bp-watch-chip{
+  flex:none;display:inline-flex;align-items:center;gap:7px;
+  min-height:36px;padding:5px 12px;
+  font-family:inherit;font-size:.78rem;line-height:1.2;white-space:nowrap;
+  scroll-snap-align:center;
+}
+.bp-watch-chip-count{
+  min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:.68rem;font-weight:700;line-height:1;
+  background:rgba(31,41,55,.07);color:var(--vg-color-text-secondary);
+}
+html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
+.bp-watch-chip.active .bp-watch-chip-count{background:rgba(255,255,255,.26);color:#fff;}
+.bp-watch-chip.is-zero{opacity:.6;}
