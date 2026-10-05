@@ -1362,49 +1362,30 @@ html[data-theme="dark"] .bp-watch-chip-count{background:rgba(255,255,255,.10);}
 .bp-watch-chip.active .bp-watch-chip-count{background:rgba(255,255,255,.26);color:#fff;}
 .bp-watch-chip.is-zero{opacity:.6;}
 
-/* Customers: dedicated 44x44px invisible chevron hit area. The existing
-   disclosure glyph remains visually unchanged; only the hit target is added. */
-.vg-route-customers .customer-list-row::after{
-  display:none;
+
+/* Customers: invisible hit area over the existing disclosure chevron. */
+.vg-route-customers .customer-list-row{
+  position:relative;
 }
-.vg-route-customers .customer-row-detail-chevron{
-  grid-column:3;
-  grid-row:1;
+.vg-route-customers .customer-row-detail-hitarea{
+  position:absolute;
+  inset-inline-end:-15px;
+  top:50%;
   width:44px;
   height:44px;
   margin:0;
   padding:0;
+  transform:translateY(-50%);
   border:0;
   background:transparent;
-  color:inherit;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  border-radius:10px;
+  color:transparent;
   appearance:none;
   -webkit-appearance:none;
+  cursor:pointer;
   z-index:2;
 }
-.vg-route-customers .customer-row-detail-chevron span{
-  width:14px;
-  height:14px;
-  display:block;
-  opacity:.38;
-  background-color:currentColor;
-  -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E");
-  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E");
-  -webkit-mask-size:contain;
-  mask-size:contain;
-  -webkit-mask-repeat:no-repeat;
-  mask-repeat:no-repeat;
-  -webkit-mask-position:center;
-  mask-position:center;
-}
-.vg-route-customers .customer-row-detail-chevron:focus-visible{
+.vg-route-customers .customer-row-detail-hitarea:focus-visible{
   outline:2px solid currentColor;
   outline-offset:-2px;
-}
-.vg-route-customers .customer-row-detail-chevron:active span{
-  opacity:.58;
+  color:var(--vg-color-text-muted);
 }
