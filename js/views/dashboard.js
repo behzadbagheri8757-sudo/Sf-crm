@@ -486,7 +486,8 @@
       }
     }
 
-    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + '">' +
+    const progressClass = pct > 0 ? ' has-progress' : '';
+    return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + progressClass + '">' +
       '<div class="bp-target-strip-head">' +
         targetTitleHtml() +
         '<span class="bp-target-strip-status">' + (done ? '✓ رسید' : status.icon + ' ' + status.text) + '</span>' +
@@ -576,11 +577,12 @@
       alertBar +
       todaySnapshot +
 
+      targetHtml(metrics) +
+
       /* A — Today's Focus */
       '<div class="dash-focus">' +
         '<div class="dash-focus-actions">' + focusActions + '</div>' +
       '</div>' +
-      targetHtml(metrics) +
       watchSummary +
 
       /* B — Financial Health (same metrics; stacked rows for mobile) */
