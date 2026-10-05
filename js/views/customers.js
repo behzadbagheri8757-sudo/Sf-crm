@@ -154,11 +154,9 @@
         const watchTitle = watchCount > 0 ? 'هشدار فعال: ' + watchCount + ' مورد' : '';
 
         return (
-          '<a class="ledger-row customer-list-row ' + riskCls + '" data-open-customer="' +
+          '<div class="ledger-row customer-list-row ' + riskCls + '" data-open-customer="' +
           esc(c.id) +
-          '" href="' +
-          customerHref(c.id) +
-          '" style="text-decoration:none;color:inherit;"' +
+          '" style="color:inherit;"' +
           (watchTitle ? ' title="' + esc(watchTitle) + '"' : '') + '>' +
           '<span class="customer-row-main">' +
           '<span class="customer-row-title-line">' +
@@ -179,7 +177,9 @@
           '<span class="customer-row-balance-value">' +
           (t.balance !== 0 ? toman(Math.abs(t.balance)) + ' ت' : '') +
           '</span>' +
-          '</span></a>'
+          '</span>' +
+          '<button type="button" class="customer-row-detail-chevron" data-customer-detail="' + esc(c.id) + '" aria-label="مشاهده جزئیات مشتری" title="مشاهده جزئیات مشتری"><span aria-hidden="true"></span></button>' +
+          '</div>'
         );
       })
       .join('');
@@ -308,6 +308,13 @@
 
     const list = document.getElementById('customer-list');
     listClickHandler = function (e) {
+      const detailButton = e.target.closest('[data-customer-detail]');
+      if (detailButton) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigateToCustomer(detailButton.getAttribute('data-customer-detail'));
+        return;
+      }
       const row = e.target.closest('[data-open-customer]');
       if (!row) return;
       if (typeof isSpaShell === 'function' && isSpaShell()) {
