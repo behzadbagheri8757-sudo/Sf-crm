@@ -487,14 +487,15 @@
     }
 
     const progressClass = pct > 0 ? ' has-progress' : '';
+
     return '<div class="bp-target-strip ' + (done ? 'is-done' : 'is-' + status.cls) + progressClass + '">' +
       '<div class="bp-target-strip-head">' +
         targetTitleHtml() +
         '<span class="bp-target-strip-status">' + (done ? '✓ رسید' : status.icon + ' ' + status.text) + '</span>' +
       '</div>' +
       '<div class="bp-target-strip-figures">' +
-        '<span><strong>' + compactMoney(sales) + '</strong> / ' + compactMoney(target) + ' <small>تومان</small></span>' +
-        '<span><strong>' + enToFaDigits(String(pct)) + '٪</strong></span>' +
+        '<span class="bp-target-strip-sales"><strong class="bp-target-strip-current">' + compactMoney(sales) + '</strong><span class="bp-target-strip-target"> / ' + compactMoney(target) + '</span> <small>تومان</small></span>' +
+        '<span class="bp-target-strip-percent"><strong>' + enToFaDigits(String(pct)) + '٪</strong></span>' +
         (done ? '<span class="bp-target-strip-congrats">آفرین!</span>' : '<span>نیاز روزانه <strong>' + compactMoney(requiredDaily) + '</strong> ت</span>') +
       '</div>' +
       '<div class="bp-target-strip-bar"><span style="width:' + capped + '%"></span></div>' +
@@ -576,7 +577,6 @@
       '<div class="dashboard-eyebrow">مرکز فرماندهی روزانه</div>' +
       alertBar +
       todaySnapshot +
-
       targetHtml(metrics) +
 
       /* A — Today's Focus */
