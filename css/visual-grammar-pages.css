@@ -1828,3 +1828,74 @@ html[data-theme="dark"] #main #customer-chips .chip.active{box-shadow:0 1px 3px 
 html[data-theme="dark"] #main #invoice-chips .chip.active{box-shadow:0 1px 3px rgba(0,0,0,.45);}
 #main .cl-tools .tx-toolbar-label{margin-inline-start:auto;white-space:nowrap;}
 #main .cl-tools .cl-count{padding:0;}
+
+/* ============================================================
+   Invoice detail — shared visual language (Reports / Customer Detail)
+   Presentation only. Scope: #main .inv-detail (the tx-* classes are
+   shared with supplier / prospect / settings pages, so nothing here
+   leaks to them). Surface standard: --vg-color-surface + 1px border +
+   --vg-radius-raised, no shadow; related numbers share ONE surface
+   with hairline dividers.
+   ============================================================ */
+#main .inv-detail h3.sub-title{margin:22px 0 10px;}
+
+/* Identity */
+#main .inv-detail .tx-identity.card{
+  padding:16px;border-radius:var(--vg-radius-raised);box-shadow:none;margin-bottom:var(--vg-space-group);
+}
+#main .inv-detail .tx-identity-title{font-size:1.2rem;}
+#main .inv-detail .tx-identity-meta{margin-top:6px;gap:6px;line-height:1.7;}
+
+/* Financial summary: total, paid, remaining = one grouped surface */
+#main .inv-detail .tx-finance.cards{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;padding:0;overflow:hidden;
+  background:var(--vg-color-divider);
+  border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  box-shadow:none;margin-bottom:var(--vg-space-group);
+}
+#main .inv-detail .tx-finance.cards > .card{
+  background:var(--vg-color-surface);border:0;border-radius:0;box-shadow:none;padding:12px 14px;min-width:0;
+}
+#main .inv-detail .tx-finance.cards > .card.wide{grid-column:1/-1;padding:16px 14px 14px;}
+#main .inv-detail .tx-finance.cards > .card.wide .value{font-size:1.45rem;font-weight:var(--vg-weight-value);}
+#main .inv-detail .tx-finance.cards > .card .value{overflow-wrap:anywhere;}
+
+/* Items / edit history: one surface, divided rows */
+#main .inv-detail .inv-surface{
+  background:var(--vg-color-surface);border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  box-shadow:none;padding:0 14px;margin-bottom:var(--vg-space-group);
+}
+#main .inv-detail .inv-surface > .ledger-row{padding:12px 0;min-height:52px;}
+#main .inv-detail .inv-surface > .ledger-row + .ledger-row{border-top:1px solid var(--vg-color-divider);}
+#main .inv-detail .inv-surface > .empty{padding:14px 0;}
+
+/* Disclosures (payment & profit / settlement trace / visit link): list rows on a surface */
+#main .inv-detail .tx-details{
+  margin:0 0 10px;padding:0 14px;
+  background:var(--vg-color-surface);border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  box-shadow:none;
+}
+#main .inv-detail .tx-details > summary{
+  list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  min-height:46px;padding:0;font-size:.86rem;font-weight:var(--vg-weight-title);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+#main .inv-detail .tx-details > summary::-webkit-details-marker{display:none;}
+#main .inv-detail .tx-details > summary::after{
+  content:'';flex:0 0 auto;width:7px;height:7px;margin-inline-end:3px;
+  border-inline-end:2px solid var(--vg-color-text-muted);border-bottom:2px solid var(--vg-color-text-muted);
+  transform:rotate(45deg);transition:transform .2s ease;
+}
+#main .inv-detail .tx-details[open] > summary::after{transform:rotate(-135deg);}
+#main .inv-detail .tx-details > .cards{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;padding:0;overflow:hidden;
+  background:var(--vg-color-divider);border:1px solid var(--vg-color-border);border-radius:12px;box-shadow:none;
+}
+#main .inv-detail .tx-details > .cards > .card{
+  background:var(--vg-color-surface);border:0;border-radius:0;box-shadow:none;padding:11px 12px;min-width:0;
+}
+#main .inv-detail .tx-details > .cards > .card.wide,
+#main .inv-detail .tx-details > .cards > .card:last-child:nth-child(odd){grid-column:1/-1;}
+#main .inv-detail .tx-details > .cards > .card .value{overflow-wrap:anywhere;}
+#main .inv-detail .tx-details > .card{background:transparent;border:0;box-shadow:none;padding:0;}
+@media (prefers-reduced-motion:reduce){#main .inv-detail .tx-details > summary::after{transition:none;}}
