@@ -1574,3 +1574,85 @@ details[open] > summary .rp-sum-chev{transform:rotate(90deg);}
 @media (prefers-reduced-motion:reduce){
   .rp-bar-fill,.rp-sum-chev,.rp-seg-btn{transition:none;}
 }
+
+/* ============================================================
+   Dashboard — shared visual language with Reports (polish only)
+   Presentation only. Scope: .vg-route-dashboard .dashboard-shell.
+   NOT touched on purpose: .bp-target-strip* (Target Bar), bottom
+   navigation, all markup / data / logic.
+
+   Shared standard (same values as the Reports page):
+     surface   = --vg-color-surface + 1px --vg-color-border + --vg-radius-raised, no shadow
+     divider   = 1px --vg-color-divider between rows / KPI cells
+     section title = --vg-type-section / --vg-weight-title, no leading icon
+     section link  = .76rem, --vg-color-primary
+     KPI group = ONE surface with hairline dividers (value first, label below)
+     semantic colour = --vg-color-danger / success / warning tokens only
+   ============================================================ */
+.vg-route-dashboard .dashboard-eyebrow{color:var(--vg-color-text-muted);margin-bottom:16px;}
+
+/* Section titles — same size/weight/spacing as Reports; no leading icon */
+.vg-route-dashboard .dashboard-block-head{margin-bottom:10px;}
+.vg-route-dashboard .dashboard-shell .dash-section-label{
+  font-size:var(--vg-type-section);font-weight:var(--vg-weight-title);gap:8px;
+}
+.vg-route-dashboard .dashboard-shell .dash-section-ico{display:none;}
+.vg-route-dashboard .dashboard-shell .section-action{
+  font-size:.76rem;font-weight:var(--vg-weight-label);color:var(--vg-color-primary);
+  text-decoration:none;padding:6px 0 6px 4px;
+}
+.vg-route-dashboard .dashboard-shell .dashboard-block-head .section-action{font-size:.76rem;}
+
+/* KPI groups (today snapshot + financial health): three separate cards → one surface */
+.vg-route-dashboard .dashboard-shell .bp-dashboard-snapshot-grid,
+.vg-route-dashboard .dashboard-shell .dash-health-surface{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
+  box-shadow:none;padding:4px 0;overflow:hidden;
+}
+.vg-route-dashboard .dashboard-shell .bp-dashboard-snapshot-item,
+.vg-route-dashboard .dashboard-shell .dash-health-row{
+  align-items:center;justify-content:center;text-align:center;
+  gap:4px;min-height:0;padding:12px 8px;
+  background:transparent;border:0;border-radius:0;box-shadow:none;
+}
+.vg-route-dashboard .dashboard-shell .bp-dashboard-snapshot-item + .bp-dashboard-snapshot-item,
+.vg-route-dashboard .dashboard-shell .dash-health-row + .dash-health-row{
+  border-inline-start:1px solid var(--vg-color-divider);
+}
+/* value first, label below (same order as Reports stats) */
+.vg-route-dashboard .dashboard-shell .bp-dashboard-snapshot-item strong,
+.vg-route-dashboard .dashboard-shell .dash-health-value{order:-1;font-weight:var(--vg-weight-value);}
+.vg-route-dashboard .dashboard-shell .dash-health-value{text-align:center;}
+.vg-route-dashboard .dashboard-shell .dash-health-value.debt{color:var(--vg-color-danger);}
+.vg-route-dashboard .dashboard-shell .dash-health-link:active{
+  transform:none;background:var(--vg-color-surface-soft);
+}
+
+/* Action queue (primary list) and empty state: rows now sit on a surface like Reports lists */
+.vg-route-dashboard .dashboard-shell .dashboard-block > .dash-activity{
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
+}
+.vg-route-dashboard .dashboard-shell .dash-action-queue > .action-row:last-child{border-bottom:0;}
+.vg-route-dashboard .dashboard-shell .action-badge{background:var(--vg-color-neutral-soft);}
+
+/* Recent activity cards, quick actions, watch, alert: one border/radius/no-shadow standard */
+.vg-route-dashboard .dashboard-shell .dash-activity-section,
+.vg-route-dashboard .dashboard-shell .dash-watch-compact{
+  border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);box-shadow:none;
+}
+.vg-route-dashboard .dashboard-shell .dash-qa-btn{
+  border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);box-shadow:none;
+}
+.vg-route-dashboard .dashboard-shell .dash-qa-btn:active{background:var(--vg-color-surface-soft);transform:none;opacity:.7;}
+.vg-route-dashboard .dashboard-shell .dash-qa-label{color:var(--vg-color-text-secondary);}
+.vg-route-dashboard .dashboard-shell .bp-dashboard-watch-card,
+.vg-route-dashboard .dashboard-shell .bp-dashboard-alert{
+  border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+}
+.vg-route-dashboard .dashboard-shell .bp-dashboard-alert{padding-inline:16px;}
+.vg-route-dashboard .dashboard-shell .bp-dashboard-watch-list{gap:8px;}
