@@ -1656,3 +1656,114 @@ details[open] > summary .rp-sum-chev{transform:rotate(90deg);}
 }
 .vg-route-dashboard .dashboard-shell .bp-dashboard-alert{padding-inline:16px;}
 .vg-route-dashboard .dashboard-shell .bp-dashboard-watch-list{gap:8px;}
+
+/* ============================================================
+   Customer Detail — shared visual language with Reports/Dashboard
+   Presentation only. Scope: #main.customer-detail-view.
+   Standard surface: --vg-color-surface + 1px --vg-color-border +
+   --vg-radius-raised, no shadow. Related info = ONE grouped surface
+   with hairline dividers instead of many boxes. Watch / Intelligence
+   keep their own labelled surfaces (accent edge preserved).
+   Tokens only; Light/Dark follow the existing token swap.
+   ============================================================ */
+
+/* Section titles: same rhythm as Reports */
+#main.customer-detail-view h3.sub-title{margin:22px 0 10px;}
+
+/* 1 · Header: identity + balance + status + story = one grouped surface */
+#main.customer-detail-view .customer-identity-card{
+  padding:16px;border-radius:var(--vg-radius-raised);box-shadow:none;margin-bottom:var(--vg-space-group);
+}
+#main.customer-detail-view .customer-identity-name{font-size:1.2rem;margin-bottom:4px;overflow-wrap:anywhere;}
+#main.customer-detail-view .customer-identity-meta{font-size:.82rem;line-height:1.7;}
+.cd-meta-row{display:flex;align-items:baseline;gap:10px;padding:2px 0;}
+.cd-meta-k{flex:0 0 78px;font-size:.72rem;color:var(--vg-color-text-muted);}
+.cd-meta-v{min-width:0;flex:1 1 auto;color:var(--vg-color-text);overflow-wrap:anywhere;}
+#main.customer-detail-view .customer-balance-block{
+  margin-top:12px;padding-top:12px;border-top:1px solid var(--vg-color-divider);
+}
+#main.customer-detail-view .customer-balance-value{font-size:1.3rem;font-weight:var(--vg-weight-value);overflow-wrap:anywhere;}
+#main.customer-detail-view .bp-customer-health{
+  margin-top:12px;padding:12px 0 0;border:0;border-top:1px solid var(--vg-color-divider);
+  border-radius:0;background:transparent;
+}
+#main.customer-detail-view .bp-customer-health-label{font-size:.76rem;}
+#main.customer-detail-view .bp-customer-health-value{font-size:.84rem;}
+#main.customer-detail-view .bp-customer-attention{
+  margin-top:12px;border:0;border-radius:12px;background:var(--vg-color-warning-soft);
+}
+html[data-theme="dark"] #main.customer-detail-view .bp-customer-attention{border:0;}
+#main.customer-detail-view .bp-customer-attention .bp-attention-icon{
+  flex:0 0 7px;width:7px;height:7px;margin-top:.62em;border-radius:50%;background:var(--vg-color-warning);font-size:0;
+}
+#main.customer-detail-view .customer-identity-card .cust-summary{
+  margin:12px 0 0;padding:12px 0 0;background:transparent;border:0;
+  border-top:1px solid var(--vg-color-divider);border-radius:0;box-shadow:none;
+}
+#main.customer-detail-view .customer-identity-card .cust-summary-story{font-size:.86rem;line-height:1.8;}
+
+/* 2 · Same surface standard for the remaining standalone blocks */
+#main.customer-detail-view .bp-focus,
+#main.customer-detail-view .bp-glance,
+#main.customer-detail-view .cust-recommended-action,
+#main.customer-detail-view .watch-followup-card,
+#main.customer-detail-view .watch-confirmed-card,
+#main.customer-detail-view .watch-lifecycle-card,
+#main.customer-detail-view .customer-behavior-details > .card,
+#main.customer-detail-view .customer-last-visit-card{
+  border-radius:var(--vg-radius-raised);box-shadow:none;
+}
+#main.customer-detail-view .bp-focus,
+#main.customer-detail-view .bp-glance{border:1px solid var(--vg-color-border);}
+
+/* 3 · Actions: secondary actions disclosure becomes a list row on a surface */
+#main.customer-detail-view .bp-customer-secondary-actions{
+  margin:0 0 var(--vg-space-group);padding:0 14px;
+  background:var(--vg-color-surface);border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+}
+#main.customer-detail-view .bp-customer-secondary-actions summary{padding:0;min-height:46px;display:flex;align-items:center;justify-content:space-between;font-size:.82rem;}
+#main.customer-detail-view .bp-customer-secondary-actions summary::after{float:none;}
+#main.customer-detail-view .bp-customer-secondary-actions .cust-actions-secondary{margin:0;padding-bottom:12px;}
+
+/* 4 · Metric groups (financial summary + behaviour analysis): ONE surface, hairline dividers */
+#main.customer-detail-view .cards.cust-metrics,
+#main.customer-detail-view details > .cards{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;padding:0;overflow:hidden;
+  background:var(--vg-color-divider);
+  border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  box-shadow:none;margin-bottom:var(--vg-space-group);
+}
+#main.customer-detail-view .cards.cust-metrics > .card,
+#main.customer-detail-view details > .cards > .card{
+  background:var(--vg-color-surface);border:0;border-radius:0;box-shadow:none;
+  padding:12px 14px;min-width:0;
+}
+#main.customer-detail-view .cards.cust-metrics > .card.wide,
+#main.customer-detail-view details > .cards > .card.wide{grid-column:1/-1;}
+#main.customer-detail-view .cards.cust-metrics > .card .label,
+#main.customer-detail-view details > .cards > .card .label{margin-bottom:4px;}
+#main.customer-detail-view .cards.cust-metrics > .card .value,
+#main.customer-detail-view details > .cards > .card .value{font-size:.96rem;overflow-wrap:anywhere;}
+#main.customer-detail-view .cards.cust-metrics > .card:last-child:nth-child(odd),
+#main.customer-detail-view details > .cards > .card:last-child:nth-child(odd){grid-column:1/-1;}
+
+/* 5 · Disclosures (behaviour analysis / all signals / rejected products): iOS-style list rows */
+#main.customer-detail-view .customer-behavior-summary{
+  min-height:46px;padding:0 14px;margin:0;
+  background:var(--vg-color-surface);border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  font-size:.86rem;
+}
+#main.customer-detail-view details[open] > .customer-behavior-summary{margin-bottom:10px;}
+#main.customer-detail-view .customer-rejection-details,
+#main.customer-detail-view .customer-watch-details,
+#main.customer-detail-view .customer-behavior-details{margin-bottom:var(--vg-space-group);}
+
+/* 6 · Lists (top products, invoices, payments, checks, visits, rejected products): one surface + divided rows */
+#main.customer-detail-view .customer-tx-list,
+#main.customer-detail-view .customer-rejection-list{
+  background:var(--vg-color-surface);border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);
+  box-shadow:none;padding:2px 14px;margin-bottom:var(--vg-space-group);
+}
+#main.customer-detail-view .customer-tx-list .ledger-row,
+#main.customer-detail-view .customer-rejection-list .ledger-row{min-height:52px;}
+#main.customer-detail-view .watch-occ-row{border-bottom-style:solid;}
