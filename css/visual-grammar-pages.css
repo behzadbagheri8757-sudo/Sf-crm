@@ -1499,7 +1499,10 @@ html[data-theme="dark"] .rp-seg-btn.is-active{box-shadow:0 1px 3px rgba(0,0,0,.4
 .rp-chart svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;}
 .rp-grid{stroke:var(--vg-color-divider);stroke-width:1;}
 .rp-grid.is-base{stroke:var(--vg-color-border);}
-.rp-area{fill:var(--vg-color-primary);opacity:.07;stroke:none;}
+.rp-area{fill:url(#rp-fade);stroke:none;}
+/* Apple-style fade under the line: project blue at the line, transparent at the baseline */
+.rp-fade-top{stop-color:var(--vg-color-primary);stop-opacity:.24;}
+.rp-fade-bottom{stop-color:var(--vg-color-primary);stop-opacity:0;}
 .rp-line{fill:none;stroke:var(--vg-color-primary);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
 .rp-line-prev{fill:none;stroke:var(--vg-color-text-muted);stroke-width:1.25;stroke-dasharray:4 4;opacity:.65;}
 .rp-ylab{position:absolute;left:0;transform:translateY(-120%);font-size:.6rem;color:var(--vg-color-text-muted);pointer-events:none;direction:rtl;}
@@ -1800,3 +1803,28 @@ html[data-theme="dark"] #main #customer-chips .chip.active{box-shadow:0 1px 3px 
 
 /* Active-alert glyph uses the shared warning token */
 .customer-row-watch{color:var(--vg-color-warning);}
+
+/* ============================================================
+   Invoices list — shared visual language (controls only)
+   Rows stay as they are (inset iOS list on the white canvas);
+   the redundant «پرداخت‌شده» line is no longer repeated on fully
+   paid rows (it equals the total and the status text already says
+   «تسویه روی فاکتور»). Scope: #invoice-chips / .cl-* only.
+   ============================================================ */
+#main #invoice-chips{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:3px;
+  background:var(--vg-color-neutral-soft);border-radius:999px;margin:0 0 12px;overflow:visible;
+}
+#main #invoice-chips .chip{
+  display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:34px;margin:0;padding:0 6px;
+  border:0;border-radius:999px;background:transparent;box-shadow:none;
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  font-size:.84rem;font-weight:var(--vg-weight-label);color:var(--vg-color-text-secondary);
+}
+#main #invoice-chips .chip.active{
+  background:var(--vg-color-surface);color:var(--vg-color-text);
+  font-weight:var(--vg-weight-title);box-shadow:0 1px 3px rgba(31,41,55,.12);
+}
+html[data-theme="dark"] #main #invoice-chips .chip.active{box-shadow:0 1px 3px rgba(0,0,0,.45);}
+#main .cl-tools .tx-toolbar-label{margin-inline-start:auto;white-space:nowrap;}
+#main .cl-tools .cl-count{padding:0;}
