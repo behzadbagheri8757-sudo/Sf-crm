@@ -501,6 +501,9 @@
       '</span></div>' +
       '<div class="rp-chart" id="rp-chart">' +
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+      '<defs><linearGradient id="rp-fade" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" class="rp-fade-top"/><stop offset="1" class="rp-fade-bottom"/>' +
+      '</linearGradient></defs>' +
       '<line class="rp-grid" x1="0" x2="100" y1="' + Y0 + '" y2="' + Y0 + '" vector-effect="non-scaling-stroke"/>' +
       '<line class="rp-grid" x1="0" x2="100" y1="' + (Y0 + Y1) / 2 + '" y2="' + (Y0 + Y1) / 2 + '" vector-effect="non-scaling-stroke"/>' +
       '<line class="rp-grid is-base" x1="0" x2="100" y1="' + Y1 + '" y2="' + Y1 + '" vector-effect="non-scaling-stroke"/>' +
