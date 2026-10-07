@@ -190,7 +190,7 @@ main .empty{margin:14px 0;}
    when the route host does not carry the optional vg-route-customers class. */
 .customer-row-spark{
   flex:0 0 46px; width:46px; height:16px; display:inline-flex; align-items:center;
-  color:var(--vg-color-primary); opacity:.72; margin-inline-start:8px;
+  color:var(--vg-color-primary); opacity:.72; margin-inline-start:8px; direction:ltr;
 }
 .customer-row-spark svg{display:block;width:100%;height:100%;}
 #main.customer-detail-view .customer-trend-card{
@@ -200,10 +200,11 @@ main .empty{margin:14px 0;}
 #main.customer-detail-view .customer-trend-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px;}
 #main.customer-detail-view .customer-trend-head .label{margin:0;}
 #main.customer-detail-view .customer-trend-note{font-size:.72rem;color:var(--vg-color-text-muted);white-space:nowrap;}
-#main.customer-detail-view .customer-trend-chart{height:58px;width:100%;}
+#main.customer-detail-view .customer-trend-chart{height:58px;width:100%;direction:ltr;}
 #main.customer-detail-view .customer-trend-chart svg{display:block;width:100%;height:100%;overflow:visible;}
 #main.customer-detail-view .customer-trend-line{fill:none;stroke:var(--vg-color-primary);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 #main.customer-detail-view .customer-trend-area{fill:var(--vg-color-primary);opacity:.07;}
+#main.customer-detail-view .customer-trend-end{fill:var(--vg-color-primary);}
 
 /* ---------- Search/filter group ---------- */
 .vg-route-customers .field:has(#customer-search),
