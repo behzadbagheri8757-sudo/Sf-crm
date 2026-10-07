@@ -60,7 +60,7 @@
       });
       if (!vals.some(function (v) { return v > 0; })) return '';
       const max = Math.max.apply(null, vals) || 1;
-      const left = 4, right = 96;
+      const left = 5, right = 91;
       const pts = vals.map(function (v, i) {
         const x = left + i * ((right - left) / (vals.length - 1));
         const y = 18 - (v / max) * 13;
@@ -68,7 +68,7 @@
       }).join(' ');
       const last = pts.split(' ').pop();
       const lastParts = last.split(',');
-      return '<span class="customer-row-spark" aria-label="روند خرید، ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="1.9" fill="currentColor"></circle></svg></span>';
+      return '<span class="customer-row-spark" aria-label="روند خرید، ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="1.25" fill="currentColor"></circle></svg></span>';
     } catch (e) { return ''; }
   }
 

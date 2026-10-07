@@ -598,7 +598,7 @@
         if (ratio >= 1.15) trendText = 'خرید اخیر بیشتر شده';
         else if (ratio <= 0.85) trendText = 'خرید اخیر کمتر شده';
       }
-      return '<div class="customer-trend-card"><div class="customer-trend-head"><div><span class="label">روند خرید</span><span class="customer-trend-period">۸ هفته اخیر</span></div><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید بر اساس مبلغ فاکتورها در ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.2" class="customer-trend-end"></circle></svg></div></div>';
+      return '<div class="customer-trend-card"><div class="customer-trend-head"><div><span class="label">روند خرید</span><span class="customer-trend-period">۸ هفته اخیر</span></div><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید بر اساس مبلغ فاکتورها در ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="1.35" class="customer-trend-end"></circle></svg></div></div>';
     } catch (e) { return ''; }
   }
 
