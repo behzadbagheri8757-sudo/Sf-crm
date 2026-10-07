@@ -40,6 +40,32 @@
     return map;
   }
 
+  /* Presentation-only: compact 8-week customer purchase sparkline. */
+  function customerSparklineHtml(cid, ctx) {
+    try {
+      const invs = (typeof customerInvoices === 'function' ? customerInvoices(cid, ctx) : []) || [];
+      if (!invs.length) return '';
+      const now = new Date(); now.setHours(0,0,0,0);
+      const vals = new Array(8).fill(0);
+      invs.forEach(function (inv) {
+        if (!inv || !inv.date) return;
+        const d = new Date(inv.date + 'T00:00:00'); if (isNaN(d.getTime())) return;
+        d.setHours(0,0,0,0);
+        const days = Math.floor((now - d) / 86400000);
+        if (days < 0 || days >= 56) return;
+        vals[7 - Math.floor(days / 7)] += Number(inv.total) || 0;
+      });
+      if (!vals.some(function (v) { return v > 0; })) return '';
+      const max = Math.max.apply(null, vals) || 1;
+      const pts = vals.map(function (v, i) {
+        const x = i * (100 / (vals.length - 1));
+        const y = 18 - (v / max) * 14;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+      return '<span class="customer-row-spark" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline></svg></span>';
+    } catch (e) { return ''; }
+  }
+
   function renderCustomerListOnly() {
     const listEl = document.getElementById('customer-list');
     if (!listEl) return;
@@ -173,6 +199,7 @@
             ? '<span class="customer-row-status badge tone-' + badgeTone + '">' + esc(badgeLabel) + '</span>'
             : '') +
           '<span class="customer-row-meta">' + esc(daysText) + '</span>' +
+          customerSparklineHtml(c.id, custCtx) +
           (watchCount > 0
             ? '<span class="customer-row-watch" aria-label="هشدار فعال" title="' + esc(watchTitle) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>'
             : '') +
