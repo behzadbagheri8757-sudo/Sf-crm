@@ -588,8 +588,17 @@
       const area = '0,36 ' + pts + ' 100,36';
       const last = pts.split(' ').pop();
       const lastParts = last.split(',');
-      const trendText = behavior && behavior.amountTrend === 'up' ? 'روند افزایشی' : behavior && behavior.amountTrend === 'down' ? 'روند کاهشی' : behavior && behavior.amountTrend === 'flat' ? 'تقریباً ثابت' : 'روند خرید';
-      return '<div class="customer-trend-card"><div class="customer-trend-head"><span class="label">روند خرید</span><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.2" class="customer-trend-end"></circle></svg></div></div>';
+      const firstHalf = vals.slice(0, 4).reduce(function (s, v) { return s + v; }, 0);
+      const secondHalf = vals.slice(4).reduce(function (s, v) { return s + v; }, 0);
+      let trendText = 'تقریباً ثابت';
+      if (firstHalf === 0 && secondHalf > 0) trendText = 'خرید اخیر بیشتر شده';
+      else if (firstHalf > 0 && secondHalf === 0) trendText = 'خرید اخیر کمتر شده';
+      else if (firstHalf > 0) {
+        const ratio = secondHalf / firstHalf;
+        if (ratio >= 1.15) trendText = 'خرید اخیر بیشتر شده';
+        else if (ratio <= 0.85) trendText = 'خرید اخیر کمتر شده';
+      }
+      return '<div class="customer-trend-card"><div class="customer-trend-head"><div><span class="label">روند خرید</span><span class="customer-trend-period">۸ هفته اخیر</span></div><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید بر اساس مبلغ فاکتورها در ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.2" class="customer-trend-end"></circle></svg></div></div>';
     } catch (e) { return ''; }
   }
 

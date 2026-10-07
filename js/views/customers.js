@@ -40,7 +40,10 @@
     return map;
   }
 
-  /* Presentation-only: compact 8-week customer purchase sparkline. */
+  /* Presentation-only: compact 8-week customer purchase sparkline.
+     The chart intentionally uses the same invoice-total basis as the
+     customer detail trend: it is a visual shape of purchase activity,
+     not a new accounting/Intelligence metric. */
   function customerSparklineHtml(cid, ctx) {
     try {
       const invs = (typeof customerInvoices === 'function' ? customerInvoices(cid, ctx) : []) || [];
@@ -57,14 +60,15 @@
       });
       if (!vals.some(function (v) { return v > 0; })) return '';
       const max = Math.max.apply(null, vals) || 1;
+      const left = 4, right = 96;
       const pts = vals.map(function (v, i) {
-        const x = i * (100 / (vals.length - 1));
-        const y = 18 - (v / max) * 14;
+        const x = left + i * ((right - left) / (vals.length - 1));
+        const y = 18 - (v / max) * 13;
         return x.toFixed(1) + ',' + y.toFixed(1);
       }).join(' ');
       const last = pts.split(' ').pop();
       const lastParts = last.split(',');
-      return '<span class="customer-row-spark" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.1" fill="currentColor"></circle></svg></span>';
+      return '<span class="customer-row-spark" aria-label="روند خرید، ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="1.9" fill="currentColor"></circle></svg></span>';
     } catch (e) { return ''; }
   }
 
@@ -319,6 +323,7 @@
       '</div>' +
       '<div id="customer-filter-indicator" class="customer-filter-indicator" aria-live="polite"></div>' +
       '<div id="customer-count" class="cl-count" aria-live="polite"></div>' +
+      '<div class="customer-list-trend-hint"><span class="customer-list-trend-sample"><i></i><b></b></span><span>روند خرید · ۸ هفته اخیر</span></div>' +
       '<div id="customer-list"></div>';
 
     const searchEl = document.getElementById('customer-search');
