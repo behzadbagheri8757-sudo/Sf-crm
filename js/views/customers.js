@@ -68,7 +68,9 @@
       }).join(' ');
       const last = pts.split(' ').pop();
       const lastParts = last.split(',');
-      return '<span class="customer-row-spark" aria-label="روند خرید، ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><line x1="' + lastParts[0] + '" y1="' + lastParts[1] + '" x2="' + lastParts[0] + '" y2="' + lastParts[1] + '" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg></span>';
+      const dotLeftPct = parseFloat(lastParts[0]);
+      const dotTopPct = (parseFloat(lastParts[1]) / 20) * 100;
+      return '<span class="customer-row-spark" aria-label="روند خرید، ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline></svg><i class="customer-row-spark-dot" style="left:' + dotLeftPct + '%;top:' + dotTopPct + '%;"></i></span>';
     } catch (e) { return ''; }
   }
 
