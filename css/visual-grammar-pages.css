@@ -216,7 +216,7 @@ main .empty{margin:14px 0;}
 #main.customer-detail-view .customer-trend-chart svg{display:block;width:100%;height:100%;overflow:visible;}
 #main.customer-detail-view .customer-trend-line{fill:none;stroke:var(--vg-color-primary);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 #main.customer-detail-view .customer-trend-area{fill:var(--vg-color-primary);opacity:.07;}
-#main.customer-detail-view .customer-trend-end{fill:var(--vg-color-primary);}
+#main.customer-detail-view .customer-trend-end{stroke:var(--vg-color-primary);}
 #main.customer-detail-view .customer-trend-chart svg{overflow:visible;}
 
 /* ---------- Search/filter group ---------- */
