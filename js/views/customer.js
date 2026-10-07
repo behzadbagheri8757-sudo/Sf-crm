@@ -586,8 +586,10 @@
         return x.toFixed(1) + ',' + y.toFixed(1);
       }).join(' ');
       const area = '0,36 ' + pts + ' 100,36';
+      const last = pts.split(' ').pop();
+      const lastParts = last.split(',');
       const trendText = behavior && behavior.amountTrend === 'up' ? 'روند افزایشی' : behavior && behavior.amountTrend === 'down' ? 'روند کاهشی' : behavior && behavior.amountTrend === 'flat' ? 'تقریباً ثابت' : 'روند خرید';
-      return '<div class="customer-trend-card"><div class="customer-trend-head"><span class="label">روند خرید</span><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline></svg></div></div>';
+      return '<div class="customer-trend-card"><div class="customer-trend-head"><span class="label">روند خرید</span><span class="customer-trend-note">' + esc(trendText) + '</span></div><div class="customer-trend-chart" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><polygon points="' + area + '" class="customer-trend-area"></polygon><polyline points="' + pts + '" class="customer-trend-line" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.2" class="customer-trend-end"></circle></svg></div></div>';
     } catch (e) { return ''; }
   }
 

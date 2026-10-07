@@ -62,7 +62,9 @@
         const y = 18 - (v / max) * 14;
         return x.toFixed(1) + ',' + y.toFixed(1);
       }).join(' ');
-      return '<span class="customer-row-spark" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline></svg></span>';
+      const last = pts.split(' ').pop();
+      const lastParts = last.split(',');
+      return '<span class="customer-row-spark" aria-label="روند خرید ۸ هفته اخیر"><svg viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline><circle cx="' + lastParts[0] + '" cy="' + lastParts[1] + '" r="2.1" fill="currentColor"></circle></svg></span>';
     } catch (e) { return ''; }
   }
 
