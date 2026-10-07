@@ -191,10 +191,11 @@ main .empty{margin:14px 0;}
    when the route host does not carry the optional vg-route-customers class. */
 .customer-row-spark{
   flex:0 0 46px; width:46px; height:16px; min-width:46px; display:inline-flex; align-items:center;
-  color:var(--vg-color-primary); opacity:.68; margin-inline-start:8px; direction:ltr;
+  color:var(--vg-color-primary); margin-inline-start:8px; direction:ltr;
   overflow:visible;
 }
-.customer-row-spark svg{display:block;width:100%;height:100%;overflow:visible; flex:none;}
+.customer-row-spark svg{display:block;width:100%;height:100%;overflow:visible; flex:none;opacity:.68;}
+.customer-row-spark .customer-row-spark-dot{position:absolute;width:5px;height:5px;margin-left:-2.5px;margin-top:-2.5px;border-radius:50%;background:currentColor;pointer-events:none;display:block;opacity:1;}
 .customer-list-trend-hint{
   display:flex; align-items:center; justify-content:flex-end; gap:6px;
   min-height:24px; margin:2px 2px 4px;
@@ -216,7 +217,7 @@ main .empty{margin:14px 0;}
 #main.customer-detail-view .customer-trend-chart svg{display:block;width:100%;height:100%;overflow:visible;}
 #main.customer-detail-view .customer-trend-line{fill:none;stroke:var(--vg-color-primary);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 #main.customer-detail-view .customer-trend-area{fill:var(--vg-color-primary);opacity:.07;}
-#main.customer-detail-view .customer-trend-end{stroke:var(--vg-color-primary);}
+#main.customer-detail-view .customer-trend-dot{position:absolute;width:7px;height:7px;margin-left:-3.5px;margin-top:-3.5px;border-radius:50%;background:var(--vg-color-primary);pointer-events:none;display:block;}
 #main.customer-detail-view .customer-trend-chart svg{overflow:visible;}
 
 /* ---------- Search/filter group ---------- */
