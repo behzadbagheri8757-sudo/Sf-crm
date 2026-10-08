@@ -4755,3 +4755,201 @@ input.has-input-clear{padding-inline-end:34px !important}
    box stays >= 41px (74px at <=360) so a 5-digit quantity (~40px) never touches the button. */
 input.has-input-clear.has-input-clear-sm{padding-inline-end:26px !important}
 @media print{.input-clear-btn{display:none !important}}
+
+
+/* --------------------------------------------------------------------------
+   Visit form — product-first workflow
+   Presentation only. Uses the existing visual grammar/tokens; no data rules.
+   -------------------------------------------------------------------------- */
+.visit-section-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin:4px 0 10px;
+}
+.visit-section-title{
+  font-size:var(--vg-type-section);
+  font-weight:var(--vg-weight-title);
+  color:var(--vg-color-text);
+  line-height:1.45;
+}
+.visit-section-subtitle{
+  margin-top:2px;
+  font-size:var(--vg-type-meta);
+  line-height:1.6;
+  color:var(--vg-color-text-muted);
+}
+.visit-section-count{
+  flex:0 0 auto;
+  min-width:28px;
+  min-height:28px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:var(--vg-color-neutral-soft);
+  color:var(--vg-color-text-secondary);
+  font-size:.72rem;
+  font-weight:var(--vg-weight-label);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.visit-product-suggestions{
+  margin-top:2px;
+}
+.visit-product-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.visit-product-grid .chip-opt{
+  width:100%;
+  min-height:48px;
+  padding:9px 7px;
+  font-size:.78rem;
+  font-weight:var(--vg-weight-label);
+  text-align:center;
+  line-height:1.35;
+  border-radius:var(--vg-radius-control);
+  white-space:normal;
+  word-break:break-word;
+  -webkit-tap-highlight-color:transparent;
+}
+.visit-product-grid .chip-opt:active,
+.visit-choice-group .chip-opt:active,
+.visit-reaction-options .chip-opt:active,
+.visit-reason-options .chip-opt:active,
+.visit-stock-options .chip-opt:active{
+  transform:scale(.985);
+}
+.visit-choice-group{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.visit-reaction-options{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.visit-reason-options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.visit-stock-options{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.visit-reaction-options .chip-opt,
+.visit-stock-options .chip-opt{
+  min-height:52px;
+  padding:9px 7px;
+  line-height:1.4;
+}
+.visit-reason-options .chip-opt{
+  min-height:48px;
+  padding:9px 8px;
+}
+.visit-add-product-btn{
+  width:100%;
+  min-height:48px;
+  margin-top:14px;
+  justify-content:center;
+}
+.visit-add-products{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--vg-color-divider);
+}
+.visit-product-toggle{
+  width:100%;
+  min-height:44px;
+  margin-top:12px;
+  justify-content:center;
+}
+.visit-empty-note{
+  padding:9px 2px 2px;
+  font-size:var(--vg-type-meta);
+  line-height:1.7;
+  color:var(--vg-color-text-muted);
+}
+.visit-picked-list{
+  margin-bottom:16px;
+}
+.visit-picked-list .visit-section-label{
+  margin-bottom:7px;
+  font-size:var(--vg-type-meta);
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-muted);
+}
+.visit-picked-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:52px;
+  padding:7px 0;
+  border-top:1px solid var(--vg-color-divider);
+}
+.visit-picked-item:last-child{
+  border-bottom:1px solid var(--vg-color-divider);
+}
+.visit-picked-main{
+  min-width:0;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.visit-picked-name{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.84rem;
+  color:var(--vg-color-text);
+}
+.visit-picked-status{
+  font-size:.68rem;
+  line-height:1.45;
+  color:var(--vg-color-text-muted);
+}
+.visit-picked-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+.visit-pick-action{
+  appearance:none;
+  -webkit-appearance:none;
+  min-width:48px;
+  min-height:40px;
+  padding:7px 8px;
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-surface);
+  color:var(--vg-color-primary);
+  font:inherit;
+  font-size:.7rem;
+  font-weight:var(--vg-weight-label);
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.visit-pick-action.is-remove{
+  color:var(--vg-color-text-muted);
+}
+.visit-stage-back{
+  min-height:44px;
+  margin-top:12px;
+  padding-inline:14px;
+}
+@media (max-width:360px){
+  .visit-product-grid{gap:8px;}
+  .visit-product-grid .chip-opt{padding-inline:5px;font-size:.75rem;}
+  .visit-reaction-options,
+  .visit-stock-options{gap:8px;}
+  .visit-reaction-options .chip-opt,
+  .visit-stock-options .chip-opt{padding-inline:5px;font-size:.76rem;}
+}
