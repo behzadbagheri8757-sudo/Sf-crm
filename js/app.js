@@ -735,6 +735,115 @@ function invoiceReturnAvailableQty(invoice, productId){
    dropdown, and the rest of the form only appears once a method is picked
    (sequential one-tap feel). Same 5 methods, same stored values, same
    return-flow logic as before — only the method-selection widget changed. */
+/* ---------- Inline customer selector — presentation/navigation only ---------- */
+function activeCustomersForPicker(){
+  return (data.customers || []).filter(function(c){ return c && c.active !== false && c.id; })
+    .slice().sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||''), 'fa'); });
+}
+function customerSelectorButtonHtml(cid, className){
+  const cust = cid ? (data.customers || []).find(function(c){ return c && c.id === cid; }) : null;
+  const label = cust ? (cust.name || '—') : 'انتخاب مشتری';
+  return '<button type="button" class="customer-inline-selector ' + (className || '') + '" data-open-customer-picker aria-haspopup="dialog">' +
+    '<span class="customer-inline-selector-label">مشتری</span>' +
+    '<span class="customer-inline-selector-value' + (cust ? '' : ' is-placeholder') + '">' + esc(label) + '</span>' +
+    '<span class="customer-inline-selector-chevron" aria-hidden="true">›</span>' +
+  '</button>';
+}
+function openInlineCustomerPicker(title, onPick){
+  const customers = activeCustomersForPicker();
+  const modalRoot = document.getElementById('modalRoot');
+  if(!modalRoot) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'inline-customer-picker-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML =
+    '<div class="inline-customer-picker-card" role="document">' +
+      '<div class="inline-customer-picker-head">' +
+        '<div>' +
+          '<div class="inline-customer-picker-title">' + esc(title || 'انتخاب مشتری') + '</div>' +
+          '<div class="inline-customer-picker-sub">مشتری فعال را انتخاب کن</div>' +
+        '</div>' +
+        '<button type="button" class="inline-customer-picker-close" aria-label="بستن">×</button>' +
+      '</div>' +
+      '<div class="inline-customer-picker-list">' + (customers.length ? customers.map(function(c){
+        return '<button type="button" class="inline-customer-picker-item" data-customer-pick="' + esc(c.id) + '">' +
+          '<span class="inline-customer-picker-main">' + esc(c.name || '—') + '</span>' +
+          (c.phone ? '<span class="inline-customer-picker-meta">' + esc(c.phone) + '</span>' : '') +
+        '</button>';
+      }).join('') : '<div class="inline-customer-picker-empty">مشتری فعال ندارید.</div>') + '</div>' +
+    '</div>';
+
+  modalRoot.appendChild(overlay);
+
+  const card = overlay.querySelector('.inline-customer-picker-card');
+  const closeBtn = overlay.querySelector('.inline-customer-picker-close');
+  const previousFocus = document.activeElement;
+  let closed = false;
+
+  function removeOverlay(restoreFocus){
+    if(closed) return;
+    closed = true;
+    overlay.classList.add('is-closing');
+    document.removeEventListener('keydown', onKey);
+    window.setTimeout(function(){
+      if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if(restoreFocus && previousFocus && typeof previousFocus.focus === 'function'){
+        try { previousFocus.focus(); } catch(_e) {}
+      }
+    }, 200);
+  }
+
+  function closeOnly(){
+    removeOverlay(true);
+  }
+
+  function onKey(e){
+    if(e.key === 'Escape'){
+      e.preventDefault();
+      closeOnly();
+    }
+  }
+
+  overlay.addEventListener('click', function(e){
+    if(e.target === overlay || e.target.closest('.inline-customer-picker-close')){
+      e.preventDefault();
+      closeOnly();
+      return;
+    }
+    const btn = e.target.closest('[data-customer-pick]');
+    if(!btn) return;
+    e.preventDefault();
+    const newCid = btn.getAttribute('data-customer-pick');
+    if(!newCid || closed) return;
+    closed = true;
+    overlay.classList.add('is-closing');
+    document.removeEventListener('keydown', onKey);
+    window.setTimeout(function(){
+      if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if(typeof onPick === 'function') onPick(newCid);
+    }, 200);
+  });
+
+  document.addEventListener('keydown', onKey);
+  requestAnimationFrame(function(){ overlay.classList.add('is-open'); });
+  if(closeBtn) closeBtn.focus();
+
+}
+
+function bindInlineCustomerPicker(onPick, isDirty){
+  const btn = document.querySelector('[data-open-customer-picker]');
+  if(!btn) return;
+  btn.addEventListener('click', async function(){
+    if(typeof isDirty === 'function' && isDirty()){
+      const ok = await appConfirm('با تغییر مشتری، اطلاعات فعلی این فرم پاک می‌شود. ادامه می‌دهی؟');
+      if(!ok) return;
+    }
+    openInlineCustomerPicker('انتخاب مشتری', onPick);
+  });
+}
+
 const TX_METHOD_CHIPS = [
   { value:'cash', label:'نقدی' },
   { value:'card', label:'کارت' },
@@ -842,6 +951,7 @@ function openAddTransaction(cid){
   function renderSheet(){
     openSheet(`
       <h3>ثبت تراکنش</h3>
+      ${customerSelectorButtonHtml(cid)}
       <div class="q-block">
         <div class="q-title">روش پرداخت</div>
         <div class="chip-wrap">${TX_METHOD_CHIPS.map(o=>`<button type="button" class="chip-opt${method===o.value?' selected':''}" data-tx-method="${esc(o.value)}">${esc(o.label)}</button>`).join('')}</div>
@@ -851,10 +961,11 @@ function openAddTransaction(cid){
         <div class="field"><label>مبلغ (تومان)</label><input id="f-amount" type="text" inputmode="decimal" value="${amountStr}"></div>
         <div class="field"><label>توضیح (اختیاری)</label><input id="f-note" value="${esc(noteStr)}"></div>
         ${returnItemsSectionHtml()}
-        <div class="btn-row"><button class="btn" id="save-tx">ثبت</button></div>
+        <div class="btn-row"><button class="btn" id="save-tx" ${cid ? '' : 'disabled'}>ثبت</button></div>
       ` : ''}
     `, {dirtyCheck:true});
 
+    bindInlineCustomerPicker(function(newCid){ openAddTransaction(newCid); }, function(){ return !!method || !!String(amountStr||'').trim() || !!String(noteStr||'').trim() || returnRows.length > 0; });
     document.querySelectorAll('[data-tx-method]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const sheetEl = btn.closest('.sheet');
@@ -920,6 +1031,7 @@ function openAddTransaction(cid){
 
     document.getElementById('save-tx').addEventListener('click', async (e)=>{
       await withSubmitGuard(e.currentTarget, async ()=>{
+        if(!cid){ showToast('ابتدا مشتری را انتخاب کن'); throw new Error('validation'); }
         const amount = parseFloat(faToEnDigits(amountStr))||0;
         const date = dateStr || todayISO();
         const note = (noteStr||'').trim();
@@ -1716,6 +1828,7 @@ function openAddVisit(cid){
 
   openSheet(
     '<h3>ثبت ویزیت</h3>' +
+    customerSelectorButtonHtml(cid) +
     visitPreHtml +
     '<div style="display:flex;gap:8px;">' +
       '<div class="field" style="flex:1;"><label>تاریخ</label>' + shamsiDateInputHTML('f-date', todayISO()) + '</div>' +
@@ -1728,8 +1841,8 @@ function openAddVisit(cid){
       '</select></div>' +
     '<div class="field" style="margin-top:12px;"><label>یادداشت کوتاه (اختیاری)</label><input id="f-visit-note" placeholder="اختیاری" autocomplete="off"></div>' +
     '<div class="btn-row visit-save-actions" style="margin-top:8px;">' +
-      '<button type="button" class="btn" id="save-visit">ثبت و پایان</button>' +
-      '<button type="button" class="btn secondary" id="save-visit-invoice">ثبت و ایجاد فاکتور</button>' +
+      '<button type="button" class="btn" id="save-visit" ' + (cid ? '' : 'disabled') + '>ثبت و پایان</button>' +
+      '<button type="button" class="btn secondary" id="save-visit-invoice" ' + (cid ? '' : 'disabled') + '>ثبت و ایجاد فاکتور</button>' +
     '</div>'
   , {dirtyCheck:true});
 
@@ -1834,11 +1947,6 @@ function openAddVisit(cid){
     const tops = Array.isArray(visitBehavior.topProducts) ? visitBehavior.topProducts : [];
     tops.forEach(function (p, i) {
       if (p && p.productId) add(p.productId, p.name, 3000 - (i * 120), 'خرید');
-    });
-
-    const declining = Array.isArray(visitBehavior.decliningProducts) ? visitBehavior.decliningProducts : [];
-    declining.forEach(function (p, i) {
-      if (p && p.productId) add(p.productId, p.name, 2200 - (i * 90), 'افت خرید');
     });
 
     const stats = Array.isArray(visitBehavior.offeredProductStats) ? visitBehavior.offeredProductStats : [];
@@ -2012,6 +2120,7 @@ function openAddVisit(cid){
         if (next) {
           state.step = next;
           state.showAllProducts = false;
+          state.editingProductId = null;
           renderStage();
         }
       });
@@ -2154,6 +2263,7 @@ function openAddVisit(cid){
   }
 
   async function persistVisit(auto){
+    if(!cid){ showToast('ابتدا مشتری را انتخاب کن'); return false; }
     const c = data.customers.find(function (x) { return x.id === cid; });
     if (!c) {
       showToast('مشتری پیدا نشد');
@@ -2206,6 +2316,8 @@ function openAddVisit(cid){
     showToast('ویزیت ثبت شد');
     return visit;
   }
+
+  bindInlineCustomerPicker(function(newCid){ openAddVisit(newCid); }, function(){ return !!state.result || state.offeredProducts.length > 0 || !!state.nextAction || !!String((document.getElementById('f-visit-note')||{}).value||'').trim(); });
 
   document.getElementById('save-visit').addEventListener('click', function (e) {
     withSubmitGuard(e.currentTarget, function () {
@@ -2512,6 +2624,10 @@ function openInvoiceForm(cid, editInv, opts){
   function productDropPanelHtml(idx){
     return `
       <div class="prod-drop-panel">
+        <div class="prod-drop-header">
+          <span class="prod-drop-header-title">انتخاب کالا</span>
+          <button type="button" class="prod-drop-header-close" data-close-drop aria-label="بستن">×</button>
+        </div>
         <div class="prod-drop-search-wrap">
           <input type="search" class="prod-drop-search" data-row="${idx}" placeholder="جستجوی کالا..." value="" autocomplete="off" enterkeyhint="search">
         </div>
@@ -2593,6 +2709,20 @@ function openInvoiceForm(cid, editInv, opts){
     return invoiceMetrics().profit;
   }
 
+  let invoiceSummaryObserver = null;
+  let invoiceSummaryCleanupObserver = null;
+  function disconnectInvoiceSummaryObservers(){
+    if(invoiceSummaryObserver){ try{ invoiceSummaryObserver.disconnect(); }catch(_e){} invoiceSummaryObserver = null; }
+    if(invoiceSummaryCleanupObserver){ try{ invoiceSummaryCleanupObserver.disconnect(); }catch(_e){} invoiceSummaryCleanupObserver = null; }
+  }
+  function updateStickyTotal(){
+    const el = document.getElementById('inv-sticky-total');
+    if(!el) return;
+    const metrics = invoiceMetrics();
+    const value = el.querySelector('[data-sticky-total-value]');
+    if(value) value.textContent = toman(metrics.total) + ' ت';
+  }
+
   function updateSummary(){
     const metrics = invoiceMetrics();
     const total = metrics.total;
@@ -2615,9 +2745,11 @@ function openInvoiceForm(cid, editInv, opts){
     if(profitEl){
       profitEl.innerHTML = `<span class="name">سود این فاکتور (بر اساس میانگین خرید)</span><strong class="amount" style="color:${profitColor}">${profit<0?'−':''}${toman(Math.abs(profit))} ت</strong>`;
     }
+    updateStickyTotal();
   }
 
   function renderSheet(){
+    disconnectInvoiceSummaryObservers();
     // Preserve the sheet's internal scroll position across re-renders.
     // renderSheet() is called on every add-row / row-delete / discount-type
     // change, and each call fully rebuilds #modalRoot via openSheet() (a
@@ -2649,19 +2781,20 @@ function openInvoiceForm(cid, editInv, opts){
             <span class="inv-header-title-main">${editInv?'ویرایش فاکتور':'فاکتور جدید'}</span>
             <span class="inv-header-title-sub">${editInv?('#'+esc(String(editInv.number||'—'))):'پیش‌نویس'}</span>
           </div>
-          <button type="button" class="btn inv-header-save" id="save-invoice">${editInv?'ذخیره':'ثبت'}</button>
+          <button type="button" class="btn inv-header-save" id="save-invoice" ${cid ? '' : 'disabled'}>${editInv?'ذخیره':'ثبت'}</button>
         </div>
 
         <div class="inv-body">
+          <div class="inv-sticky-total" id="inv-sticky-total" hidden aria-live="polite"><span class="inv-sticky-total-label">جمع فاکتور</span><span class="inv-sticky-total-value" data-sticky-total-value>۰ ت</span></div>
           ${editInv?`<div class="inv-edit-notice">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
 
-          <div class="inv-customer-context">
+          <button type="button" class="inv-customer-context inv-customer-context-button" data-open-customer-picker aria-haspopup="dialog">
             <div class="inv-customer-info">
               <div class="inv-customer-kicker">مشتری</div>
-              <div class="inv-customer-name">${custDisplay}</div>
-              ${cust&&cust.phone?`<div class="inv-customer-meta">${esc(cust.phone)}</div>`:''}
+              ${cust ? `<div class="inv-customer-name">${esc(cust.name||'—')}</div>${cust.ownerName?`<div class="inv-customer-owner">${esc(cust.ownerName)}</div>`:''}${cust.phone?`<div class="inv-customer-meta">${esc(cust.phone)}</div>`:''}` : `<div class="inv-customer-name is-placeholder">انتخاب مشتری</div><div class="inv-customer-meta">برای ادامه، مشتری را انتخاب کن</div>`}
             </div>
-          </div>
+            <span class="inv-customer-chevron" aria-hidden="true">›</span>
+          </button>
 
           <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}</div>
 
@@ -2790,7 +2923,31 @@ function openInvoiceForm(cid, editInv, opts){
       const _newScrollEl = document.querySelector('.inv-body') || document.querySelector('.sheet');
       if(_newScrollEl) _newScrollEl.scrollTop = _prevScrollTop;
     }
+    bindInlineCustomerPicker(function(newCid){ openAddInvoice(newCid, opts); }, function(){ return rows.some(function(r){ return !!r.productId; }) || !!discount || !!cashPaid || !!cardPaid || !!transferPaid || !!checkAmount; });
     updateSummary();
+    const summarySection = document.querySelector('.inv-summary-section');
+    const stickyTotal = document.getElementById('inv-sticky-total');
+    if(summarySection && stickyTotal && typeof IntersectionObserver !== 'undefined'){
+      invoiceSummaryObserver = new IntersectionObserver(function(entries){
+        const entry = entries[0];
+        if(!entry) return;
+        if(!entry.isIntersecting){
+          stickyTotal.hidden = false;
+          requestAnimationFrame(function(){ stickyTotal.classList.add('is-visible'); });
+        }else{
+          stickyTotal.classList.remove('is-visible');
+          setTimeout(function(){ if(stickyTotal && !stickyTotal.classList.contains('is-visible')) stickyTotal.hidden = true; }, 190);
+        }
+      }, {root: document.querySelector('.inv-body'), threshold: 0});
+      invoiceSummaryObserver.observe(summarySection);
+      const modalRoot = document.getElementById('modalRoot');
+      if(modalRoot && typeof MutationObserver !== 'undefined'){
+        invoiceSummaryCleanupObserver = new MutationObserver(function(){
+          if(!document.body.contains(summarySection)){ disconnectInvoiceSummaryObservers(); }
+        });
+        invoiceSummaryCleanupObserver.observe(modalRoot, {childList:true, subtree:true});
+      }
+    }
     // No-Purchase Reason chips (re-bound after every renderSheet rebuild)
     if(typeof bindNoPurchasePrompt === 'function') bindNoPurchasePrompt(cid);
 
@@ -2947,6 +3104,8 @@ function openInvoiceForm(cid, editInv, opts){
         dropEl.classList.add('is-open');
         positionProductDrop(dropEl, anchor);
         prodDropOpenRow = idx;
+        const closeDrop = dropEl.querySelector('[data-close-drop]');
+        if(closeDrop) closeDrop.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); closeAllProductDrops(); });
         const search = dropEl.querySelector('.prod-drop-search');
         const list = dropEl.querySelector('.prod-drop-list');
         if(search && list){
@@ -3210,6 +3369,7 @@ function openInvoiceForm(cid, editInv, opts){
 
     document.getElementById('save-invoice').addEventListener('click', async (e)=>{
       const btn = e.currentTarget;
+      if(!cid){ showToast('ابتدا مشتری را انتخاب کن'); return; }
       if(btn.disabled) return; // جلوگیری از ثبت دوباره با کلیک سریع/پی‌درپی
       btn.disabled = true;
       const date = document.getElementById('f-date').value || todayISO();
@@ -4500,3 +4660,24 @@ function openSupplierDetail(sid){
   }
 })();
 
+
+/* Dashboard Quick Actions — open add forms directly with an in-form customer picker. */
+(function bindDashboardInlineCustomerQuickActions(){
+  function bind(){
+    if(typeof document === 'undefined' || document.__bagheriDashboardInlinePickerBound) return;
+    document.__bagheriDashboardInlinePickerBound = true;
+    document.addEventListener('click', function(e){
+      const btn = e.target && e.target.closest ? e.target.closest('.dash-quick-actions [data-qa]') : null;
+      if(!btn) return;
+      const kind = btn.getAttribute('data-qa');
+      if(kind !== 'invoice' && kind !== 'payment' && kind !== 'visit') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if(kind === 'invoice' && typeof openAddInvoice === 'function') openAddInvoice(null);
+      else if(kind === 'payment' && typeof openAddTransaction === 'function') openAddTransaction(null);
+      else if(kind === 'visit' && typeof openAddVisit === 'function') openAddVisit(null);
+    }, true);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true});
+  else bind();
+})();
