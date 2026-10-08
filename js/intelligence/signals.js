@@ -180,14 +180,33 @@
   /* ---------------------------------------------------------
      1-3: Purchase decline / growth (based on sales30 vs salesPrev30)
      --------------------------------------------------------- */
+  /* Limited-history guard (minimum caution, NOT a scientific sufficiency rule).
+     With a single distinct purchase day, a sales30-vs-salesPrev30 comparison is
+     not a purchase PATTERN (one old purchase always reads as a 100% drop), so it
+     must not produce PURCHASE_DECLINE_* signals. Checked at generation time,
+     before persistence, so previously stored occurrences cannot bypass it.
+     Payment events (CHECK_BOUNCED / PAYMENT_OVERDUE) use a separate path and are
+     unaffected. The Watch layer (PURCHASE_DECLINE_WATCH) still reports the raw
+     drop as a non-scoring early observation. */
+  var MIN_PURCHASE_DAYS_FOR_DECLINE = 2;
+  /* BEHIND_PATTERN needs at least two distinct-day intervals (3 purchase days);
+     one gap is not an established rhythm. */
+  var MIN_DISTINCT_INTERVALS_FOR_BEHIND = 2;
+
   function _purchaseTrendSignals(cid, b, out) {
     if (!(b.salesPrev30 > 0)) return; // false-positive rule: no signal if no baseline
+    // Distinct purchase days from customerBehavior; if that field is ever absent,
+    // fall back to the invoice count (always present) instead of failing open.
+    var purchaseDaysKnown = (typeof b.purchaseDayCount === 'number') ? b.purchaseDayCount
+      : ((typeof b.invoiceCount === 'number') ? b.invoiceCount : null);
+    var limitedPurchaseHistory = (purchaseDaysKnown != null
+      && purchaseDaysKnown < MIN_PURCHASE_DAYS_FOR_DECLINE);
 
     const declinePct = _pctChange(b.salesPrev30, b.sales30); // positive => decline
     // growthPct: same baseline guard as decline (salesPrev30 > 0 already enforced above)
     const growthPct = ((b.sales30 - b.salesPrev30) / b.salesPrev30) * 100;
 
-    if (declinePct != null && declinePct >= 30) {
+    if (!limitedPurchaseHistory && declinePct != null && declinePct >= 30) {
       out.push(_mkSignal(cid, 'PURCHASE_DECLINE_SEVERE', {
         type: 'risk',
         severity: 'critical',
@@ -199,7 +218,7 @@
       return; // duplication rule: severe suppresses mild
     }
 
-    if (declinePct != null && declinePct >= 15 && declinePct < 30) {
+    if (!limitedPurchaseHistory && declinePct != null && declinePct >= 15 && declinePct < 30) {
       out.push(_mkSignal(cid, 'PURCHASE_DECLINE_MILD', {
         type: 'risk',
         severity: 'medium',
@@ -226,7 +245,14 @@
      4: BEHIND_PATTERN — reuse existing behavior flag as-is
      --------------------------------------------------------- */
   function _behindPatternSignal(cid, b, out) {
-    if (b.behindPattern !== true) return; // covers false/null/undefined
+    if (typeof b.distinctIntervalCount === 'number') {
+      // Distinct-purchase-day basis: same-day invoices make no 0-day gaps, and a
+      // single gap is not an established pattern.
+      if (b.distinctIntervalCount < MIN_DISTINCT_INTERVALS_FOR_BEHIND) return;
+      if (b.behindPatternDistinct !== true) return;
+    } else if (b.behindPattern !== true) {
+      return; // legacy fallback if the distinct-day fields are absent
+    }
     out.push(_mkSignal(cid, 'BEHIND_PATTERN', {
       type: 'risk',
       severity: 'high',
@@ -1012,6 +1038,27 @@
     return false;
   }
 
+  /* Memo signature of a confirmed-signals override: exactly the fields that
+     _isWatchSuppressedByConfirmed reads (status === 'active', a category listed
+     in WATCH_SUPERSESSION_MAP, productId, familyId). Overrides that suppress the
+     same set of watches share a slot; different ones never do. */
+  function _watchOverrideSignature(list) {
+    var relevant = Object.create(null);
+    var mapKeys = Object.keys(WATCH_SUPERSESSION_MAP);
+    for (var i = 0; i < mapKeys.length; i++) {
+      var cats = WATCH_SUPERSESSION_MAP[mapKeys[i]];
+      for (var j = 0; j < cats.length; j++) relevant[cats[j]] = true;
+    }
+    var parts = [];
+    for (var k = 0; k < list.length; k++) {
+      var s = list[k];
+      if (!s || s.status !== 'active' || !relevant[s.category]) continue;
+      parts.push([s.category, s.productId == null ? '' : s.productId, s.familyId == null ? '' : s.familyId]);
+    }
+    parts.sort(function (a, b) { return JSON.stringify(a) < JSON.stringify(b) ? -1 : 1; });
+    return JSON.stringify(parts);
+  }
+
   /* Main Watch entry point (spec 4/5).
      confirmedSignalsOverride: optional — lets a caller that already
      computed extractCustomerSignals(cid) this render cycle (e.g.
@@ -1023,7 +1070,12 @@
       // Keep override and self-computed results in separate memo slots so a
       // prior call cannot silently satisfy a later call with a different
       // input shape.
-      var watchMemoKey = String(cid) + ':' + (Array.isArray(confirmedSignalsOverride) ? 'override' : 'self');
+      // For an array override the slot is keyed by the CONTENT that actually
+      // drives suppression (see _watchOverrideSignature), so [] (raw) and a
+      // real confirmed list can never share a result.
+      var watchMemoKey = String(cid) + ':' + (Array.isArray(confirmedSignalsOverride)
+        ? 'override:' + _watchOverrideSignature(confirmedSignalsOverride)
+        : 'self');
       return ctx.memo('watchObservations', watchMemoKey, function () {
         return extractWatchObservations(cid, confirmedSignalsOverride, ctx, true);
       });
