@@ -1735,13 +1735,16 @@ function openAddVisit(cid){
 
   const state = {
     result: null,
-    offeredProducts: [], // complete only
+    offeredProducts: [], // one complete record per product in this visit
     pendingProductId: null,
     pendingReaction: null,
     pendingRejectionReason: null,
+    editingProductId: null,
+    showAllProducts: false,
     nextAction: null, // optional; one of VISIT_NEXT_ACTIONS
-    step: 'result', // result | product | reaction | rejectReason | stockSource | another | done
+    step: 'result', // result | product | reaction | rejectReason | stockSource | done
   };
+
   const nextActionEl = document.getElementById('f-next-action');
   if (nextActionEl) {
     nextActionEl.addEventListener('change', function () {
@@ -1754,17 +1757,17 @@ function openAddVisit(cid){
   const stage = document.getElementById('visit-card-stage');
 
   function validOffered(){
+    const seen = {};
     return (state.offeredProducts || []).filter(function (op) {
-      if (!op || !op.productId) return false;
+      if (!op || !op.productId || seen[op.productId]) return false;
       if (op.reaction !== 'accepted' && op.reaction !== 'rejected' && op.reaction !== 'deferred') return false;
       if (op.reaction === 'rejected' && !op.rejectionReason) return false;
-      // stockSource only valid/required with still_stock; other reasons must not carry it
       if (op.reaction === 'rejected' && op.rejectionReason === 'still_stock') {
         if (op.stockSource !== 'ours' && op.stockSource !== 'competitor' && op.stockSource !== 'unknown') return false;
       }
+      seen[op.productId] = true;
       return true;
     }).map(function (op) {
-      // Data integrity: strip stockSource unless still_stock
       if (op.reaction === 'rejected' && op.rejectionReason === 'still_stock') {
         return {
           productId: op.productId,
@@ -1784,10 +1787,86 @@ function openAddVisit(cid){
     });
   }
 
+
   function productLabel(pid){
     const p = (data.products || []).find(function (x) { return x.id === pid; });
     return p ? (p.name || '—') : '—';
   }
+
+  function visitReactionLabel(reaction){
+    if (reaction === 'accepted') return 'قبول کرد';
+    if (reaction === 'rejected') return 'رد کرد';
+    if (reaction === 'deferred') return 'بعداً تصمیم می‌گیرد';
+    return '—';
+  }
+
+  function upsertOfferedProduct(record){
+    if (!record || !record.productId) return;
+    const idx = (state.offeredProducts || []).findIndex(function (op) {
+      return op && op.productId === record.productId;
+    });
+    if (idx >= 0) state.offeredProducts[idx] = record;
+    else state.offeredProducts.push(record);
+  }
+
+  function removeOfferedProduct(pid){
+    state.offeredProducts = (state.offeredProducts || []).filter(function (op) {
+      return !op || op.productId !== pid;
+    });
+  }
+
+  function suggestedProductEntries(){
+    const candidates = {};
+    const add = function(pid, name, score, reason){
+      if (!pid) return;
+      const prod = activeProducts.find(function (p) { return p.id === pid; });
+      if (!prod) return;
+      if (!candidates[pid] || score > candidates[pid].score) {
+        candidates[pid] = {
+          productId: pid,
+          name: prod.name || name || '—',
+          score: score,
+          reason: reason || ''
+        };
+      }
+    };
+
+    const tops = Array.isArray(visitBehavior.topProducts) ? visitBehavior.topProducts : [];
+    tops.forEach(function (p, i) {
+      if (p && p.productId) add(p.productId, p.name, 3000 - (i * 120), 'خرید');
+    });
+
+    const declining = Array.isArray(visitBehavior.decliningProducts) ? visitBehavior.decliningProducts : [];
+    declining.forEach(function (p, i) {
+      if (p && p.productId) add(p.productId, p.name, 2200 - (i * 90), 'افت خرید');
+    });
+
+    const stats = Array.isArray(visitBehavior.offeredProductStats) ? visitBehavior.offeredProductStats : [];
+    stats.forEach(function (st) {
+      if (!st || !st.productId) return;
+      let score = 1300 + ((st.offeredCount || 0) * 25) + ((st.acceptedCount || 0) * 70) + ((st.deferredCount || 0) * 110);
+      if (st.lastOfferedDate && typeof daysAgo === 'function') {
+        const age = Number(daysAgo(st.lastOfferedDate));
+        if (isFinite(age) && age >= 0) score += Math.max(0, 500 - (age * 8));
+      }
+      let reason = 'تعامل قبلی';
+      if ((st.deferredCount || 0) > 0) reason = 'بعداً تصمیم می‌گیرد';
+      else if ((st.acceptedCount || 0) > 0) reason = 'قبلاً قبول کرده';
+      else if ((st.rejectedCount || 0) > 0) reason = 'پیشنهاد قبلی';
+      add(st.productId, st.productName, score, reason);
+    });
+
+    return Object.keys(candidates)
+      .map(function (pid) { return candidates[pid]; })
+      .sort(function (a, b) {
+        return (b.score - a.score) || String(a.name).localeCompare(String(b.name), 'fa');
+      })
+      .slice(0, 10);
+  }
+
+  const visitSuggestedProducts = suggestedProductEntries();
+  const visitSuggestedIds = {};
+  visitSuggestedProducts.forEach(function (p) { visitSuggestedIds[p.productId] = true; });
 
   function renderStage(){
     if (!stage) return;
@@ -1798,34 +1877,93 @@ function openAddVisit(cid){
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="result">' +
           '<div class="q-title">نتیجه ویزیت؟</div>' +
-          '<div class="chip-wrap">' + RESULT_CHIPS.map(function (o) {
+          '<div class="chip-wrap visit-choice-group">' + RESULT_CHIPS.map(function (o) {
             return chipBtn('result', o.value, o.label);
           }).join('') + '</div>' +
         '</div>';
     } else if (step === 'product') {
       const chosen = {};
-      (state.offeredProducts || []).forEach(function (op) { chosen[op.productId] = true; });
-      const avail = activeProducts.filter(function (p) { return !chosen[p.id]; });
+      (state.offeredProducts || []).forEach(function (op) {
+        if (op && op.productId) chosen[op.productId] = true;
+      });
+
+      const suggestedAvail = visitSuggestedProducts.filter(function (p) {
+        return !chosen[p.productId];
+      });
+      const allAvail = activeProducts.filter(function (p) {
+        return !chosen[p.id] && !visitSuggestedIds[p.id];
+      });
+
+      const picked = (state.offeredProducts || []).filter(function (op) {
+        return op && op.productId;
+      });
+
+      const pickedHtml = picked.length
+        ? '<div class="visit-picked-list">' +
+            '<div class="visit-section-label">محصولات این ویزیت</div>' +
+            picked.map(function (op) {
+              return '<div class="visit-picked-item">' +
+                '<div class="visit-picked-main">' +
+                  '<span class="visit-picked-name">' + esc(productLabel(op.productId)) + '</span>' +
+                  '<span class="visit-picked-status">' + esc(visitReactionLabel(op.reaction)) +
+                    (op.reaction === 'rejected' && op.rejectionReason
+                      ? ' · ' + esc(BP && BP.reasonLabel ? BP.reasonLabel(op.rejectionReason) : op.rejectionReason)
+                      : '') +
+                  '</span>' +
+                '</div>' +
+                '<div class="visit-picked-actions">' +
+                  '<button type="button" class="visit-pick-action" data-edit-product="' + esc(op.productId) + '">ویرایش</button>' +
+                  '<button type="button" class="visit-pick-action is-remove" data-remove-product="' + esc(op.productId) + '">حذف</button>' +
+                '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>'
+        : '';
+
+      const suggestedHtml = visitSuggestedProducts.length
+        ? '<div class="visit-product-suggestions">' +
+            '<div class="visit-section-head">' +
+              '<div><div class="visit-section-title">محصولات این مشتری</div><div class="visit-section-subtitle">مواردی که احتمالاً در این ویزیت ارزش بررسی دارند</div></div>' +
+              '<span class="visit-section-count">' + visitSuggestedProducts.length + '</span>' +
+            '</div>' +
+            (suggestedAvail.length
+              ? '<div class="visit-product-grid visit-suggested-grid">' + suggestedAvail.map(function (p) {
+                  return chipBtn('product', p.productId, p.name || '—');
+                }).join('') + '</div>'
+              : '<div class="visit-empty-note">محصولات مرتبط این ویزیت ثبت شده‌اند.</div>') +
+          '</div>'
+        : '<div class="visit-product-suggestions"><div class="visit-section-title">محصولات این مشتری</div><div class="visit-section-subtitle">هنوز سابقه کافی برای پیشنهاد اولیه وجود ندارد.</div></div>';
+
+      const addHtml = state.showAllProducts
+        ? '<div class="visit-add-products">' +
+            '<div class="visit-section-head">' +
+              '<div><div class="visit-section-title">افزودن محصول</div><div class="visit-section-subtitle">محصولی خارج از فهرست بالا را انتخاب کن.</div></div>' +
+            '</div>' +
+            (allAvail.length
+              ? '<div class="visit-product-grid visit-add-grid">' + allAvail.map(function (p) {
+                  return chipBtn('product', p.id, p.name || '—');
+                }).join('') + '</div>'
+              : '<div class="visit-empty-note">محصول دیگری برای افزودن وجود ندارد.</div>') +
+            '<button type="button" class="btn secondary small visit-product-toggle" data-toggle-all-products="0">بازگشت به محصولات این مشتری</button>' +
+          '</div>'
+        : '<button type="button" class="btn secondary visit-add-product-btn" data-toggle-all-products="1">＋ افزودن محصول</button>';
+
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="product">' +
-          '<div class="q-title">چه محصولی پیشنهاد/بررسی شد؟</div>' +
-          (avail.length
-            ? '<div class="visit-product-grid chip-wrap">' + avail.map(function (p) {
-                return chipBtn('product', p.id, p.name || '—');
-              }).join('') + '</div>'
-            : '<div class="empty" style="padding:12px 0;">همه محصولات فعال قبلاً ثبت شدند یا کالایی نیست.</div>' +
-              '<button type="button" class="btn secondary small" data-skip-product>بدون پیشنهاد محصول، ادامه</button>') +
+          pickedHtml +
+          suggestedHtml +
+          addHtml +
           '<button type="button" class="btn secondary small visit-stage-back" data-back-step="result">بازگشت</button>' +
         '</div>';
     } else if (step === 'reaction') {
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="reaction">' +
-          '<div class="q-title">واکنش مشتری؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
+          '<div class="q-title">' + (state.editingProductId ? 'ویرایش واکنش مشتری؟' : 'واکنش مشتری؟') + ' <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
           (function () {
             const hl = visitHints ? visitHints(state.pendingProductId) : [];
             return hl.length ? '<div class="bp-hint">' + BP.hintHtml(hl) + '</div>' : '';
           })() +
-          '<div class="chip-wrap">' + REACTION_CHIPS.map(function (o) {
+          '<div class="chip-wrap visit-reaction-options">' + REACTION_CHIPS.map(function (o) {
             return chipBtn('reaction', o.value, o.label);
           }).join('') + '</div>' +
           '<button type="button" class="btn secondary small visit-stage-back" data-back-step="product">بازگشت</button>' +
@@ -1834,7 +1972,7 @@ function openAddVisit(cid){
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="rejectReason">' +
           '<div class="q-title">چرا نخرید؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
-          '<div class="chip-wrap">' + REJECTION_REASON_CHIPS.map(function (o) {
+          '<div class="chip-wrap visit-reason-options">' + REJECTION_REASON_CHIPS.map(function (o) {
             return chipBtn('rejectReason', o.value, o.label);
           }).join('') + '</div>' +
           '<button type="button" class="btn secondary small visit-stage-back" data-back-step="reaction">بازگشت</button>' +
@@ -1843,20 +1981,10 @@ function openAddVisit(cid){
       html =
         '<div class="visit-card visit-card-enter" data-visit-step="stockSource">' +
           '<div class="q-title">این موجودی از کجا بود؟ <span class="sub" style="display:inline;font-weight:400;">(' + esc(productLabel(state.pendingProductId)) + ')</span></div>' +
-          '<div class="chip-wrap">' + STOCK_SOURCE_CHIPS.map(function (o) {
+          '<div class="chip-wrap visit-stock-options">' + STOCK_SOURCE_CHIPS.map(function (o) {
             return chipBtn('stockSource', o.value, o.label);
           }).join('') + '</div>' +
           '<button type="button" class="btn secondary small visit-stage-back" data-back-step="rejectReason">بازگشت</button>' +
-        '</div>';
-    } else if (step === 'another') {
-      html =
-        '<div class="visit-card visit-card-enter" data-visit-step="another">' +
-          '<div class="q-title">محصول دیگری هم مطرح شد؟</div>' +
-          '<div class="chip-wrap">' +
-            chipBtn('another', 'yes', 'بله') +
-            chipBtn('another', 'no', 'خیر') +
-          '</div>' +
-          '<button type="button" class="btn secondary small visit-stage-back" data-back-step="product">بازگشت</button>' +
         '</div>';
     } else if (step === 'done') {
       const n = validOffered().length;
@@ -1868,7 +1996,7 @@ function openAddVisit(cid){
             (n ? (n + ' محصول با واکنش کامل ثبت می‌شود.') : 'بدون محصول پیشنهادی (اختیاری).') +
             '<br>برای ذخیره روی «ثبت و پایان» بزنید.' +
           '</div>' +
-          '<button type="button" class="btn secondary small visit-stage-back" data-back-step="another">بازگشت</button>' +
+          '<button type="button" class="btn secondary small visit-stage-back" data-back-step="product">بازگشت</button>' +
         '</div>';
     }
 
@@ -1881,16 +2009,46 @@ function openAddVisit(cid){
     stage.querySelectorAll('.visit-stage-back').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const next = btn.getAttribute('data-back-step');
-        if (next) { state.step = next; renderStage(); }
+        if (next) {
+          state.step = next;
+          state.showAllProducts = false;
+          renderStage();
+        }
       });
     });
-    const skipProductBtn = stage.querySelector('[data-skip-product]');
-    if (skipProductBtn) {
-      skipProductBtn.addEventListener('click', function () {
-        state.step = 'another';
+
+    stage.querySelectorAll('[data-toggle-all-products]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.showAllProducts = btn.getAttribute('data-toggle-all-products') === '1';
         renderStage();
       });
-    }
+    });
+
+    stage.querySelectorAll('[data-edit-product]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const pid = btn.getAttribute('data-edit-product');
+        const existing = (state.offeredProducts || []).find(function (op) { return op && op.productId === pid; });
+        if (!existing) return;
+        state.editingProductId = pid;
+        state.pendingProductId = pid;
+        state.pendingReaction = existing.reaction;
+        state.pendingRejectionReason = existing.rejectionReason || null;
+        state.step = 'reaction';
+        renderStage();
+      });
+    });
+
+    stage.querySelectorAll('[data-remove-product]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const pid = btn.getAttribute('data-remove-product');
+        removeOfferedProduct(pid);
+        if (state.editingProductId === pid) state.editingProductId = null;
+        const sheetEl = btn.closest('.sheet');
+        if (sheetEl) sheetEl.dataset.dirty = '1';
+        renderStage();
+      });
+    });
+
     stage.querySelectorAll('.chip-opt').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const sheetEl = btn.closest('.sheet');
@@ -1903,17 +2061,23 @@ function openAddVisit(cid){
           state.result = value;
           state.pendingProductId = null;
           state.pendingReaction = null;
+          state.pendingRejectionReason = null;
+          state.editingProductId = null;
+          state.showAllProducts = false;
           state.step = 'product';
           renderStage();
           return;
         }
+
         if (group === 'product') {
           state.pendingProductId = value;
           state.pendingReaction = null;
+          state.pendingRejectionReason = null;
           state.step = 'reaction';
           renderStage();
           return;
         }
+
         if (group === 'reaction') {
           state.pendingReaction = value;
           state.pendingRejectionReason = null;
@@ -1923,7 +2087,7 @@ function openAddVisit(cid){
             return;
           }
           if (state.pendingProductId && (value === 'accepted' || value === 'deferred')) {
-            state.offeredProducts.push({
+            upsertOfferedProduct({
               productId: state.pendingProductId,
               reaction: value,
             });
@@ -1931,10 +2095,13 @@ function openAddVisit(cid){
           state.pendingProductId = null;
           state.pendingReaction = null;
           state.pendingRejectionReason = null;
-          state.step = 'another';
+          state.editingProductId = null;
+          state.showAllProducts = false;
+          state.step = 'product';
           renderStage();
           return;
         }
+
         if (group === 'rejectReason') {
           if (value === 'still_stock') {
             state.pendingRejectionReason = 'still_stock';
@@ -1943,8 +2110,7 @@ function openAddVisit(cid){
             return;
           }
           if (state.pendingProductId && state.pendingReaction === 'rejected' && value) {
-            // Non-still_stock reasons: never attach stockSource
-            state.offeredProducts.push({
+            upsertOfferedProduct({
               productId: state.pendingProductId,
               reaction: 'rejected',
               rejectionReason: value,
@@ -1953,10 +2119,13 @@ function openAddVisit(cid){
           state.pendingProductId = null;
           state.pendingReaction = null;
           state.pendingRejectionReason = null;
-          state.step = 'another';
+          state.editingProductId = null;
+          state.showAllProducts = false;
+          state.step = 'product';
           renderStage();
           return;
         }
+
         if (group === 'stockSource') {
           if (
             state.pendingProductId &&
@@ -1964,7 +2133,7 @@ function openAddVisit(cid){
             state.pendingRejectionReason === 'still_stock' &&
             (value === 'ours' || value === 'competitor' || value === 'unknown')
           ) {
-            state.offeredProducts.push({
+            upsertOfferedProduct({
               productId: state.pendingProductId,
               reaction: 'rejected',
               rejectionReason: 'still_stock',
@@ -1974,22 +2143,10 @@ function openAddVisit(cid){
           state.pendingProductId = null;
           state.pendingReaction = null;
           state.pendingRejectionReason = null;
-          state.step = 'another';
+          state.editingProductId = null;
+          state.showAllProducts = false;
+          state.step = 'product';
           renderStage();
-          return;
-        }
-        if (group === 'another') {
-          if (value === 'yes') {
-            state.pendingProductId = null;
-            state.pendingReaction = null;
-            state.pendingRejectionReason = null;
-            state.step = 'product';
-            renderStage();
-            return;
-          }
-          state.step = 'done';
-          renderStage();
-          persistVisit(true);
           return;
         }
       });
