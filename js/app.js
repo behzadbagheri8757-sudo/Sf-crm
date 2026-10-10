@@ -2269,9 +2269,29 @@ function openInvoiceForm(cid, editInv, opts){
     }
     return fifoCostCache[productId];
   }
+  // Visit → invoice ("ثبت و ایجاد فاکتور"): every product the customer ACCEPTED in that visit
+  // starts as its own invoice line, exactly like picking it by hand (same default price rule
+  // as selectProduct: retail||sell, qty 1, no discount, no buyPrice). Read-only on the visit;
+  // inactive/missing products and duplicates are skipped. Nothing accepted => the usual blank line.
+  function visitAcceptedRows(visitId){
+    const vc = data.customers.find(c=>c.id===cid);
+    const visit = vc && Array.isArray(vc.visits) ? vc.visits.find(v=>v && v.id===visitId) : null;
+    if(!visit || !Array.isArray(visit.offeredProducts)) return [];
+    const seen = Object.create(null);
+    const out = [];
+    visit.offeredProducts.forEach(op=>{
+      if(!op || op.reaction!=='accepted' || !op.productId || seen[op.productId]) return;
+      const prod = invoiceProduct(op.productId);
+      if(!prod || prod.active===false) return;
+      seen[op.productId] = true;
+      out.push({productId:op.productId, qty:1, price:prod.retail||prod.sell||0, discount:0});
+    });
+    return out;
+  }
+  const visitRows = (!editInv && opts && opts.visitId) ? visitAcceptedRows(opts.visitId) : [];
   let rows = editInv
     ? editInv.items.map(it=>({productId:it.productId, qty:it.qty, price:it.price, discount:it.discount||0, buyPrice:it.buyPrice}))
-    : [{productId:'', qty:1, price:0, discount:0}];
+    : (visitRows.length ? visitRows : [{productId:'', qty:1, price:0, discount:0}]);
   const cust = data.customers.find(c=>c.id===cid); // presentation only: Customer Context header
   // Presentation only: one-time per-sheet context map (last offer/reject, stock source,
   // relevant active watch, last purchase). Reads existing facts; never writes or recalculates.
@@ -2433,15 +2453,31 @@ function openInvoiceForm(cid, editInv, opts){
     },0));
   }
 
-  function productDropListHtml(idx, query){
-    const q = (query||'').trim();
-    // Inactive products (active===false) excluded from NEW invoice product selector only.
-    const activeOnly = data.products.filter(p=>p.active!==false);
-    const list = (q ? activeOnly.filter(p=>(p.name||'').includes(q)) : activeOnly).slice(0, 40);
-    if(!list.length) return `<div class="prod-drop-empty">کالایی پیدا نشد</div>`;
-    return list.map(p=>{
-      const hl = productHint(p.id);
-      return `
+  // The customer's most-purchased products (customerBehavior.topProducts, already memoised in
+  // invoiceCtx), active ones only. Read-only; any failure just means "no frequent section".
+  let frequentProductsCache = null;
+  function frequentProducts(){
+    if(frequentProductsCache) return frequentProductsCache;
+    frequentProductsCache = [];
+    try{
+      const beh = (typeof customerBehavior === 'function') ? customerBehavior(cid, invoiceCtx) : null;
+      const top = beh && Array.isArray(beh.topProducts) ? beh.topProducts : [];
+      const seen = Object.create(null);
+      top.forEach(t=>{
+        const pid = t && t.productId;
+        if(!pid || seen[pid]) return;
+        const p = invoiceProduct(pid);
+        if(!p || p.active===false) return;
+        seen[pid] = true;
+        frequentProductsCache.push(p);
+      });
+    }catch(eFreq){ frequentProductsCache = []; }
+    return frequentProductsCache;
+  }
+
+  function productDropItemHtml(idx, p){
+    const hl = productHint(p.id);
+    return `
       <div class="prod-drop-item" data-row="${idx}" data-pid="${esc(p.id)}" role="button" tabindex="0">
         <span class="prod-drop-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg></span>
         <span class="prod-drop-main">
@@ -2452,7 +2488,26 @@ function openInvoiceForm(cid, editInv, opts){
         <span class="prod-drop-chevron" aria-hidden="true">›</span>
       </div>
     `;
-    }).join('');
+  }
+  function productDropListHtml(idx, query){
+    const q = (query||'').trim();
+    const matches = p=>!q || (p.name||'').includes(q);
+    // Inactive products (active===false) excluded from NEW invoice product selector only.
+    const activeOnly = data.products.filter(p=>p.active!==false);
+    // Section 1 — this customer's most-purchased products; section 2 — everything else (max 40).
+    const frequent = frequentProducts().filter(matches);
+    const inFrequent = Object.create(null);
+    frequent.forEach(p=>{ inFrequent[p.id] = true; });
+    const others = activeOnly.filter(p=>matches(p) && !inFrequent[p.id]).slice(0, 40);
+    if(!frequent.length && !others.length) return `<div class="prod-drop-empty">کالایی پیدا نشد</div>`;
+    // Headings only when both sections exist; otherwise the list looks exactly as before.
+    if(frequent.length && others.length){
+      return `<div class="prod-drop-section-title">پرخرید این مشتری</div>` +
+        frequent.map(p=>productDropItemHtml(idx, p)).join('') +
+        `<div class="prod-drop-section-title">همه محصولات</div>` +
+        others.map(p=>productDropItemHtml(idx, p)).join('');
+    }
+    return (frequent.length ? frequent : others).map(p=>productDropItemHtml(idx, p)).join('');
   }
   function productDropPanelHtml(idx){
     return `
