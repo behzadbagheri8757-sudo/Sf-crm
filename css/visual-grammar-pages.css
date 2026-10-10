@@ -1123,16 +1123,15 @@ html[data-theme="dark"] #main.customer-detail-view .watch-level-high{
 
 /* Invoice product picker: section headings ("پرخرید این مشتری" / "همه محصولات") */
 .prod-drop-section-title{
-  padding:8px 12px 4px;
-  font-size:.7rem;
+  padding:9px 16px 5px;
+  font-size:.72rem;
   font-weight:var(--vg-weight-title);
   line-height:1.5;
   color:var(--vg-color-text-muted);
   background:var(--vg-color-surface-soft);
 }
-
 .inv-line-intel{
-  margin:4px 14px 0;
+  margin:6px 16px 0;
   font-size:11.5px;
   line-height:1.6;
   color:var(--vg-color-warning);
