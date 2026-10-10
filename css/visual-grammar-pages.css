@@ -1121,6 +1121,16 @@ html[data-theme="dark"] #main.customer-detail-view .watch-level-high{
 .prod-drop-hint .bp-hint-line{font-size:.7rem;line-height:1.6;}
 .prod-drop-item:has(.prod-drop-hint){padding-top:9px;padding-bottom:9px;}
 
+/* Invoice product picker: section headings ("پرخرید این مشتری" / "همه محصولات") */
+.prod-drop-section-title{
+  padding:8px 12px 4px;
+  font-size:.7rem;
+  font-weight:var(--vg-weight-title);
+  line-height:1.5;
+  color:var(--vg-color-text-muted);
+  background:var(--vg-color-surface-soft);
+}
+
 .inv-line-intel{
   margin:4px 14px 0;
   font-size:11.5px;
