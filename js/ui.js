@@ -155,10 +155,11 @@ function isLiveAmountInput(el){
 (function bindInputClearButton(){
   if(typeof document === 'undefined') return;
   var OK_TYPES = ['text','tel','number','email','url'];
-  // Fields narrower than NARROW get the compact 22px button + 26px end
-  // padding (has-input-clear-sm). Covers the invoice qty field (74-76px) and
-  // the price field at <=360px (88px); the price field at 96px keeps 30px/34px.
-  var SIZE = 30, SIZE_SM = 22, NARROW = 90, MIN_W = 40;
+  // Fields narrower than NARROW get the compact button + smaller end padding
+  // (has-input-clear-sm). The icon scales down with the button (.is-sm) so the
+  // × never looks oversized inside a narrow field such as the invoice
+  // quantity box.
+  var SIZE = 30, SIZE_SM = 20, NARROW = 90, MIN_W = 40;
   // Follow loop: runs only while the button may still be moving, and stops
   // once the geometry has been identical for `need` consecutive frames.
   // Viewport-driven changes (iOS keyboard show/hide, focus) use the longer
@@ -229,6 +230,22 @@ function isLiveAmountInput(el){
       if(pr.bottom < bottom) bottom = pr.bottom;
       if(pr.right < right) right = pr.right;
     }
+    // Full-screen sheets keep fixed chrome (header, running-total bar) over the
+    // scrolling body. Those overlays are not ancestors, so they are folded in
+    // here — otherwise the button would float on top of the header while the
+    // field it belongs to is scrolled underneath it.
+    if(el.closest && el.closest('.inv-sheet-v2')){
+      var chromeTop = document.querySelector('.inv-header');
+      var chromeBottom = document.querySelector('.inv-totalbar');
+      if(chromeTop){
+        var hr = chromeTop.getBoundingClientRect();
+        if(hr.bottom > top) top = hr.bottom;
+      }
+      if(chromeBottom){
+        var br = chromeBottom.getBoundingClientRect();
+        if(br.top < bottom) bottom = br.top;
+      }
+    }
     return cy < top || cy > bottom || cx < left || cx > right;
   }
 
@@ -267,6 +284,7 @@ function isLiveAmountInput(el){
     var size = narrow ? SIZE_SM : SIZE;
     var rtl = getComputedStyle(el).direction === 'rtl';
     b.style.width = b.style.height = size + 'px';
+    b.classList.toggle('is-sm', narrow);
     b.hidden = false;
     place(b, rtl ? r.left + 2 : r.right - size - 2, r.top + (r.height - size) / 2);
     return 's|' + Math.round(corrX * 2) + '|' + Math.round(corrY * 2) + '|' + key;

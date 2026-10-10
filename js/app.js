@@ -1,6 +1,12 @@
 /* app.js — screens, forms, navigation, init, QA
    Phase 0 extract: no logic changes. Depends on models/db/calc/stock/backup/ui.
 */
+// ---------- Invoice sheet (new/edit) — presentation-only inline icons ----------
+// Small, single-purpose SVGs so the sheet needs no icon font and no extra request.
+const INV_SWAP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h11l-3-3M8 7l3 3M16 17H5l3 3M16 17l-3-3"/></svg>';
+const INV_CHEVRON_UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
+const INV_TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V4.8h5V7M6.5 7l1 13.2h9L17.5 7M10 10.6v6.2M14 10.6v6.2"/></svg>';
+const INV_CALC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>';
 // ---------- submit guard (double-tap on mobile) ----------
 /** Disable mutation button for one run; always release the guard while the sheet remains open. */
 function focusValidationControl(btn){
@@ -2510,8 +2516,16 @@ function openInvoiceForm(cid, editInv, opts){
     return (frequent.length ? frequent : others).map(p=>productDropItemHtml(idx, p)).join('');
   }
   function productDropPanelHtml(idx){
+    // The picker is its own layer: a dim backdrop + a bottom sheet with a title
+    // bar. It must never read as "one more card" next to the invoice line it
+    // belongs to — that is what made closing a row feel like a guessing game.
     return `
+      <div class="prod-drop-backdrop" data-drop-backdrop="${idx}" aria-hidden="true"></div>
       <div class="prod-drop-panel">
+        <div class="prod-drop-head">
+          <span class="prod-drop-title">انتخاب کالا</span>
+          <button type="button" class="prod-drop-close" data-drop-close="${idx}">بستن</button>
+        </div>
         <div class="prod-drop-search-wrap">
           <input type="search" class="prod-drop-search" data-row="${idx}" placeholder="جستجوی کالا..." value="" autocomplete="off" enterkeyhint="search">
         </div>
@@ -2535,17 +2549,25 @@ function openInvoiceForm(cid, editInv, opts){
       let activeHtml = `
         <div class="inv-line-main">
           <input type="text" class="row-product-search inv-line-name" data-row="${idx}" placeholder="انتخاب کالا..." autocomplete="off" readonly value="${label}" inputmode="none" aria-label="${prod?'تغییر کالا':'انتخاب کالا'}">
-          ${rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">×</button>`:''}
+          <span class="inv-line-change-hint" aria-hidden="true">${INV_SWAP_ICON}</span>
           <span class="inv-line-chevron" data-row="${idx}" aria-hidden="true" style="display:${prod?'none':''}">›</span>
+          <button type="button" class="inv-line-collapse" data-collapse="${idx}" title="بستن این قلم" aria-label="بستن این قلم">
+            <span class="inv-line-collapse-ico" aria-hidden="true">${INV_CHEVRON_UP_ICON}</span><span class="inv-line-collapse-txt">بستن</span>
+          </button>
           <div class="prod-drop" data-row="${idx}" hidden></div>
         </div>
         <div class="inv-line-sub" data-row="${idx}" style="display:${prod?'flex':'none'}">
-          <span class="inv-line-qtyrate">
+          <label class="inv-field inv-field-qty">
+            <span class="inv-field-label">تعداد</span>
             <input type="text" inputmode="decimal" data-row="${idx}" class="row-qty inv-mini-input" aria-label="تعداد" value="${enToFaDigits(fmtQtyDisplay(r.qty||0))}">
-            <span class="inv-line-x">×</span>
+          </label>
+          <span class="inv-line-x" aria-hidden="true">×</span>
+          <label class="inv-field inv-field-price">
+            <span class="inv-field-label">قیمت واحد</span>
             <input type="text" inputmode="decimal" data-row="${idx}" class="row-price inv-mini-input inv-mini-input-price" aria-label="قیمت واحد" value="${esc(String(priceDisp))}">
-            <span class="inv-line-unit">ت</span>
-          </span>
+          </label>
+          <span class="inv-line-unit" aria-hidden="true">ت</span>
+          ${rows.length>1?`<button type="button" class="inv-line-del row-del" data-row="${idx}" title="حذف این قلم" aria-label="حذف این قلم">${INV_TRASH_ICON}</button>`:''}
         </div>
         <div class="inv-line-avg-cost${prod && (r.price||0) < rowFifo?' is-below':''}" data-row="${idx}" style="display:${prod?'block':'none'}">${prod?`میانگین خرید: ${toman(rowFifo)} ت`:''}</div>
         <div class="inv-line-intel" data-row="${idx}"${rowIntelText?'':' hidden'}>${esc(rowIntelText)}</div>
@@ -2605,15 +2627,34 @@ function openInvoiceForm(cid, editInv, opts){
     const remainCls = newBalance>0 ? 'accent-rust' : 'accent-olive';
     const summaryEl = document.getElementById('calc-summary');
     if(summaryEl) summaryEl.innerHTML = `
-      <div class="ledger-row inv-sum-tertiary"><span class="name">مانده قبلی مشتری</span><span class="filler"></span><span class="amount">${toman(prevBalance)} ت</span></div>
-      <div class="ledger-row inv-total-row inv-sum-primary"><span class="name">جمع این فاکتور</span><span class="filler"></span><span class="amount">${toman(total)} ت</span></div>
-      ${discountAmount>0?`<div class="ledger-row inv-discount-row"><span class="name">تخفیف کلی فاکتور</span><span class="filler"></span><span class="amount">− ${toman(discountAmount)} ت</span></div>`:''}
-      <div class="ledger-row inv-sum-secondary"><span class="name">پرداختی</span><span class="filler"></span><span class="amount">(${toman(paid)}) ت</span></div>
-      <div class="ledger-row inv-remain-row inv-sum-primary"><span class="name ${remainCls}">مانده جدید</span><span class="filler"></span><span class="amount ${remainCls}">${toman(Math.abs(newBalance))} ت ${balanceStatusWord(newBalance)}</span></div>
+      <div class="inv-sum-row"><span class="inv-sum-name">جمع اقلام</span><span class="inv-sum-amount">${toman(metrics.subtotal)} ت</span></div>
+      ${discountAmount>0?`<div class="inv-sum-row inv-sum-row-discount"><span class="inv-sum-name">تخفیف فاکتور${discountType==='percent'?' ('+enToFaDigits(String(discount))+'٪)':''}</span><span class="inv-sum-amount">− ${toman(discountAmount)} ت</span></div>`:''}
+      <div class="inv-sum-row inv-sum-row-total"><span class="inv-sum-name">جمع این فاکتور</span><span class="inv-sum-amount">${toman(total)} ت</span></div>
+      <div class="inv-sum-row inv-sum-row-quiet"><span class="inv-sum-name">مانده قبلی مشتری</span><span class="inv-sum-amount">${toman(prevBalance)} ت</span></div>
+      ${paid>0?`<div class="inv-sum-row inv-sum-row-quiet"><span class="inv-sum-name">پرداختی همراه فاکتور</span><span class="inv-sum-amount">(${toman(paid)}) ت</span></div>`:''}
+      <div class="inv-sum-row inv-sum-row-remain"><span class="inv-sum-name ${remainCls}">مانده جدید مشتری</span><span class="inv-sum-amount ${remainCls}">${toman(Math.abs(newBalance))} ت ${balanceStatusWord(newBalance)}</span></div>
     `;
     const profitEl = document.getElementById('inv-profit-summary');
     if(profitEl){
       profitEl.innerHTML = `<span class="name">سود این فاکتور (بر اساس میانگین خرید)</span><strong class="amount" style="color:${profitColor}">${profit<0?'−':''}${toman(Math.abs(profit))} ت</strong>`;
+    }
+    // Always-visible total bar (fixed to the bottom of the sheet). Deliberately NOT in
+    // the header: the header carries navigation + save only, so the running total never
+    // competes with the title or the save control for attention.
+    const barTotalEl = document.getElementById('inv-totalbar-total');
+    if(barTotalEl) barTotalEl.textContent = toman(total) + ' ت';
+    const barRemainEl = document.getElementById('inv-totalbar-remain');
+    if(barRemainEl){
+      barRemainEl.textContent = toman(Math.abs(newBalance)) + ' ت';
+      barRemainEl.classList.toggle('accent-rust', newBalance>0);
+      barRemainEl.classList.toggle('accent-olive', !(newBalance>0));
+    }
+    const barRemainLab = document.getElementById('inv-totalbar-remain-label');
+    if(barRemainLab) barRemainLab.textContent = 'مانده جدید (' + balanceStatusWord(newBalance) + ')';
+    const countEl = document.getElementById('inv-items-count');
+    if(countEl){
+      const n = rows.filter(r=>r.productId && invoiceProduct(r.productId)).length;
+      countEl.textContent = n ? enToFaDigits(String(n)) + ' قلم' : 'بدون قلم';
     }
   }
 
@@ -2640,6 +2681,10 @@ function openInvoiceForm(cid, editInv, opts){
     const custDisplay = cust
       ? (cust.ownerName ? (esc(cust.name)+' / '+esc(cust.ownerName)) : esc(cust.name||'—'))
       : '—';
+    // Avatar initial (presentation only). The identity card is the sheet's anchor:
+    // who this invoice is for, and what they already owe.
+    const custInitial = (cust && cust.name) ? String(cust.name).trim().charAt(0) : '؟';
+    const prevBalanceCls = prevBalance > 0 ? 'is-debt' : 'is-clear';
 
     openSheet(`
       <div class="inv-sheet-v2">
@@ -2653,33 +2698,47 @@ function openInvoiceForm(cid, editInv, opts){
         </div>
 
         <div class="inv-body">
-          ${editInv?`<div class="inv-edit-notice">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
+          ${editInv?`<div class="inv-note">با ذخیره‌ی این ویرایش، موجودی انبار و مانده حساب مشتری به‌طور خودکار اصلاح می‌شود.</div>`:''}
 
-          <div class="inv-customer-context">
-            <div class="inv-customer-info">
-              <div class="inv-customer-kicker">مشتری</div>
-              <div class="inv-customer-name">${custDisplay}</div>
-              ${cust&&cust.phone?`<div class="inv-customer-meta">${esc(cust.phone)}</div>`:''}
+          <section class="inv-block inv-customer-block" aria-label="مشتری این فاکتور">
+            <div class="inv-cust-card">
+              <span class="inv-cust-avatar" aria-hidden="true">${esc(custInitial)}</span>
+              <div class="inv-cust-main">
+                <span class="inv-cust-kicker">مشتری</span>
+                <span class="inv-cust-name">${custDisplay}</span>
+                ${cust&&cust.phone?`<span class="inv-cust-meta">${esc(cust.phone)}</span>`:''}
+              </div>
+              <div class="inv-cust-side">
+                <span class="inv-cust-side-label">مانده قبلی</span>
+                <span class="inv-cust-side-value ${prevBalanceCls}">${toman(Math.abs(prevBalance))} ت</span>
+                <span class="inv-cust-side-word">${balanceStatusWord(prevBalance)}</span>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}</div>
+          <section class="inv-block" aria-label="تاریخ فاکتور">
+            <div class="inv-field-row">
+              <span class="inv-field-row-label">تاریخ فاکتور</span>
+              ${shamsiDateInputHTML('f-date', editInv?editInv.date:todayISO())}
+            </div>
+          </section>
 
-          <div class="inv-section inv-items-section">
-            <div class="inv-items-card-head">
-              <span class="inv-items-card-label">اقلام فاکتور</span>
+          <section class="inv-block inv-items-section">
+            <div class="inv-sec-head">
+              <h2 class="inv-sec-title">اقلام فاکتور</h2>
+              <span class="inv-sec-hint" id="inv-items-count"></span>
             </div>
             <div class="inv-items-card">
               <div id="items-wrap" class="inv-items">${itemsHtml()}</div>
               <button type="button" class="inv-add-line" id="add-row"><span class="inv-add-line-icon" aria-hidden="true">+</span> افزودن قلم جدید</button>
             </div>
-          </div>
+          </section>
 
           ${nprHtmlInv}
 
-          <div class="inv-section inv-payment-section">
-            <div class="inv-payment-heading">
-              <h2 class="inv-section-title">دریافتی همراه این فاکتور <span class="inv-section-title-optional">(اختیاری)</span></h2>
+          <section class="inv-block inv-payment-section">
+            <div class="inv-sec-head">
+              <h2 class="inv-sec-title">دریافتی همراه این فاکتور <span class="inv-section-title-optional">(اختیاری)</span></h2>
               <span class="inv-payment-total" id="inv-payment-total">${toman(cashPaid+cardPaid+transferPaid+checkAmount)} ت</span>
             </div>
 
@@ -2756,13 +2815,28 @@ function openInvoiceForm(cid, editInv, opts){
               </div>
               <input id="f-discount" type="text" inputmode="decimal" value="${discount ? enToFaDigits(String(discount)) : ''}" placeholder="۰" aria-label="مقدار تخفیف">
             </div>
-          </div>
+          </section>
 
-          <div class="inv-summary-section">
-            <h2 class="inv-section-title">جمع‌بندی فاکتور</h2>
-            <div id="calc-summary"></div>
+          <section class="inv-block inv-summary-section">
+            <div class="inv-sec-head">
+              <h2 class="inv-sec-title">جمع‌بندی فاکتور</h2>
+            </div>
+            <div class="inv-card inv-sum-card" id="calc-summary"></div>
+            <div class="inv-profit-summary" id="inv-profit-summary" aria-label="سود این فاکتور"></div>
+          </section>
+        </div>
+
+        <!-- Running total, always visible while the form is open. It lives here
+             (not in the header) so it never competes with the title or Save. -->
+        <div class="inv-totalbar" id="inv-totalbar" role="status" aria-live="polite">
+          <div class="inv-totalbar-main">
+            <span class="inv-totalbar-label">جمع فاکتور</span>
+            <span class="inv-totalbar-value" id="inv-totalbar-total">—</span>
           </div>
-          <div class="inv-profit-summary" id="inv-profit-summary" aria-label="سود این فاکتور"></div>
+          <div class="inv-totalbar-side">
+            <span class="inv-totalbar-label" id="inv-totalbar-remain-label">مانده جدید</span>
+            <span class="inv-totalbar-remain" id="inv-totalbar-remain">—</span>
+          </div>
         </div>
       </div>
     `, {dirtyCheck:true});
@@ -2799,7 +2873,9 @@ function openInvoiceForm(cid, editInv, opts){
         const line = el.closest('.inv-line');
         if(!line) return;
         const idx = parseInt(line.getAttribute('data-row'), 10);
-        if(idx === activeRowIndex) return;
+        // Tapping the row while it is already the open one closes it again
+        // (the row is a toggle, not a one-way expander).
+        if(idx === activeRowIndex){ collapseRow(idx); return; }
         setActiveRow(idx);
         focusQtyForRow(idx);
       };
@@ -2808,6 +2884,34 @@ function openInvoiceForm(cid, editInv, opts){
         if(e.key==='Enter' || e.key===' '){ e.preventDefault(); activate(); }
       });
     });
+    // Explicit "بستن" control on the open row: one obvious tap closes the row
+    // without touching the product field (which opens the picker).
+    document.querySelectorAll('.inv-line-collapse').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        collapseRow(parseInt(btn.getAttribute('data-collapse'), 10));
+      });
+    });
+    // Tapping anywhere else inside the sheet (background, section titles, the
+    // header, the total bar) also closes the open row. Inputs, buttons and the
+    // date control are excluded so typing/using a control never collapses it.
+    document._invRowCollapseApi = {
+      get openRow(){ return activeRowIndex; },
+      close: function(){ if(activeRowIndex !== null) collapseRow(activeRowIndex); }
+    };
+    if(!document._invRowCollapseBound){
+      document._invRowCollapseBound = true;
+      document.addEventListener('pointerdown', function(e){
+        const t = e.target;
+        if(!t || typeof t.closest !== 'function') return;
+        if(!t.closest('.inv-sheet-v2')) return;
+        if(t.closest('.inv-line') || t.closest('.prod-drop')) return;
+        if(t.closest('input,textarea,select,button,a,label,summary,details,.shamsi-date')) return;
+        const api = document._invRowCollapseApi;
+        if(api && api.openRow !== null) api.close();
+      }, true);
+    }
     document.querySelectorAll('.row-qty').forEach(el=>el.addEventListener('blur', e=>{
       const key = e.target.dataset.row;
       if(e.target.value.trim()==='' && qtyFocusPrevious.has(String(key))){
@@ -2896,29 +3000,58 @@ function openInvoiceForm(cid, editInv, opts){
       if(newActiveEl) newActiveEl.classList.add('is-active');
     }
 
+    // Close the currently open row back to its collapsed summary. Rows still
+    // waiting for a product have no collapsed form, so they stay open.
+    function collapseRow(idx){
+      idx = parseInt(idx, 10);
+      if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
+      if(!rows[idx] || !rows[idx].productId) return;
+      if(prodDropOpenRow !== null) closeAllProductDrops();
+      if(activeRowIndex === idx) activeRowIndex = null;
+      const el = document.querySelector(`.inv-line[data-row="${idx}"]`);
+      if(el){
+        el.classList.remove('is-active');
+        // Drop focus (and therefore the on-screen keyboard) when a field of the
+        // row being closed is focused.
+        const focused = document.activeElement;
+        if(focused && el.contains(focused) && typeof focused.blur === 'function'){
+          try{ focused.blur(); }catch(eBlur){}
+        }
+      }
+    }
+
     function positionProductDrop(dropEl, anchorEl){
       if(!dropEl || !anchorEl) return;
-      const margin = 10;
-      const rect = anchorEl.getBoundingClientRect();
+      // Bottom-sheet geometry lives in CSS (.prod-drop / .prod-drop-panel); the
+      // only thing left to do here is keep the row being edited visible above it.
+      dropEl.style.left = '';
+      dropEl.style.right = '';
+      dropEl.style.top = '';
+      dropEl.style.bottom = '';
+      dropEl.style.width = '';
+      dropEl.style.maxHeight = '';
+      ensureLineVisibleAboveSheet(anchorEl);
+    }
+    // PICKER_SHEET_MAX_VH / PICKER_SHEET_MAX_PX mirror the .prod-drop-panel
+    // max-height in css/app.css — keep both in sync.
+    const PICKER_SHEET_MAX_VH = 0.62;
+    const PICKER_SHEET_MAX_PX = 460;
+    function pickerSheetHeight(){
       const vv = window.visualViewport;
       const vh = vv ? vv.height : window.innerHeight;
-      const vTop = vv ? vv.offsetTop : 0;
-      // Height cap: ~38% viewport, max 300px, min 180px
-      const maxH = Math.min(300, Math.max(180, Math.round(vh * 0.38)));
-      dropEl.style.left = margin + 'px';
-      dropEl.style.right = margin + 'px';
-      dropEl.style.width = 'auto';
-      dropEl.style.maxHeight = maxH + 'px';
-      const spaceBelow = (vTop + vh) - rect.bottom - 8;
-      const spaceAbove = rect.top - vTop - 8;
-      if(spaceBelow >= Math.min(maxH, 200) || spaceBelow >= spaceAbove){
-        dropEl.style.top = (rect.bottom + 4) + 'px';
-        dropEl.style.bottom = 'auto';
-        if(spaceBelow < maxH) dropEl.style.maxHeight = Math.max(160, spaceBelow) + 'px';
-      }else{
-        dropEl.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-        dropEl.style.top = 'auto';
-        if(spaceAbove < maxH) dropEl.style.maxHeight = Math.max(160, spaceAbove) + 'px';
+      return Math.min(Math.round(vh * PICKER_SHEET_MAX_VH), PICKER_SHEET_MAX_PX);
+    }
+    function ensureLineVisibleAboveSheet(anchorEl){
+      const body = document.querySelector('.inv-body');
+      const line = anchorEl && typeof anchorEl.closest === 'function' ? anchorEl.closest('.inv-line') : null;
+      if(!body || !line) return;
+      const vv = window.visualViewport;
+      const vh = vv ? vv.height : window.innerHeight;
+      const limit = vh - pickerSheetHeight() - 12;
+      const rect = line.getBoundingClientRect();
+      // 80px ≈ fixed header height + a small gap, so the row lands right under it.
+      if(rect.bottom > limit || rect.top < 80){
+        body.scrollTop = Math.max(0, body.scrollTop + (rect.top - 84));
       }
     }
     function openProductDrop(idx){
@@ -3021,6 +3154,12 @@ function openInvoiceForm(cid, editInv, opts){
         e.preventDefault();
       });
       dropEl.addEventListener('click', e=>{
+        if(e.target.closest('[data-drop-close]') || e.target.closest('.prod-drop-backdrop')){
+          e.preventDefault();
+          e.stopPropagation();
+          closeAllProductDrops();
+          return;
+        }
         const item = e.target.closest('.prod-drop-item');
         if(!item) return;
         e.preventDefault();
@@ -4499,4 +4638,3 @@ function openSupplierDetail(sid){
     setTimeout(ensureQAUI, 0);
   }
 })();
-
