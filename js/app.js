@@ -2315,7 +2315,6 @@ function openInvoiceForm(cid, editInv, opts){
   let cardPaid = editInv ? (editInv.cardPaid||0) : 0;
   let transferPaid = editInv ? (editInv.transferPaid||0) : 0;
   let checkAmount = editInv ? (editInv.checkPaid||0) : 0;
-  let dateStr = editInv ? editInv.date : todayISO();
   let checkDue = existingCheck ? existingCheck.dueDate : todayISO();
   const pendingPayment = { cash: cashPaid, card: cardPaid, transfer: transferPaid, check: checkAmount, checkDue };
   // Display-only digit grouping for the payment amount inputs (same fa-IR grouping as toman()).
@@ -2384,10 +2383,11 @@ function openInvoiceForm(cid, editInv, opts){
       amount.className = 'inv-line-amount';
       view.append(body, amount);
       line.insertBefore(view, line.querySelector('.inv-line-view-active'));
+      // قبلاً اینجا setActiveRow صدا زده می‌شد که در scope این تابع نیست (ReferenceError)؛
+      // برای آخرین ردیفِ پرشده تپ بی‌اثر می‌ماند تا re-render بعدی. حالا از hook استفاده می‌شود.
       const activate = ()=>{
-        if(idx === activeRowIndex) return;
-        setActiveRow(idx);
-        focusQtyForRow(idx);
+        const lineEl = view.closest('.inv-line');
+        if(lineEl && activateCollapsedRow) activateCollapsedRow(parseInt(lineEl.getAttribute('data-row'), 10));
       };
       view.addEventListener('click', activate);
       view.addEventListener('keydown', e=>{
@@ -2443,6 +2443,10 @@ function openInvoiceForm(cid, editInv, opts){
   // this value, since it has no collapsed summary to fall back to.
   let activeRowIndex = rows.findIndex(r=>!r.productId);
   if(activeRowIndex < 0) activeRowIndex = null;
+  // تاریخ فاکتور در closure نگه داشته می‌شود تا با هر renderSheet() دوباره به «امروز» برنگردد.
+  let invoiceDateStr = editInv ? editInv.date : todayISO();
+  // فعال‌سازی ردیف جمع‌شده؛ renderSheet آن را تنظیم می‌کند (setActiveRow داخل scope همان است).
+  let activateCollapsedRow = null;
   const qtyFocusPrevious = new Map();
   function focusQtyForRow(idx){
     const input = document.querySelector(`.inv-line[data-row="${idx}"] .row-qty`);
@@ -2620,55 +2624,7 @@ function openInvoiceForm(cid, editInv, opts){
     }
   }
 
-  function closeAllProductDrops(){
-    prodDropOpenRow = null;
-    prodDropOpening = false;
-    document.querySelectorAll('.prod-drop').forEach(d=>{
-      d.hidden = true;
-      d.classList.remove('is-open');
-      d.innerHTML = '';
-      d.style.top = d.style.bottom = d.style.maxHeight = d.style.left = d.style.right = '';
-    });
-  }
-  // Stage 3 — expand/collapse a row in place. Pure class toggle: no
-  // renderSheet(), no outerHTML/innerHTML morph. Rows with no collapsed
-  // view yet (still empty, awaiting a product) are left alone here — they
-  // are not part of the collapse/expand toggle at all (see itemsHtml()).
-  function setActiveRow(idx){
-    idx = parseInt(idx, 10);
-    if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
-    if(idx === activeRowIndex) return;
-    if(prodDropOpenRow !== null) closeAllProductDrops();
-
-    // A transient empty row is always appended by Add Item. Remove that
-    // true empty row from both state and DOM when the user switches away,
-    // so Save can never validate an invisible empty item.
-    if(activeRowIndex !== null && rows[activeRowIndex] && !rows[activeRowIndex].productId && activeRowIndex !== idx){
-      const removedIdx = activeRowIndex;
-      const emptyEl = document.querySelector(`.inv-line[data-row="${removedIdx}"]`);
-      rows.splice(removedIdx, 1);
-      invalidateInvoiceMetrics();
-      if(emptyEl) emptyEl.remove();
-      // Add Item appends the transient row, so populated row indexes remain stable.
-    }
-
-    activeRowIndex = idx;
-    document.querySelectorAll('.inv-line.is-active').forEach(el=>{
-      const rowIdx = parseInt(el.getAttribute('data-row'), 10);
-      if(rowIdx !== idx && rows[rowIdx] && rows[rowIdx].productId) el.classList.remove('is-active');
-      else if(rowIdx !== idx && (!rows[rowIdx] || !rows[rowIdx].productId)) el.classList.remove('is-active');
-    });
-    const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
-    if(newActiveEl) newActiveEl.classList.add('is-active');
-  }
-
-
   function renderSheet(){
-    // Rebuilt DOM has no open picker; discard state belonging to old nodes.
-    prodDropOpenRow = null;
-    prodDropOpening = false;
-    document._invPickerTapPending = false;
-    qtyFocusPrevious.clear();
     // Preserve the sheet's internal scroll position across re-renders.
     // renderSheet() is called on every add-row / row-delete / discount-type
     // change, and each call fully rebuilds #modalRoot via openSheet() (a
@@ -2718,7 +2674,7 @@ function openInvoiceForm(cid, editInv, opts){
             </div>
           </div>
 
-          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', dateStr)}</div>
+          <div class="field inv-date-field"><label>تاریخ فاکتور</label>${shamsiDateInputHTML('f-date', invoiceDateStr)}</div>
 
           <div class="inv-section inv-items-section">
             <div class="inv-items-card-head">
@@ -2796,11 +2752,12 @@ function openInvoiceForm(cid, editInv, opts){
               <div class="inv-payment-panel-head"><div><strong>دریافت چک</strong><small>دارم چک دریافت می‌کنم</small></div><button type="button" class="inv-payment-close" data-payment-close="check" aria-label="بستن">×</button></div>
               <label for="f-check">مبلغ چک</label>
               <input id="f-check" type="text" inputmode="decimal" value="${payInputText(checkAmount)}" placeholder="مبلغ چک را وارد کنید">
-              <button type="button" class="inv-payment-confirm" data-payment-confirm="check">ثبت دریافت چک</button>
+              <!-- تاریخ سررسید قبل از دکمهٔ ثبت می‌آید تا کاربر قبل از ثبت به آن برسد -->
               <div class="inv-payment-check-due" id="check-due-wrap" style="display:${checkAmount>0?'block':'none'};">
                 <label for="f-check-due">تاریخ سررسید چک</label>
-                ${shamsiDateInputHTML('f-check-due', pendingPayment.checkDue || checkDue)}
+                ${shamsiDateInputHTML('f-check-due', checkDue)}
               </div>
+              <button type="button" class="inv-payment-confirm" data-payment-confirm="check">ثبت دریافت چک</button>
             </div>
 
             <div class="inv-discount-block" role="group" aria-label="تخفیف فاکتور">
@@ -2821,23 +2778,6 @@ function openInvoiceForm(cid, editInv, opts){
         </div>
       </div>
     `, {dirtyCheck:true});
-    const invoiceDateInput = document.getElementById('f-date');
-    if(invoiceDateInput){
-      const rememberInvoiceDate = ()=>{ dateStr = invoiceDateInput.value; };
-      invoiceDateInput.addEventListener('input', rememberInvoiceDate);
-      invoiceDateInput.addEventListener('change', rememberInvoiceDate);
-    }
-    function bindCheckDueInput(){
-      const due = document.getElementById('f-check-due');
-      if(!due) return;
-      const rememberCheckDue = ()=>{
-        pendingPayment.checkDue = due.value;
-        checkDue = due.value;
-      };
-      due.addEventListener('input', rememberCheckDue);
-      due.addEventListener('change', rememberCheckDue);
-    }
-    bindCheckDueInput();
     const invoiceBottomNav = document.getElementById('bottom-nav');
     if (invoiceBottomNav && invoiceBottomNav.dataset.invoiceHiddenPrev == null) { invoiceBottomNav.dataset.invoiceHiddenPrev = invoiceBottomNav.hidden ? '1' : '0'; invoiceBottomNav.hidden = true; }
     // Presentation-only: the sheet's generic close-x (from openSheet) is
@@ -2870,14 +2810,15 @@ function openInvoiceForm(cid, editInv, opts){
     // No-Purchase Reason chips (re-bound after every renderSheet rebuild)
     if(typeof bindNoPurchasePrompt === 'function') bindNoPurchasePrompt(cid);
 
+    activateCollapsedRow = function(idx){
+      if(isNaN(idx) || idx === activeRowIndex) return;
+      setActiveRow(idx);
+      focusQtyForRow(idx);
+    };
     document.querySelectorAll('.inv-line-collapsed').forEach(el=>{
       const activate = ()=>{
         const line = el.closest('.inv-line');
-        if(!line) return;
-        const idx = parseInt(line.getAttribute('data-row'), 10);
-        if(idx === activeRowIndex) return;
-        setActiveRow(idx);
-        focusQtyForRow(idx);
+        if(line) activateCollapsedRow(parseInt(line.getAttribute('data-row'), 10));
       };
       el.addEventListener('click', activate);
       el.addEventListener('keydown', e=>{
@@ -2947,6 +2888,48 @@ function openInvoiceForm(cid, editInv, opts){
         renderSheet();
       }
     }));
+
+    function closeAllProductDrops(){
+      prodDropOpenRow = null;
+      prodDropOpening = false;
+      document.querySelectorAll('.prod-drop').forEach(d=>{
+        d.hidden = true;
+        d.classList.remove('is-open');
+        d.innerHTML = '';
+        d.style.top = d.style.bottom = d.style.maxHeight = d.style.left = d.style.right = '';
+      });
+    }
+    // Stage 3 — expand/collapse a row in place. Pure class toggle: no
+    // renderSheet(), no outerHTML/innerHTML morph. Rows with no collapsed
+    // view yet (still empty, awaiting a product) are left alone here — they
+    // are not part of the collapse/expand toggle at all (see itemsHtml()).
+    function setActiveRow(idx){
+      idx = parseInt(idx, 10);
+      if(isNaN(idx) || idx < 0 || idx >= rows.length) return;
+      if(idx === activeRowIndex) return;
+      if(prodDropOpenRow !== null) closeAllProductDrops();
+
+      // A transient empty row is always appended by Add Item. Remove that
+      // true empty row from both state and DOM when the user switches away,
+      // so Save can never validate an invisible empty item.
+      if(activeRowIndex !== null && rows[activeRowIndex] && !rows[activeRowIndex].productId && activeRowIndex !== idx){
+        const removedIdx = activeRowIndex;
+        const emptyEl = document.querySelector(`.inv-line[data-row="${removedIdx}"]`);
+        rows.splice(removedIdx, 1);
+        invalidateInvoiceMetrics();
+        if(emptyEl) emptyEl.remove();
+        // Add Item appends the transient row, so populated row indexes remain stable.
+      }
+
+      activeRowIndex = idx;
+      document.querySelectorAll('.inv-line.is-active').forEach(el=>{
+        const rowIdx = parseInt(el.getAttribute('data-row'), 10);
+        if(rowIdx !== idx && rows[rowIdx] && rows[rowIdx].productId) el.classList.remove('is-active');
+        else if(rowIdx !== idx && (!rows[rowIdx] || !rows[rowIdx].productId)) el.classList.remove('is-active');
+      });
+      const newActiveEl = document.querySelector(`.inv-line[data-row="${idx}"]`);
+      if(newActiveEl) newActiveEl.classList.add('is-active');
+    }
 
     function positionProductDrop(dropEl, anchorEl){
       if(!dropEl || !anchorEl) return;
@@ -3172,15 +3155,15 @@ function openInvoiceForm(cid, editInv, opts){
             setTimeout(()=>input.focus(), 0);
           }
           if(method==='check'){
+            // فیلد پنهان و فیلد دیداری هر دو از یک مقدار پر می‌شوند تا آنچه دیده می‌شود همان ذخیره شود.
+            const desiredDue = pendingPayment.checkDue || checkDue;
+            const due = panel.querySelector('#f-check-due');
+            if(due) due.value = desiredDue;
+            const dueVisible = panel.querySelector('.shamsi-date-field');
+            const jDue = (typeof isoToJalali === 'function') ? isoToJalali(desiredDue) : null;
+            if(dueVisible && jDue) dueVisible.value = enToFaDigits(jDue[0] + '/' + jDue[1] + '/' + jDue[2]);
             const dueWrap = panel.querySelector('#check-due-wrap');
-            if(dueWrap){
-              // Use the date component's own renderer for hidden and visible values.
-              // Do not assume ui.js's private display-input IDs or date formatting.
-              dueWrap.innerHTML = '<label for="f-check-due">تاریخ سررسید چک</label>' +
-                shamsiDateInputHTML('f-check-due', pendingPayment.checkDue || checkDue);
-              dueWrap.style.display = pendingPayment.check > 0 ? 'block' : 'none';
-              bindCheckDueInput();
-            }
+            if(dueWrap && input && parseFloat(faToEnDigits(input.value))>0) dueWrap.style.display = 'block';
           }
         }
       });
@@ -3251,6 +3234,14 @@ function openInvoiceForm(cid, editInv, opts){
         closeInvPaymentPanels();
       });
     });
+    // تاریخ فاکتور و تاریخ سررسید چک: هر تغییرِ picker در closure ثبت می‌شود تا re-render آن را گم نکند.
+    const invDateEl = document.getElementById('f-date');
+    if(invDateEl) invDateEl.addEventListener('input', e=>{ invoiceDateStr = e.target.value || todayISO(); });
+    const checkDueEl = document.getElementById('f-check-due');
+    if(checkDueEl) checkDueEl.addEventListener('input', e=>{
+      pendingPayment.checkDue = e.target.value;
+      checkDue = e.target.value || todayISO();
+    });
     document.getElementById('f-discount').addEventListener('input', e=>{
       let v = parseFloat(faToEnDigits(e.target.value))||0;
       if(discountType==='percent') v = Math.min(100, Math.max(0, v));
@@ -3273,8 +3264,7 @@ function openInvoiceForm(cid, editInv, opts){
       const btn = e.currentTarget;
       if(btn.disabled) return; // جلوگیری از ثبت دوباره با کلیک سریع/پی‌درپی
       btn.disabled = true;
-      dateStr = document.getElementById('f-date').value || dateStr;
-      const date = dateStr || todayISO();
+      const date = document.getElementById('f-date').value || todayISO();
 
       // اعتبارسنجی: ردیف‌های خالیِ draft (بدون جنس انتخاب‌شده) اگر حداقل یک ردیف
       // معتبر دیگر وجود داشته باشد، نباید مانع ثبت فاکتور شوند؛ اما ردیفی که
