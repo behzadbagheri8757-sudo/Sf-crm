@@ -1640,7 +1640,14 @@ details[open] > .customer-behavior-summary::after{
 }
 
 /* --------------------------------------------------------------------------
-   11. INVOICES V6 (PROTECTED)
+   11. INVOICE SHEET — new / edit  (redesigned)
+   --------------------------------------------------------------------------
+   Same visual language as the Reports page (token-only colour, calm surfaces:
+   1px --vg-color-border + --vg-radius-raised, no heavy shadows, section heads
+   with a hint, quiet notes) — but shaped for a transactional form:
+     identity → date → items → received payment → summary
+   plus a running total bar that stays visible for the whole form.
+   Presentation only. No accounting / FIFO / allocation rule lives here.
    -------------------------------------------------------------------------- */
 /* openSheet() sets inline position:relative — fixed+inset must win for full viewport cover */
 .sheet.inv-sheet-host{
@@ -1662,8 +1669,7 @@ details[open] > .customer-behavior-summary::after{
 }
 /* This is a full-screen page-like host, not a card sheet — no grabber,
    no swipe-to-dismiss affordance (display:none also stops touch events
-   from reaching bindSheetDragToDismiss's listener, so this alone is
-   enough to disable the gesture here, no JS branch needed). */
+   from reaching bindSheetDragToDismiss's listener). */
 .sheet.inv-sheet-host .sheet-handle{
   display:none;
 }
@@ -1673,7 +1679,12 @@ details[open] > .customer-behavior-summary::after{
   height:100%;
   min-height:0;
   overflow:hidden;
+  background:var(--vg-color-bg);
+  direction:rtl;
 }
+
+/* ---- Header: navigation + save only. The running total deliberately lives
+   in the bottom bar, never here, so nothing competes with the title. ---- */
 .inv-header{
   position:fixed;
   top:0;
@@ -1683,58 +1694,63 @@ details[open] > .customer-behavior-summary::after{
   max-width:none;
   margin:0;
   box-sizing:border-box;
-  padding-top:calc(10px + env(safe-area-inset-top,0px));
-  padding-bottom:10px;
-  background:rgba(255,255,255,.97);
+  padding-top:calc(8px + env(safe-area-inset-top,0px));
+  padding-bottom:8px;
+  padding-inline:14px;
+  background:rgba(255,255,255,.96);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
-  box-shadow:0 1px 0 rgba(15,23,42,.07),0 8px 22px rgba(15,23,42,.05);
+  box-shadow:0 1px 0 var(--vg-color-divider);
   z-index:5;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:8px;
-  padding-inline:14px;
 }
 .inv-header-btn{
   flex:0 0 auto;
-  min-height:36px;
-  padding:6px 12px;
+  min-height:38px;
+  padding:6px 14px;
   border:0;
-  border-radius:999px;
-  background:rgba(31,41,55,.05);
-  color:var(--vg-color-text-muted);
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-neutral-soft);
+  color:var(--vg-color-text-secondary);
   font-family:inherit;
   font-size:.84rem;
-  font-weight:600;
+  font-weight:var(--vg-weight-label);
   cursor:pointer;
 }
+.inv-header-btn:active{opacity:.75;}
 .inv-header-title{
   flex:1 1 auto;
   display:flex;
   flex-direction:column;
   align-items:center;
+  gap:1px;
   min-width:0;
 }
 .inv-header-title-main{
   font-size:.95rem;
-  font-weight:700;
+  font-weight:var(--vg-weight-title);
   color:var(--vg-color-text);
 }
 .inv-header-title-sub{
-  font-size:.7rem;
+  font-size:.68rem;
   color:var(--vg-color-text-muted);
 }
 button.inv-header-save.btn{
   flex:0 0 auto;
-  min-height:36px;
-  padding:7px 16px;
-  border-radius:999px;
+  min-height:38px;
+  padding:7px 18px;
+  border-radius:var(--vg-radius-control);
   font-size:.86rem;
-  font-weight:700;
-  background:#0070D2;
+  font-weight:var(--vg-weight-title);
+  background:var(--vg-color-primary);
   color:#fff;
 }
+button.inv-header-save.btn:active{opacity:.88;}
+
+/* ---- Body: one calm column, grouped like the Reports page ---- */
 .inv-body{
   flex:1 1 auto;
   min-height:0;
@@ -1742,141 +1758,247 @@ button.inv-header-save.btn{
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding:calc(72px + env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));
+  display:flex;
+  flex-direction:column;
+  gap:var(--vg-space-group);
+  padding:calc(64px + env(safe-area-inset-top,0px)) 14px calc(92px + env(safe-area-inset-bottom,0px));
   max-width:720px;
   width:100%;
   margin:0 auto;
   box-sizing:border-box;
 }
-.inv-section{
-  margin-bottom:24px;
+.inv-block{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
 }
-.inv-section-title{
-  font-size:.8rem;
-  font-weight:600;
+.inv-card{
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
+}
+/* Section head — same shape as .rp-sec-head on the Reports page */
+.inv-sec-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  margin:0 2px 8px;
+}
+.inv-sec-title{
+  margin:0;
+  font-size:var(--vg-type-section);
+  font-weight:var(--vg-weight-title);
+  color:var(--vg-color-text);
+}
+.inv-sec-hint{
+  flex:0 0 auto;
+  font-size:var(--vg-type-meta);
   color:var(--vg-color-text-muted);
-  margin:0 0 10px;
 }
 .inv-section-title-optional{
-  font-weight:400;
+  font-weight:var(--vg-weight-regular);
   color:var(--vg-color-text-muted);
-  opacity:.75;
+  opacity:.8;
 }
-.inv-payment-section{
-  margin-bottom:16px;
+/* Quiet note (edit-mode notice) — Reports' .rp-note voice, tinted because it
+   announces a real side effect on stock and customer balance. */
+.inv-note{
+  margin:0;
+  padding:10px 12px;
+  border-radius:var(--vg-radius-soft);
+  background:var(--vg-color-warning-soft);
+  color:var(--vg-color-warning);
+  font-size:.76rem;
+  line-height:1.75;
 }
-.inv-items-section{
-  margin-bottom:18px;
-}
-/* Customer identity block at the top of the New Invoice sheet. These
-   classes existed in the markup with no rules at all, so the avatar
-   rendered as a bare unstyled initial letter and the name/meta had no
-   grouping — this is the "unexplained standalone A" and the weak
-   customer-identity issue in the same pass. */
-.inv-customer-context{
+
+/* ---- Customer identity card ---- */
+.inv-cust-card{
   display:flex;
   align-items:center;
-  padding:8px 2px 12px;
-  margin-bottom:4px;
-  border-bottom:1px solid rgba(15,23,42,.06);
+  gap:12px;
+  padding:14px 16px;
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
 }
-.inv-customer-kicker{
-  font-size:.68rem;
-  font-weight:600;
-  color:#98A2B3;
-  margin-bottom:2px;
+.inv-cust-avatar{
+  flex:0 0 auto;
+  width:42px;
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:var(--vg-radius-circle);
+  background:var(--vg-color-primary-soft);
+  color:var(--vg-color-primary);
+  font-size:1rem;
+  font-weight:var(--vg-weight-value);
 }
-.inv-customer-info{
-  min-width:0;
+/* Generous, even rhythm between the three lines — they used to sit on top of
+   each other with 2px gaps and no grouping. */
+.inv-cust-main{
   flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:5px;
 }
-.inv-customer-name{
-  font-size:.96rem;
-  font-weight:700;
+.inv-cust-kicker{
+  font-size:var(--vg-type-meta);
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-muted);
+  letter-spacing:.02em;
+}
+.inv-cust-name{
+  max-width:100%;
+  font-size:1rem;
+  font-weight:var(--vg-weight-title);
   color:var(--vg-color-text);
-  line-height:1.35;
+  line-height:1.55;
   overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow-wrap:anywhere;
 }
-.inv-customer-meta{
+.inv-cust-meta{
+  display:block;
   font-size:.78rem;
   color:var(--vg-color-text-muted);
-  margin-top:2px;
-  line-height:1.3;
+  line-height:1.55;
+  font-variant-numeric:tabular-nums;
+  direction:rtl;
 }
-.inv-date-field label{
-  font-size:.72rem;
-  font-weight:600;
+.inv-cust-side{
+  flex:0 0 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:3px;
+  padding-inline-start:12px;
+  border-inline-start:1px solid var(--vg-color-divider);
+  text-align:left;
+}
+.inv-cust-side-label{
+  font-size:var(--vg-type-meta);
   color:var(--vg-color-text-muted);
-  margin-bottom:6px;
+  white-space:nowrap;
 }
-.inv-date-field{
-  margin-bottom:16px;
+.inv-cust-side-value{
+  font-size:.92rem;
+  font-weight:var(--vg-weight-value);
+  color:var(--vg-color-text);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
 }
+.inv-cust-side-value.is-debt{color:var(--vg-color-danger);}
+.inv-cust-side-value.is-clear{color:var(--vg-color-success);}
+.inv-cust-side-word{
+  font-size:var(--vg-type-meta);
+  color:var(--vg-color-text-muted);
+}
+
+/* ---- Date row (label + value, iOS form-row shape) ---- */
+.inv-field-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:56px;
+  padding:8px 16px;
+  box-sizing:border-box;
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
+}
+.inv-field-row-label{
+  flex:0 0 auto;
+  font-size:.82rem;
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-secondary);
+  white-space:nowrap;
+}
+.inv-field-row .shamsi-date{
+  position:relative;
+  flex:1 1 auto;
+  min-width:0;
+}
+.inv-field-row .shamsi-date::after{
+  content:"";
+  position:absolute;
+  inset-inline-start:2px;
+  top:50%;
+  width:7px;
+  height:7px;
+  margin-top:-5px;
+  border-inline-start:1.5px solid var(--vg-color-text-muted);
+  border-block-end:1.5px solid var(--vg-color-text-muted);
+  transform:rotate(-45deg);
+  pointer-events:none;
+}
+.inv-sheet-v2 .inv-field-row .shamsi-date-field{
+  width:100%;
+  min-height:40px;
+  box-sizing:border-box;
+  padding:0 20px 0 0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--vg-color-text);
+  font-family:inherit;
+  font-size:.95rem;
+  font-weight:var(--vg-weight-title);
+  text-align:left;
+  font-variant-numeric:tabular-nums;
+  outline:none;
+  -webkit-appearance:none;
+  appearance:none;
+}
+
+/* ---- Items ---- */
 .inv-items-card{
   background:var(--vg-color-surface);
-  border:1px solid rgba(15,23,42,.07);
-  border-radius:16px;
-  box-shadow:0 6px 22px rgba(15,23,42,.05);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
   overflow:hidden;
-  padding:0 0 4px;
-}
-/* Title now sits above the card surface (More-page pattern) — see markup
-   in js/app.js renderSheet(), where .inv-items-card-head was moved out of
-   .inv-items-card. */
-.inv-items-card-head{
-  padding:0 4px 8px;
-}
-.inv-items-card-label{
-  font-size:.72rem;
-  font-weight:600;
-  color:var(--vg-color-text-muted);
 }
 .inv-line{
   position:relative;
-  margin:0!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
-  box-shadow:none!important;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
 }
 .inv-line + .inv-line::before{
   content:"";
   position:absolute;
   top:0;
-  left:14px;
-  right:14px;
+  inset-inline:16px;
   height:1px;
-  background:rgba(15,23,42,.06);
+  background:var(--vg-color-divider);
 }
-.inv-line-empty{
-  padding:0!important;
-}
-.inv-line-view-active{
-  display:none;
-}
-.inv-line.is-active .inv-line-view-active{
-  display:block;
-}
-.inv-line.is-active .inv-line-collapsed{
-  display:none;
-}
+.inv-line-empty{padding:0;}
+
+/* Collapsed summary (a populated row at rest) */
+.inv-line-view-active{display:none;}
+.inv-line.is-active .inv-line-view-active{display:block;}
+.inv-line.is-active .inv-line-collapsed{display:none;}
 .inv-line-collapsed{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:14px;
-  min-height:56px;
-  padding:10px 14px;
+  min-height:62px;
+  padding:12px 16px;
   box-sizing:border-box;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
 }
-.inv-line-collapsed:focus{
-  outline:none;
-}
+.inv-line-collapsed:active{background:var(--vg-color-surface-soft);}
+.inv-line-collapsed:focus{outline:none;}
 .inv-line-body{
   flex:1 1 auto;
   min-width:0;
@@ -1884,7 +2006,7 @@ button.inv-header-save.btn{
   flex-direction:column;
   align-items:flex-start;
   justify-content:center;
-  gap:2px;
+  gap:5px;
   text-align:right;
 }
 .inv-line-collapsed .inv-line-name{
@@ -1894,25 +2016,25 @@ button.inv-header-save.btn{
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  border:0!important;
-  background:transparent!important;
-  padding:0!important;
-  margin:0!important;
-  min-height:0!important;
-  box-shadow:none!important;
-  border-radius:0!important;
-  color:var(--vg-color-text)!important;
-  font-size:15px!important;
-  font-weight:600!important;
-  line-height:1.35;
+  border:0;
+  background:transparent;
+  padding:0;
+  margin:0;
+  min-height:0;
+  box-shadow:none;
+  border-radius:0;
+  color:var(--vg-color-text);
+  font-size:.95rem;
+  font-weight:var(--vg-weight-title);
+  line-height:1.5;
 }
 .inv-line-collapsed-meta{
   width:100%;
   text-align:right;
 }
 .inv-line-calc{
-  font-size:12.5px;
-  font-weight:500;
+  font-size:.76rem;
+  font-weight:var(--vg-weight-label);
   color:var(--vg-color-text-muted);
   font-variant-numeric:tabular-nums;
   white-space:nowrap;
@@ -1921,38 +2043,42 @@ button.inv-header-save.btn{
   flex:0 0 auto;
   min-width:0;
   text-align:left;
-  font-size:16px;
-  line-height:1.2;
-  font-weight:700;
+  font-size:1rem;
+  line-height:1.3;
+  font-weight:var(--vg-weight-value);
   color:var(--vg-color-text);
   font-variant-numeric:tabular-nums;
   white-space:nowrap;
+}
+
+/* Open row — the editor surface. Tinted so the open row is unmistakable and
+   never reads as "another card". */
+.inv-line-view-active{
+  background:var(--vg-color-surface-soft);
 }
 .inv-line-main{
   position:relative;
   display:flex;
   align-items:center;
+  gap:8px;
   min-width:0;
-  padding:12px 14px 4px;
-}
-.inv-line-view-active{
-  background:#FBFCFE;
+  padding:12px 16px 8px;
 }
 .inv-line-view-active .row-product-search.inv-line-name{
   flex:1 1 auto;
   min-width:0;
   width:100%;
-  padding:0 40px 0 34px!important;
+  padding:0 12px 0 34px!important;
   margin:0!important;
   border:0!important;
   border-radius:0!important;
   background:transparent!important;
   box-shadow:none!important;
   outline:none!important;
-  min-height:38px!important;
+  min-height:34px!important;
   color:var(--vg-color-text)!important;
   font-size:15px!important;
-  font-weight:600!important;
+  font-weight:var(--vg-weight-title)!important;
   line-height:1.4;
   text-align:right;
   overflow:hidden;
@@ -1968,132 +2094,171 @@ button.inv-header-save.btn{
   box-shadow:none!important;
   border-color:transparent!important;
 }
+/* Decorative affordances inside the product field: "change product" arrows for
+   a filled row, a plain chevron while the row still waits for a product. */
+.inv-line-change-hint,
+.inv-line-chevron{
+  position:absolute;
+  inset-inline-start:16px;
+  top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+.inv-line-change-hint{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  color:var(--vg-color-primary);
+}
+.inv-line-change-hint svg{width:18px;height:18px;}
+.inv-line-empty .inv-line-change-hint{display:none;}
 .inv-line-chevron{
   color:var(--vg-color-text-muted);
   font-size:1.05rem;
-  opacity:.7;
-  position:absolute;
-  left:14px;
+  line-height:1;
 }
+.inv-line:not(.inv-line-empty) .inv-line-chevron{display:none;}
+/* The one explicit way to close the open row: it never touches the product
+   field, which is the control that opens the picker. */
+.inv-line-collapse{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  min-height:36px;
+  padding:0 12px 0 10px;
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-surface);
+  color:var(--vg-color-text-secondary);
+  font-family:inherit;
+  font-size:.76rem;
+  font-weight:var(--vg-weight-label);
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.inv-line-collapse:active{background:var(--vg-color-neutral-soft);}
+.inv-line-collapse-ico{display:inline-flex;width:14px;height:14px;}
+.inv-line-collapse-ico svg{width:14px;height:14px;}
+.inv-line-empty .inv-line-collapse{display:none;}
+
+/* Quantity × unit price — labelled fields at iOS control size (44px / 16px),
+   no destructive control sitting inside the boxes. */
 .inv-line-sub{
   display:flex;
-  align-items:center;
-  justify-content:flex-start;
-  padding:4px 14px 0;
-}
-.inv-line-qtyrate{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  direction:rtl;
-  font-size:.8rem;
-  color:var(--vg-color-text-muted);
-  font-weight:500;
-}
-.inv-mini-input{
-  direction:ltr;
-  width:48px;
-  min-width:48px;
-  height:40px;
+  align-items:flex-end;
+  gap:8px;
+  padding:2px 16px 4px;
   box-sizing:border-box;
-  border:1px solid rgba(15,23,42,.12);
+}
+.inv-field{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+.inv-field-label{
+  padding-inline-start:2px;
+  font-size:var(--vg-type-meta);
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-muted);
+  white-space:nowrap;
+}
+.inv-field-qty{flex:0 0 auto;width:82px;}
+.inv-field-price{flex:1 1 auto;}
+.inv-mini-input{
+  width:100%;
+  min-width:0;
+  height:44px;
+  box-sizing:border-box;
+  padding:0 8px;
+  border:1px solid var(--vg-color-border);
+  border-radius:12px;
   background:var(--vg-color-surface);
-  padding:4px 5px;
-  font-size:14px;
-  font-family:inherit;
-  font-weight:600;
   color:var(--vg-color-text);
+  font-family:inherit;
+  font-size:16px;
+  font-weight:var(--vg-weight-title);
   text-align:center;
-  border-radius:9px;
+  direction:ltr;
   box-shadow:none;
   outline:none;
   -webkit-appearance:none;
   appearance:none;
 }
-.inv-mini-input-price{
-  width:96px;
-  min-width:96px;
-}
 .sheet.inv-sheet-host .inv-mini-input:focus{
   outline:none;
-  border-color:rgba(15,23,42,.22);
-  box-shadow:0 0 0 2px rgba(15,23,42,.04);
+  border-color:rgba(0,112,210,.5);
+  box-shadow:0 0 0 3px rgba(0,112,210,.14);
 }
-.sheet.inv-sheet-host .inv-discount-block input:focus,
-.sheet.inv-sheet-host .inv-payment-panel > input:focus{
-  outline:none;
-  border-color:rgba(0,112,210,.45);
-  box-shadow:0 0 0 3px rgba(0,112,210,.18);
-}
+.inv-mini-input-price{width:100%;min-width:0;}
 .inv-line-x,
 .inv-line-unit{
+  align-self:flex-end;
+  height:44px;
+  display:flex;
+  align-items:center;
   color:var(--vg-color-text-muted);
-  font-weight:500;
+  font-weight:var(--vg-weight-label);
 }
+.inv-line-x{font-size:.85rem;}
+.inv-line-unit{font-size:.74rem;}
 .inv-line-del{
-  position:absolute;
-  top:50%;
-  left:14px;
-  transform:translateY(-50%);
-  width:28px;
-  height:28px;
-  min-width:28px;
-  padding:0;
-  border-radius:50%;
-  border:0;
-  background:rgba(31,41,55,.05);
-  color:#D52B36;
-  font-size:1rem;
-  line-height:28px;
-  text-align:center;
-  cursor:pointer;
   flex:0 0 auto;
-  opacity:.9;
-  z-index:2;
+  align-self:flex-end;
+  width:44px;
+  height:44px;
+  min-width:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  border:1px solid var(--vg-color-border);
+  border-radius:12px;
+  background:var(--vg-color-surface);
+  color:var(--vg-color-danger);
+  cursor:pointer;
   -webkit-tap-highlight-color:transparent;
 }
+.inv-line-del svg{width:19px;height:19px;display:block;}
+.inv-line-del:active{background:var(--vg-color-danger-soft);}
 .inv-line-avg-cost{
   display:inline-flex;
   align-items:center;
   gap:5px;
-  margin:5px 14px 0;
-  padding:5px 8px;
-  border-radius:8px;
-  background:rgba(31,41,55,.035);
-  font-size:11.5px;
-  font-weight:550;
-  color:#475467;
-  line-height:1.35;
+  margin:8px 16px 0;
+  padding:5px 10px;
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-neutral-soft);
+  font-size:.7rem;
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-secondary);
+  line-height:1.4;
   font-variant-numeric:tabular-nums;
 }
-.inv-line-avg-cost::before{
-  content:'میانگین خرید';
-  color:var(--vg-color-text-muted);
-  font-weight:500;
-}
 .inv-line-avg-cost.is-below{
-  background:rgba(250,57,70,.07);
-  color:#B42318;
+  background:var(--vg-color-danger-soft);
+  color:var(--vg-color-danger);
 }
 .inv-line-market-details{
-  margin:4px 14px 12px;
+  margin:6px 16px 12px;
   padding:0;
   color:var(--vg-color-text-muted);
-  font-size:12.5px;
+  font-size:.76rem;
 }
 .inv-line-market-details summary{
   list-style:none;
   cursor:pointer;
-  padding:5px 0;
-  color:#475467;
-  font-weight:600;
+  padding:6px 0;
+  color:var(--vg-color-text-secondary);
+  font-weight:var(--vg-weight-label);
   -webkit-tap-highlight-color:transparent;
 }
-.inv-line-market-details summary::-webkit-details-marker{
-  display:none;
-}
+.inv-line-market-details summary::-webkit-details-marker{display:none;}
 .inv-line-market-details summary::before{
-  content:'';
+  content:"";
   display:inline-block;
   width:7px;
   height:7px;
@@ -2103,172 +2268,23 @@ button.inv-header-save.btn{
   transform:rotate(45deg) translateY(-1px);
   transition:transform .15s ease;
 }
-.inv-line-market-details[open] summary::before{
-  transform:rotate(135deg) translate(-1px,-1px);
-}
+.inv-line-market-details[open] summary::before{transform:rotate(135deg) translate(-1px,-1px);}
 .inv-line-market-row{
   display:flex;
   align-items:baseline;
   justify-content:space-between;
   gap:12px;
-  padding:6px 0;
-  border-top:1px solid rgba(15,23,42,.05);
+  padding:7px 0;
+  border-top:1px solid var(--vg-color-divider);
 }
-.inv-line-market-row span{
-  color:var(--vg-color-text-muted);
-  font-weight:500;
-}
+.inv-line-market-row span{color:var(--vg-color-text-muted);font-weight:var(--vg-weight-label);}
 .inv-line-market-row strong{
   color:var(--vg-color-text);
-  font-weight:600;
+  font-weight:var(--vg-weight-title);
   font-variant-numeric:tabular-nums;
   text-align:left;
   white-space:nowrap;
 }
-.inv-profit-summary{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-top:10px;
-  padding:13px 16px;
-  background:var(--vg-color-surface);
-  border:1px solid rgba(15,23,42,.07);
-  border-radius:16px;
-  box-shadow:0 4px 16px rgba(15,23,42,.04);
-  font-size:.82rem;
-  color:#475467;
-}
-.inv-profit-summary .name{
-  font-weight:600;
-  color:#475467;
-}
-.inv-profit-summary .amount{
-  font-size:1rem;
-  font-weight:700;
-  white-space:nowrap;
-  font-variant-numeric:tabular-nums;
-}
-@media(max-width:360px){
-  .inv-line-collapsed{padding-inline:12px;gap:10px;}
-  .inv-line-main,.inv-line-sub,.inv-line-avg-cost{padding-inline:12px;}
-  .inv-line-market-details{margin-inline:12px;}
-  .inv-mini-input{width:46px;min-width:46px;}
-  .inv-mini-input-price{width:88px;min-width:88px;}
-  .inv-line-del{left:12px;}
-  .inv-discount-block{grid-template-columns:1fr;gap:7px;}
-  .inv-discount-type{width:100%;}
-}
-
-/* Product picker panel (Invoice V6) — markup from openProductDrop; CSS was missing */
-.prod-drop{
-  position:fixed;
-  z-index:90;
-  box-sizing:border-box;
-}
-.prod-drop[hidden]{display:none!important;}
-.prod-drop-panel{
-  display:flex;
-  flex-direction:column;
-  max-height:inherit;
-  background:rgba(255,255,255,.96);
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:18px;
-  box-shadow:0 16px 40px rgba(15,23,42,.14),0 2px 10px rgba(15,23,42,.05);
-  overflow:hidden;
-  backdrop-filter:blur(18px);
-  -webkit-backdrop-filter:blur(18px);
-}
-.prod-drop-search-wrap{
-  flex:0 0 auto;
-  padding:10px 12px;
-  background:rgba(248,250,252,.9);
-  border-bottom:1px solid rgba(15,23,42,.06);
-}
-.prod-drop-search{
-  width:100%;
-  box-sizing:border-box;
-  min-height:42px;
-  padding:8px 12px;
-  border:1px solid rgba(15,23,42,.09);
-  border-radius:12px;
-  background:var(--vg-color-surface);
-  font-family:inherit;
-  font-size:.88rem;
-  color:var(--vg-color-text);
-  outline:none;
-}
-.prod-drop-search:focus{
-  border-color:rgba(0,112,210,.32);
-  box-shadow:0 0 0 3px rgba(0,112,210,.08);
-}
-.prod-drop-list{
-  flex:1 1 auto;
-  overflow-x:hidden;
-  overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior:contain;
-  max-height:inherit;
-}
-.prod-drop-item{
-  display:flex;
-  align-items:center;
-  min-height:54px;
-  gap:10px;
-  padding:7px 12px;
-  border-bottom:1px solid rgba(15,23,42,.055);
-  cursor:pointer;
-  background:transparent;
-  -webkit-tap-highlight-color:transparent;
-}
-.prod-drop-item:last-child{border-bottom:none;}
-.prod-drop-item:active,.prod-drop-item:focus{
-  background:#F2F6FA;
-  outline:none;
-}
-.prod-drop-ico{
-  flex:0 0 auto;
-  width:32px;
-  height:32px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:9px;
-  background:#F1F6FB;
-  color:var(--vg-color-primary);
-}
-.prod-drop-ico svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
-.prod-drop-name{
-  flex:1 1 auto;
-  min-width:0;
-  font-size:.9rem;
-  font-weight:600;
-  color:var(--vg-color-text);
-  line-height:1.35;
-}
-.prod-drop-stock{
-  flex:0 0 auto;
-  min-width:28px;
-  text-align:left;
-  font-size:.72rem;
-  font-weight:500;
-  color:var(--vg-color-text-muted);
-  white-space:nowrap;
-}
-.prod-drop-stock::before{content:'موجودی ';color:#98A2B3;}
-.prod-drop-chevron{
-  flex:0 0 auto;
-  color:#B4BCC7;
-  font-size:1.1rem;
-  line-height:1;
-}
-.prod-drop-empty{
-  padding:24px 14px;
-  text-align:center;
-  font-size:.85rem;
-  color:var(--vg-color-text-muted);
-}
-
 .inv-add-line{
   display:flex;
   align-items:center;
@@ -2276,27 +2292,33 @@ button.inv-header-save.btn{
   gap:8px;
   width:100%;
   margin:0;
-  padding:12px 16px 14px;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
+  padding:13px 16px 14px;
+  border:0;
+  border-top:1px solid var(--vg-color-divider);
+  border-radius:0;
+  background:transparent;
   color:var(--vg-color-primary);
   font-family:inherit;
-  font-size:.88rem;
-  font-weight:600;
+  font-size:.86rem;
+  font-weight:var(--vg-weight-title);
   cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
 }
+.inv-add-line:active{background:var(--vg-color-primary-soft);}
 .inv-add-line-icon{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:22px;
-  height:22px;
-  border-radius:50%;
+  width:24px;
+  height:24px;
+  border-radius:var(--vg-radius-circle);
   background:var(--vg-color-primary-soft);
-  color:var(--vg-color-icon);
+  color:var(--vg-color-primary);
   font-size:.95rem;
+  line-height:1;
 }
+
+/* ---- Received payment with this invoice ---- */
 .inv-payment-heading{
   display:flex;
   align-items:center;
@@ -2307,8 +2329,9 @@ button.inv-header-save.btn{
 .inv-payment-total{
   min-width:1px;
   font-size:.8rem;
-  font-weight:700;
+  font-weight:var(--vg-weight-value);
   color:var(--vg-color-text);
+  font-variant-numeric:tabular-nums;
 }
 .inv-payment-actions{
   display:grid;
@@ -2316,25 +2339,25 @@ button.inv-header-save.btn{
   gap:8px;
 }
 .inv-payment-action{
-  min-height:52px;
-  padding:8px 6px;
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:16px;
+  min-height:66px;
+  padding:9px 6px;
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-soft);
   background:var(--vg-color-surface);
   color:var(--vg-color-text);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:4px;
+  gap:5px;
   font-family:inherit;
   font-size:.72rem;
-  font-weight:600;
+  font-weight:var(--vg-weight-label);
   cursor:pointer;
-  box-shadow:0 2px 8px rgba(15,23,42,.03);
+  -webkit-tap-highlight-color:transparent;
 }
 .inv-payment-action.is-active{
-  border-color:#0070D2;
+  border-color:var(--vg-color-primary);
   background:var(--vg-color-primary-soft);
   color:var(--vg-color-primary);
 }
@@ -2351,11 +2374,19 @@ button.inv-header-save.btn{
   stroke-linecap:round;
   stroke-linejoin:round;
 }
+.inv-payment-action-value{
+  min-height:15px;
+  font-size:.68rem;
+  font-weight:var(--vg-weight-value);
+  color:var(--vg-color-primary);
+  font-variant-numeric:tabular-nums;
+}
+.inv-payment-action-value:not(.is-filled){visibility:hidden;}
 .inv-payment-backdrop{
   position:fixed;
   inset:0;
   z-index:79;
-  background:rgba(15,23,42,.18);
+  background:rgba(15,23,42,.28);
   pointer-events:auto;
 }
 .inv-payment-backdrop[hidden]{display:none!important;}
@@ -2376,13 +2407,11 @@ button.inv-header-save.btn{
   align-items:stretch;
   gap:0;
   border-radius:22px;
-  background:rgba(255,255,255,.99);
-  border:1px solid rgba(15,23,42,.08);
-  box-shadow:0 20px 50px rgba(15,23,42,.2),0 0 0 100vmax rgba(15,23,42,.18);
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  box-shadow:var(--vg-shadow-overlay),0 0 0 100vmax rgba(15,23,42,.2);
 }
-.inv-payment-panel[hidden]{
-  display:none!important;
-}
+.inv-payment-panel[hidden]{display:none!important;}
 .inv-payment-panel-head{
   display:flex;
   align-items:center;
@@ -2390,7 +2419,7 @@ button.inv-header-save.btn{
   gap:12px;
   margin-bottom:14px;
   font-size:.9rem;
-  font-weight:700;
+  font-weight:var(--vg-weight-title);
   color:var(--vg-color-text);
 }
 .inv-payment-panel-head > div{
@@ -2399,107 +2428,115 @@ button.inv-header-save.btn{
   gap:2px;
 }
 .inv-payment-panel-head small{
-  font-size:.72rem;
-  font-weight:500;
+  font-size:.7rem;
+  font-weight:var(--vg-weight-regular);
   color:var(--vg-color-text-muted);
 }
 .inv-payment-close{
+  flex:0 0 auto;
   width:32px;
   height:32px;
+  min-width:32px;
+  padding:0;
   border:0;
-  border-radius:50%;
-  background:rgba(31,41,55,.05);
+  border-radius:var(--vg-radius-circle);
+  background:var(--vg-color-neutral-soft);
   color:var(--vg-color-text-muted);
-  font-size:1.15rem;
+  font-family:inherit;
+  font-size:1rem;
+  line-height:32px;
+  text-align:center;
   cursor:pointer;
 }
 .inv-payment-panel > label,
 .inv-payment-check-due > label{
-  display:block;
-  margin-bottom:6px;
-  font-size:.72rem;
-  font-weight:600;
+  margin:0 0 6px;
+  font-size:.74rem;
+  font-weight:var(--vg-weight-label);
   color:var(--vg-color-text-muted);
 }
 .inv-payment-panel > input,
 .inv-payment-check-due input{
-  display:block;
   width:100%;
   min-height:46px;
-  padding:11px 13px;
-  border:1px solid rgba(15,23,42,.1);
-  border-radius:14px;
-  background:var(--vg-color-surface);
+  box-sizing:border-box;
+  padding:0 12px;
+  border:1px solid var(--vg-color-border);
+  border-radius:12px;
+  background:var(--vg-color-surface-soft);
   color:var(--vg-color-text);
   font-family:inherit;
   font-size:16px;
-  box-sizing:border-box;
-}
-.inv-payment-panel > input:focus,
-.inv-payment-check-due input:focus{
+  font-weight:var(--vg-weight-title);
+  text-align:center;
+  direction:ltr;
   outline:none;
-  border-color:#D94725;
-  box-shadow:0 0 0 3px #FFF0EC;
+  -webkit-appearance:none;
+  appearance:none;
 }
-.inv-payment-action-value{
-  min-height:15px;
-  font-size:.68rem;
-  font-weight:700;
-  color:var(--vg-color-primary);
-  font-variant-numeric:tabular-nums;
+.sheet.inv-sheet-host .inv-discount-block input:focus,
+.sheet.inv-sheet-host .inv-payment-panel > input:focus,
+.sheet.inv-sheet-host .inv-payment-check-due input:focus{
+  outline:none;
+  border-color:rgba(0,112,210,.45);
+  box-shadow:0 0 0 3px rgba(0,112,210,.16);
 }
-.inv-payment-action-value:not(.is-filled){visibility:hidden;}
+.inv-payment-check-due{
+  margin-top:12px;
+}
 .inv-payment-confirm{
-  position:static;
   display:block;
   flex:0 0 auto;
   width:100%;
-  min-height:44px;
+  min-height:46px;
   margin:12px 0 0;
   box-sizing:border-box;
   border:0;
   border-radius:12px;
-  background:#0070D2;
+  background:var(--vg-color-primary);
   color:#FFFFFF;
   font-family:inherit;
-  font-size:.84rem;
-  font-weight:700;
+  font-size:.86rem;
+  font-weight:var(--vg-weight-title);
   cursor:pointer;
 }
-.inv-payment-confirm:active{transform:scale(.985);}
+.inv-payment-confirm:active{opacity:.88;}
+
+/* Discount — one quiet control row */
 .inv-discount-block{
   display:grid;
   grid-template-columns:auto minmax(112px,1fr) minmax(92px,120px);
   align-items:center;
   gap:10px;
-  margin:14px 0 4px;
-  padding:8px 10px;
-  border-radius:14px;
+  margin:14px 0 0;
+  padding:9px 12px;
+  border-radius:var(--vg-radius-soft);
   background:var(--vg-color-surface);
-  border:1px solid rgba(15,23,42,.08);
+  border:1px solid var(--vg-color-border);
 }
 .inv-discount-label{
-  font-size:.76rem;
-  font-weight:600;
-  color:var(--vg-color-text-muted);
+  font-size:.78rem;
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-secondary);
+  white-space:nowrap;
 }
 .inv-discount-type{
   display:flex;
-  min-height:36px;
+  min-height:38px;
   padding:2px;
-  border-radius:10px;
-  background:#F2F4F7;
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-neutral-soft);
 }
 .inv-discount-type-btn{
   flex:1 1 50%;
   min-width:0;
   border:0;
-  border-radius:8px;
+  border-radius:var(--vg-radius-control);
   background:transparent;
   color:var(--vg-color-text-muted);
   font-family:inherit;
   font-size:.78rem;
-  font-weight:600;
+  font-weight:var(--vg-weight-label);
   cursor:pointer;
 }
 .inv-discount-type-btn.is-active{
@@ -2509,91 +2546,357 @@ button.inv-header-save.btn{
 }
 .inv-discount-block input{
   width:100%;
-  min-height:36px;
+  min-height:38px;
   box-sizing:border-box;
-  padding:0 9px;
-  border:1px solid rgba(15,23,42,.1);
-  border-radius:10px;
-  background:#F8FAFC;
+  padding:0 10px;
+  border:1px solid var(--vg-color-border);
+  border-radius:12px;
+  background:var(--vg-color-surface-soft);
+  color:var(--vg-color-text);
   font-family:inherit;
-  font-size:14px;
-  font-weight:600;
+  font-size:15px;
+  font-weight:var(--vg-weight-title);
   text-align:center;
   direction:ltr;
+  outline:none;
+  -webkit-appearance:none;
+  appearance:none;
 }
 
-.inv-summary-section{
-  margin-top:8px;
-  margin-bottom:0;
-  padding:14px 16px 12px;
-  background:var(--vg-color-surface);
-  border:1px solid rgba(15,23,42,.07);
-  border-radius:16px;
-  box-shadow:0 6px 22px rgba(15,23,42,.05);
-}
-.inv-summary-section #calc-summary .ledger-row{
+/* ---- Summary ---- */
+.inv-summary-section{margin-bottom:0;}
+.inv-sum-card{
+  padding:6px 16px 10px;
   display:flex;
-  justify-content:space-between;
+  flex-direction:column;
+}
+.inv-sum-row{
+  display:flex;
   align-items:baseline;
+  justify-content:space-between;
   gap:10px;
-  padding:6px 0;
-  border-bottom:none;
+  padding:9px 0;
   min-height:auto;
   cursor:default;
 }
-.inv-summary-section #calc-summary .ledger-row .name{
-  font-weight:500;
-  color:#475467;
+.inv-sum-row + .inv-sum-row{border-top:1px solid var(--vg-color-divider);}
+.inv-sum-name{
+  font-size:.82rem;
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-secondary);
 }
-.inv-summary-section #calc-summary .ledger-row .amount{
-  font-weight:600;
+.inv-sum-amount{
+  font-size:.86rem;
+  font-weight:var(--vg-weight-title);
+  color:var(--vg-color-text);
   font-variant-numeric:tabular-nums;
-  color:var(--vg-color-text);
   white-space:nowrap;
+  text-align:left;
 }
-.inv-summary-section #calc-summary .inv-total-row{
-  margin-top:3px;
-  padding-top:9px;
-  border-top:1px solid rgba(15,23,42,.06);
+.inv-sum-row-discount .inv-sum-name,
+.inv-sum-row-discount .inv-sum-amount{color:var(--vg-color-text-muted);}
+.inv-sum-row-quiet .inv-sum-name,
+.inv-sum-row-quiet .inv-sum-amount{
+  color:var(--vg-color-text-muted);
+  font-weight:var(--vg-weight-label);
 }
-.inv-summary-section #calc-summary .inv-total-row .name,
-.inv-summary-section #calc-summary .inv-total-row .amount{
-  font-size:1rem;
-  font-weight:700;
+.inv-sum-row-total{
+  padding-top:11px;
+  padding-bottom:11px;
+}
+.inv-sum-row-total .inv-sum-name{
+  font-size:.9rem;
+  font-weight:var(--vg-weight-title);
   color:var(--vg-color-text);
 }
-.inv-summary-section #calc-summary .inv-discount-row{
-  padding:5px 0 6px;
+.inv-sum-row-total .inv-sum-amount{
+  font-size:1.06rem;
+  font-weight:var(--vg-weight-value);
+  color:var(--vg-color-text);
 }
-.inv-summary-section #calc-summary .inv-discount-row .name{
-  color:var(--vg-color-text-muted);
-  font-size:.78rem;
+.inv-sum-row-remain{
+  margin-top:2px;
+  padding-top:12px;
+  border-top:1px solid var(--vg-color-border)!important;
 }
-.inv-summary-section #calc-summary .inv-discount-row .amount{
-  color:var(--vg-color-text-muted);
+.inv-sum-row-remain .inv-sum-name,
+.inv-sum-row-remain .inv-sum-amount{
+  font-size:1rem;
+  font-weight:var(--vg-weight-emphasis);
+}
+.inv-profit-summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:10px;
+  padding:13px 16px;
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-radius:var(--vg-radius-raised);
   font-size:.8rem;
+  color:var(--vg-color-text-secondary);
 }
-.inv-summary-discount{
-  margin:-1px 0 4px;
-  padding-inline-start:2px;
-  font-size:11.5px;
-  color:var(--vg-color-text-muted);
-  text-align:right;
+.inv-profit-summary .name{
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-secondary);
 }
-.inv-summary-section #calc-summary .inv-remain-row{
-  margin-top:4px;
-  padding:10px 0 2px;
-  border-top:1px solid rgba(15,23,42,.08);
-}
-.inv-summary-section #calc-summary .inv-remain-row .name,
-.inv-summary-section #calc-summary .inv-remain-row .amount{
-  font-size:1.08rem;
-  font-weight:800;
+.inv-profit-summary .amount{
+  font-size:1rem;
+  font-weight:var(--vg-weight-value);
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
 }
 
-/* Unique V4 compatibility radius */
-.sheet.inv-sheet-host .inv-section{
-  border-radius:18px;
+/* ---- Running total bar (always visible, never in the header) ---- */
+.inv-totalbar{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:var(--keyboard-height,0px);
+  z-index:6;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+  box-sizing:border-box;
+  background:rgba(255,255,255,.94);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--vg-color-border);
+}
+.inv-totalbar-main,
+.inv-totalbar-side{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+  min-width:0;
+}
+.inv-totalbar-main{align-items:flex-start;}
+.inv-totalbar-side{align-items:flex-end;text-align:left;}
+.inv-totalbar-label{
+  font-size:var(--vg-type-meta);
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-muted);
+  white-space:nowrap;
+}
+.inv-totalbar-value{
+  font-size:1.18rem;
+  line-height:1.25;
+  font-weight:var(--vg-weight-emphasis);
+  color:var(--vg-color-text);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:58vw;
+}
+.inv-totalbar-remain{
+  font-size:.92rem;
+  line-height:1.3;
+  font-weight:var(--vg-weight-title);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.inv-totalbar-remain.accent-rust{color:var(--vg-color-danger);}
+.inv-totalbar-remain.accent-olive{color:var(--vg-color-success);}
+
+@media(max-width:360px){
+  .inv-body{padding-inline:12px;}
+  .inv-cust-card{padding:12px;}
+  .inv-line-collapsed{padding-inline:12px;gap:10px;}
+  .inv-line-main,.inv-line-sub{padding-inline:12px;}
+  .inv-line-avg-cost{margin-inline:12px;}
+  .inv-line-market-details{margin-inline:12px;}
+  .inv-field-qty{width:74px;}
+  .inv-discount-block{grid-template-columns:1fr;gap:7px;}
+  .inv-discount-type{width:100%;}
+  .inv-totalbar{padding-inline:12px;}
+  .inv-totalbar-value{font-size:1.06rem;}
+}
+@media(prefers-reduced-motion:reduce){
+  .inv-line-market-details summary::before{transition:none;}
+}
+
+/* --------------------------------------------------------------------------
+   11b. PRODUCT PICKER (invoice) — its own layer: dim backdrop + bottom sheet.
+   Never a floating card next to the row, so "close the row" and "change the
+   product" can't be confused with each other.
+   -------------------------------------------------------------------------- */
+.prod-drop{
+  position:fixed;
+  left:0;
+  right:0;
+  top:auto;
+  bottom:var(--keyboard-height,0px);
+  z-index:90;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  pointer-events:none;
+}
+.prod-drop[hidden]{display:none!important;}
+.prod-drop-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:0;
+  background:rgba(15,23,42,.34);
+  pointer-events:auto;
+}
+.prod-drop-panel{
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  max-height:min(62vh,460px);
+  background:var(--vg-color-surface);
+  border:1px solid var(--vg-color-border);
+  border-bottom:0;
+  border-start-start-radius:20px;
+  border-start-end-radius:20px;
+  box-shadow:0 -14px 34px rgba(15,23,42,.18);
+  overflow:hidden;
+  pointer-events:auto;
+  animation:invPickerUp .22s cubic-bezier(.22,1,.36,1);
+}
+@keyframes invPickerUp{
+  from{transform:translateY(16px);opacity:.55;}
+  to{transform:translateY(0);opacity:1;}
+}
+.prod-drop-panel::before{
+  content:"";
+  flex:0 0 auto;
+  width:38px;
+  height:4px;
+  margin:8px auto 0;
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-neutral-soft);
+}
+.prod-drop-head{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 16px 10px;
+}
+.prod-drop-title{
+  font-size:var(--vg-type-section);
+  font-weight:var(--vg-weight-title);
+  color:var(--vg-color-text);
+}
+.prod-drop-close{
+  flex:0 0 auto;
+  min-height:36px;
+  padding:6px 14px;
+  border:0;
+  border-radius:var(--vg-radius-control);
+  background:var(--vg-color-neutral-soft);
+  color:var(--vg-color-text-secondary);
+  font-family:inherit;
+  font-size:.8rem;
+  font-weight:var(--vg-weight-label);
+  cursor:pointer;
+}
+.prod-drop-close:active{opacity:.75;}
+.prod-drop-search-wrap{
+  flex:0 0 auto;
+  padding:0 12px 10px;
+  background:transparent;
+  border-bottom:0;
+}
+.prod-drop-search{
+  width:100%;
+  box-sizing:border-box;
+  min-height:44px;
+  padding:8px 12px;
+  border:1px solid var(--vg-color-border);
+  border-radius:12px;
+  /* background-color (not the shorthand) so the shared search-icon rules in
+     visual-grammar-components.css keep their no-repeat / position / size —
+     a shorthand here would reset them and tile the icon across the field. */
+  background-color:var(--vg-color-surface-soft);
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:16px 16px;
+  font-family:inherit;
+  font-size:16px;
+  color:var(--vg-color-text);
+  outline:none;
+}
+.prod-drop-search:focus{
+  border-color:rgba(0,112,210,.4);
+  box-shadow:0 0 0 3px rgba(0,112,210,.14);
+}
+.prod-drop-list{
+  flex:1 1 auto;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  max-height:inherit;
+  border-top:1px solid var(--vg-color-divider);
+}
+.prod-drop-item{
+  display:flex;
+  align-items:center;
+  min-height:56px;
+  gap:10px;
+  padding:8px 16px;
+  border-bottom:1px solid var(--vg-color-divider);
+  cursor:pointer;
+  background:transparent;
+  -webkit-tap-highlight-color:transparent;
+}
+.prod-drop-item:last-child{border-bottom:none;}
+.prod-drop-item:active,.prod-drop-item:focus{
+  background:var(--vg-color-surface-soft);
+  outline:none;
+}
+.prod-drop-ico{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:9px;
+  background:var(--vg-color-primary-soft);
+  color:var(--vg-color-primary);
+}
+.prod-drop-ico svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.prod-drop-name{
+  flex:1 1 auto;
+  min-width:0;
+  font-size:.9rem;
+  font-weight:var(--vg-weight-title);
+  color:var(--vg-color-text);
+  line-height:1.35;
+}
+.prod-drop-stock{
+  flex:0 0 auto;
+  min-width:28px;
+  text-align:left;
+  font-size:.72rem;
+  font-weight:var(--vg-weight-label);
+  color:var(--vg-color-text-muted);
+  white-space:nowrap;
+}
+.prod-drop-stock::before{content:"موجودی ";color:var(--vg-color-text-muted);opacity:.75;}
+.prod-drop-chevron{
+  flex:0 0 auto;
+  color:var(--vg-color-text-muted);
+  font-size:1.1rem;
+  line-height:1;
+  opacity:.6;
+}
+.prod-drop-empty{
+  padding:24px 14px;
+  text-align:center;
+  font-size:.85rem;
+  color:var(--vg-color-text-muted);
 }
 /* --------------------------------------------------------------------------
    12. PAYMENTS / CHECKS (Already covered via ledger row composition)
@@ -4750,10 +5053,13 @@ html[data-theme="dark"] .fab {
 }
 .input-clear-btn[hidden]{display:none}
 .input-clear-btn svg{width:18px;height:18px;display:block;pointer-events:none}
+/* Narrow fields (invoice quantity): the button and its icon shrink together,
+   so the × stays visually light inside a small box. */
+.input-clear-btn.is-sm svg{width:12px;height:12px}
 input.has-input-clear{padding-inline-end:34px !important}
-/* narrow fields (invoice quantity, 74-76px): 22px button + 3px gap. Content
-   box stays >= 41px (74px at <=360) so a 5-digit quantity (~40px) never touches the button. */
-input.has-input-clear.has-input-clear-sm{padding-inline-end:26px !important}
+/* narrow fields (invoice quantity, 74-82px): 20px button + 4px gap. Content
+   box stays wide enough that a 5-digit quantity never touches the button. */
+input.has-input-clear.has-input-clear-sm{padding-inline-end:24px !important}
 @media print{.input-clear-btn{display:none !important}}
 
 /* ============================================================

@@ -369,9 +369,6 @@ html[data-theme="dark"] .dash-watch-compact-label,
 html[data-theme="dark"] .dash-watch-compact-chevron,
 html[data-theme="dark"] .inv-section-title,
 html[data-theme="dark"] .inv-section-title-optional,
-html[data-theme="dark"] .inv-customer-meta,
-html[data-theme="dark"] .inv-date-field label,
-html[data-theme="dark"] .inv-items-card-label,
 html[data-theme="dark"] .inv-line-calc,
 html[data-theme="dark"] .inv-line-x,
 html[data-theme="dark"] .inv-line-unit,
@@ -381,7 +378,7 @@ html[data-theme="dark"] .inv-payment-panel-head small,
 html[data-theme="dark"] .inv-payment-panel > label,
 html[data-theme="dark"] .inv-payment-check-due > label,
 html[data-theme="dark"] .inv-discount-label,
-html[data-theme="dark"] .inv-summary-discount{
+html[data-theme="dark"] .inv-sec-hint{
   color:var(--vg-color-text-muted);
 }
 
@@ -442,24 +439,34 @@ html[data-theme="dark"] .prod-drop-panel{
   box-shadow:var(--vg-shadow-overlay);
 }
 html[data-theme="dark"] .prod-drop-search-wrap{
-  background:var(--vg-color-surface-soft);
+  background:transparent;
   border-color:var(--vg-color-divider);
+}
+html[data-theme="dark"] .prod-drop-search{
+  background-color:var(--vg-color-surface-soft);
+}
+html[data-theme="dark"] .prod-drop-panel::before{
+  background:rgba(255,255,255,.16);
+}
+html[data-theme="dark"] .prod-drop-backdrop{
+  background:rgba(0,0,0,.56);
+}
+html[data-theme="dark"] .inv-totalbar{
+  background:rgba(24,26,31,.92);
+  border-top-color:var(--vg-color-border);
 }
 html[data-theme="dark"] .prod-drop-item:active,
 html[data-theme="dark"] .prod-drop-item:focus{
   background:rgba(255,255,255,.07);
 }
 html[data-theme="dark"] .prod-drop-name,
-html[data-theme="dark"] .inv-customer-name,
 html[data-theme="dark"] .inv-line-collapsed .inv-line-amount,
 html[data-theme="dark"] .inv-payment-panel-head,
 html[data-theme="dark"] .inv-payment-total,
-html[data-theme="dark"] .inv-summary-section #calc-summary .ledger-row .amount,
-html[data-theme="dark"] .inv-summary-section #calc-summary .inv-total-row .name,
-html[data-theme="dark"] .inv-summary-section #calc-summary .inv-total-row .amount{
+html[data-theme="dark"] .inv-cust-name,
+html[data-theme="dark"] .inv-totalbar-value{
   color:var(--vg-color-text);
 }
-
 /* Invoice entry only — printable .inv-doc/#printArea remain untouched. */
 html[data-theme="dark"] .inv-header{
   background:rgba(24,26,31,.88);
@@ -467,7 +474,7 @@ html[data-theme="dark"] .inv-header{
   border-color:var(--vg-color-border);
 }
 html[data-theme="dark"] .inv-header-title-main,
-html[data-theme="dark"] .inv-summary-section #calc-summary .ledger-row .name{
+html[data-theme="dark"] .inv-sum-row-total .inv-sum-name{
   color:var(--vg-color-text);
 }
 html[data-theme="dark"] .inv-line-view-active{
@@ -516,9 +523,6 @@ html[data-theme="dark"] .dashboard-eyebrow{
 }
 html[data-theme="dark"] .report-summary-value.debt{
   color:var(--vg-color-danger);
-}
-html[data-theme="dark"] .inv-customer-kicker{
-  color:var(--vg-color-text-muted);
 }
 html[data-theme="dark"] button.app-back{
   background:rgba(255,255,255,.08);
