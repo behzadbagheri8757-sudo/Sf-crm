@@ -149,6 +149,7 @@
   function _pickActionSignal(signals) {
     if (!signals || !signals.length) return null;
     let best = null;
+    let bestScore = -Infinity;
     let bestRank = Infinity;
     signals.forEach(function (s) {
       if (!s || !ACTION_RULES[s.category]) return;
@@ -165,8 +166,15 @@
       if (s.status === 'pending') return;
       if (s.seasonallySuppressed === true) return;
       const r = _actionPriorityRank(s.category);
-      if (r < bestRank) {
+      // Risk and opportunity share one evidence scale. Category order is only
+      // a deterministic tie-breaker, not a risk-first preference.
+      const base = (typeof s.severityPoints === 'number' && isFinite(s.severityPoints))
+        ? s.severityPoints
+        : ({ critical: 100, high: 70, medium: 40, low: 20 }[s.severity] || 0);
+      const score = base + (s.productId && s.productId !== 'multi' ? 0.5 : 0);
+      if (score > bestScore || (score === bestScore && r < bestRank)) {
         bestRank = r;
+        bestScore = score;
         best = s;
       }
     });
@@ -197,6 +205,20 @@
 
   function visitContext(customerId, ctx) {
     if (!customerId) return null;
+    // A customer with no recorded visits has no visit cadence context; do not
+    // label it "due soon" merely because an external overdue helper returns 0.
+    var contextCustomer = null;
+    if (ctx && typeof ctx.customerById === 'function') {
+      contextCustomer = ctx.customerById(customerId);
+    } else if (typeof data !== 'undefined' && Array.isArray(data.customers)) {
+      for (var cvi = 0; cvi < data.customers.length; cvi++) {
+        if (data.customers[cvi] && data.customers[cvi].id === customerId) {
+          contextCustomer = data.customers[cvi];
+          break;
+        }
+      }
+    }
+    var hasVisits = !!(contextCustomer && Array.isArray(contextCustomer.visits) && contextCustomer.visits.length);
     // Prefer existing visitOverdueDays helper when present
     if (typeof visitOverdueDays === 'function') {
       try {
@@ -206,7 +228,7 @@
           if (overdue <= 7) return 'در ویزیت بعدی';
           return null; // large overdue already covered by action reason/whyNow
         }
-        if (overdue === 0) return 'در ویزیت بعدی';
+        if (overdue === 0 && hasVisits) return 'در ویزیت بعدی';
       } catch (e) { /* ignore */ }
     }
     // Fallback: visitCadence + last visit if both available
@@ -239,6 +261,9 @@
     if (signal.feedback && signal.feedback.reasonCode === 'still_stock') {
       return 'موجودی نزد مشتری';
     }
+    if (signal.feedback && signal.feedback.reasonCode === 'no_need') return 'فعلاً نیاز ندارد';
+    if (signal.feedback && signal.feedback.reasonCode === 'price_issue') return 'اعتراض قیمت';
+    if (signal.feedback && signal.feedback.reasonCode === 'quality') return 'اعتراض کیفیت';
     // Live lookup only if API exists and nothing attached yet
     if (typeof getFeedbackForSignal === 'function') {
       try {
@@ -246,6 +271,9 @@
         if (!fb || !fb.reasonCode) return null;
         if (fb.reasonCode === 'competitor_bought') return 'از رقیب خریداری شده';
         if (fb.reasonCode === 'still_stock') return 'موجودی نزد مشتری';
+        if (fb.reasonCode === 'no_need') return 'فعلاً نیاز ندارد';
+        if (fb.reasonCode === 'price_issue') return 'اعتراض قیمت';
+        if (fb.reasonCode === 'quality') return 'اعتراض کیفیت';
       } catch (e) { /* ignore */ }
     }
     return null;
@@ -300,10 +328,14 @@
           const op = visit.offeredProducts[oi];
           if (!op || !op.productId) continue;
           if (op.productId !== productId && famOf(op.productId) !== familyKey) continue;
-          if (!latest || visit.date > latest.date || (visit.date === latest.date && vi > latest.visitIndex) ||
-              (visit.date === latest.date && vi === latest.visitIndex && oi > latest.offerIndex)) {
+          const timeKey = _visitTimeKey(visit.time);
+          if (!latest || visit.date > latest.date ||
+              (visit.date === latest.date && timeKey > latest.timeKey) ||
+              (visit.date === latest.date && timeKey === latest.timeKey && vi > latest.visitIndex) ||
+              (visit.date === latest.date && timeKey === latest.timeKey && vi === latest.visitIndex && oi > latest.offerIndex)) {
             latest = {
               date: visit.date,
+              timeKey: timeKey,
               visitIndex: vi,
               offerIndex: oi,
               reaction: op.reaction,
@@ -323,8 +355,11 @@
         const noOrder = visit.ordered === false ||
           (typeof VISIT_RESULTS !== 'undefined' && visit.result !== VISIT_RESULTS[0]);
         if (!noOrder) continue;
-        if (!latest || visit.date > latest.date || (visit.date === latest.date && vi > latest.visitIndex)) {
-          latest = { date: visit.date, visitIndex: vi };
+        const timeKey = _visitTimeKey(visit.time);
+        if (!latest || visit.date > latest.date ||
+            (visit.date === latest.date && timeKey > latest.timeKey) ||
+            (visit.date === latest.date && timeKey === latest.timeKey && vi > latest.visitIndex)) {
+          latest = { date: visit.date, timeKey: timeKey, visitIndex: vi };
         }
       }
       return latest;
@@ -349,7 +384,10 @@
       if (skuCategories[signal.category] && signal.productId != null && signal.productId !== '' && signal.productId !== 'multi') {
         const context = latestProductContext(signal);
         if (context && context.reaction === 'rejected' &&
-            (context.rejectionReason === 'still_stock' || context.rejectionReason === 'unavailable')) {
+            (context.rejectionReason === 'still_stock' ||
+             context.rejectionReason === 'no_need' ||
+             context.rejectionReason === 'not_wanted' ||
+             context.rejectionReason === 'unavailable')) {
           return false;
         }
       }
@@ -367,13 +405,17 @@
      Product contract value (80%); the single place to change it. */
   const ACTION_ELIGIBILITY_MIN_COVERAGE = 0.80;
 
-  /* Action Eligibility (read-only, fail-open).
-     Runs AFTER the winner is chosen. Signal / Risk / Priority / persistence are
-     never touched; this only decides whether the chosen Candidate Action is still
-     worth putting in today's queue.
+  /* Action Eligibility (read-only).
+     Each candidate is checked independently while the action selector walks
+     candidates in priority order. Signal / Risk / Priority / persistence are
+     never touched; this only decides whether a candidate is still worth putting
+     in today's queue. PURCHASE_DECLINE_SEVERE keeps its fail-open behavior for
+     unprovable data. BEHIND_PATTERN is fail-closed: it requires a callable,
+     valid customerBehavior result with a finite distinctIntervalCount >= 2 and
+     behindPatternDistinct === true. A rejected candidate is not terminal; the
+     selector continues to the next candidate.
 
-     Scope: PURCHASE_DECLINE_SEVERE only (every other winner is eligible).
-     That signal is customer-level and carries no product, so its "topic" is the
+     For PURCHASE_DECLINE_SEVERE, the signal is customer-level and carries no product, so its "topic" is the
      existing customerBehavior().decliningProducts list, each entry weighted by its
      earlyQty. An entry is COVERED when its latest visit offer inside the existing
      episode window (PERSISTENCE_PARAMS.windowDays) is reaction 'rejected' with
@@ -382,11 +424,29 @@
      The action is NOT eligible when coveredWeight / totalWeight >= 80%
      (ACTION_ELIGIBILITY_MIN_COVERAGE) and the customer has not bought any
      declining Family on an invoice dated after the visit that was matched to it.
-     Anything not provable (no visits, invalid decliningProducts / earlyQty /
-     dates, unresolvable product, missing window, any error) => eligible (fail-open). */
+      Anything not provable for PURCHASE_DECLINE_SEVERE (no visits, invalid
+      decliningProducts / earlyQty / dates, unresolvable product, missing
+      window, any error) => eligible (fail-open). */
   function _isActionEligible(winnerSignal, cid, ctx) {
     try {
-      if (!winnerSignal || winnerSignal.category !== 'PURCHASE_DECLINE_SEVERE') return true;
+      if (!winnerSignal) return true;
+      // A persisted BEHIND_PATTERN candidate may outlive the generation
+      // guard. Re-check the real customer history before promoting it as a
+      // fallback: one interval is not an established purchase rhythm.
+      if (winnerSignal.category === 'BEHIND_PATTERN') {
+        try {
+          if (typeof customerBehavior !== 'function') return false;
+          var behind = customerBehavior(cid, ctx);
+          if (!behind || typeof behind.distinctIntervalCount !== 'number' ||
+              !isFinite(behind.distinctIntervalCount) ||
+              behind.distinctIntervalCount < 2 ||
+              behind.behindPatternDistinct !== true) return false;
+          return true;
+        } catch (eBehind) {
+          return false;
+        }
+      }
+      if (winnerSignal.category !== 'PURCHASE_DECLINE_SEVERE') return true;
       if (typeof customerBehavior !== 'function' || typeof daysAgo !== 'function') return true;
       if (typeof PERSISTENCE_PARAMS === 'undefined' || !PERSISTENCE_PARAMS ||
           typeof PERSISTENCE_PARAMS.windowDays !== 'number' ||
@@ -470,6 +530,133 @@
     }
   }
 
+  function _productNamesForSignal(signal) {
+    if (!signal) return [];
+    var names = [];
+    var lost = signal.evidence && Array.isArray(signal.evidence.hardLost) ? signal.evidence.hardLost : [];
+    lost.forEach(function (p) {
+      if (p && p.name && names.indexOf(p.name) === -1) names.push(p.name);
+    });
+    if (!names.length && signal.productName) names.push(signal.productName);
+    return names;
+  }
+
+  // Minimal local time key for ordering visits within the same date.
+// Assumption: valid values use 24-hour HH:MM (zero-padded). This does not
+// validate or rewrite stored visit.time. Empty/invalid values sort before
+// valid times; equal keys retain the existing visit/offer index fallback.
+function _visitTimeKey(value) {
+  if (typeof value !== 'string') return -1;
+  var m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  return m ? (Number(m[1]) * 60 + Number(m[2])) : -1;
+}
+
+function _latestVisitFeedback(cid, signal, ctx) {
+    if (!signal || signal.productId == null || signal.productId === '' || signal.productId === 'multi') return null;
+    var customer = ctx && typeof ctx.customerById === 'function' ? ctx.customerById(cid) : null;
+    if (!customer && typeof data !== 'undefined' && Array.isArray(data.customers)) {
+      customer = data.customers.find(function (c) { return c && c.id === cid; });
+    }
+    var visits = customer && Array.isArray(customer.visits) ? customer.visits : [];
+    var famOf = typeof makeFamilyResolver === 'function' ? makeFamilyResolver(ctx) : function (pid) { return pid; };
+    var family = signal.familyId != null && signal.familyId !== '' ? signal.familyId : famOf(signal.productId);
+    var latest = null;
+    visits.forEach(function (v, vi) {
+      if (!v || !Array.isArray(v.offeredProducts) || typeof v.date !== 'string') return;
+      var timeKey = _visitTimeKey(v.time);
+      v.offeredProducts.forEach(function (op, oi) {
+        if (!op || !op.productId || !famOf(op.productId) || famOf(op.productId) !== family) return;
+        if (!latest || v.date > latest.date ||
+            (v.date === latest.date && timeKey > latest.timeKey) ||
+            (v.date === latest.date && timeKey === latest.timeKey && (vi > latest.vi || (vi === latest.vi && oi > latest.oi)))) {
+          latest = { date: v.date, timeKey: timeKey, vi: vi, oi: oi, reaction: op.reaction, reason: op.rejectionReason };
+        }
+      });
+    });
+    if (!latest || latest.reaction !== 'rejected') return null;
+    return ({
+      still_stock: 'موجودی نزد مشتری', no_need: 'فعلاً نیاز ندارد', not_wanted: 'محصول را نمی‌خواهد',
+      competitor: 'از رقیب خریداری شده', price: 'اعتراض قیمت', quality: 'اعتراض کیفیت',
+      unavailable: 'عدم دسترسی به محصول', other: 'دلیل ثبت‌شده در ویزیت'
+    })[latest.reason] || null;
+  }
+
+  function _pendingFollowUp(cid, signal, ctx) {
+    if (typeof getPendingWatchFollowUps !== 'function') return null;
+    try {
+      var rows = getPendingWatchFollowUps(cid) || [];
+      var famOf = typeof makeFamilyResolver === 'function'
+        ? makeFamilyResolver(ctx)
+        : function (pid) {
+          if (typeof resolveFamilyId === 'function') {
+            try { return resolveFamilyId(pid, ctx); } catch (e) { /* fail closed */ }
+          }
+          return pid;
+        };
+      var signalFamily = signal && signal.productId != null && signal.productId !== '' && signal.productId !== 'multi'
+        ? (signal.familyId != null && signal.familyId !== '' ? signal.familyId : famOf(signal.productId))
+        : null;
+      return rows.find(function (r) {
+        if (!r) return false;
+        if (signalFamily == null) return r.productId == null || r.productId === '' || r.productId === 'multi';
+        if (r.productId == null || r.productId === '' || r.productId === 'multi') return false;
+        if (r.productId === signal.productId) return true;
+        var pendingFamily = famOf(r.productId);
+        return pendingFamily != null && pendingFamily !== '' && pendingFamily === signalFamily;
+      }) || null;
+    } catch (e) { return null; }
+  }
+
+  function _watchReasonContext(cid, signal, ctx) {
+    if (typeof getActiveWatchOccurrences !== 'function') return null;
+    try {
+      var rows = getActiveWatchOccurrences(cid) || [];
+      var famOf = typeof makeFamilyResolver === 'function'
+        ? makeFamilyResolver(ctx)
+        : function (pid) {
+          if (typeof resolveFamilyId === 'function') {
+            try { return resolveFamilyId(pid); } catch (e) { /* fail closed */ }
+          }
+          return pid;
+        };
+      var signalFamily = signal && signal.productId != null && signal.productId !== '' && signal.productId !== 'multi'
+        ? (signal.familyId != null && signal.familyId !== '' ? signal.familyId : famOf(signal.productId))
+        : null;
+      var newest = null;
+      rows.forEach(function (r) {
+        if (!r || r.status !== 'active' || !r.reason || !r.reason.code) return;
+        if (signalFamily == null) {
+          if (r.productId != null && r.productId !== '' && r.productId !== 'multi') return;
+        } else {
+          if (r.productId == null || r.productId === '' || r.productId === 'multi') return;
+          if (r.productId !== signal.productId && famOf(r.productId) !== signalFamily) return;
+        }
+      // lastEvaluatedAt tracks Watch refresh; reason.recordedAt tracks the
+      // seller's actual reason entry and is authoritative when a reason exists.
+      var timestamp = (r.reason && r.reason.recordedAt) || r.lastEvaluatedAt || r.firstDetectedAt;
+        if (typeof timestamp !== 'string' || isNaN(Date.parse(timestamp))) return;
+        if (!newest || Date.parse(timestamp) > newest.time) newest = { row: r, time: Date.parse(timestamp) };
+      });
+      if (!newest) return null;
+      var row = newest.row;
+      return ({
+        competitor: 'خرید از رقیب', competitor_bought: 'خرید از رقیب', price: 'اعتراض قیمت',
+        price_issue: 'اعتراض قیمت', quality: 'اعتراض کیفیت', no_need: 'فعلاً نیاز ندارد',
+        still_stock: 'موجودی نزد مشتری', not_wanted: 'محصول را نمی‌خواهد', follow_up_later: 'پیگیری ثبت‌شده'
+      })[row.reason.code] || null;
+    } catch (e) { return null; }
+  }
+
+  function _isGenericRepeatedAction(cid, signal, ctx) {
+    if (!signal || ['PURCHASE_DECLINE_SEVERE', 'KEY_PRODUCT_LOST', 'SKU_DELAY', 'SKU_QUANTITY_DROP', 'SKU_FREQUENCY_DROP', 'LINE_DROP', 'COMBINED_SKU_DETERIORATION', 'MULTI_SKU_DECLINE'].indexOf(signal.category) >= 0) return false;
+    if (typeof customerBehavior !== 'function') return false;
+    try {
+      var b = customerBehavior(cid, ctx);
+      return !!(b && b.lastNextAction === 'مراجعه مجدد' &&
+        ['LONG_NO_VISIT', 'VISIT_OVERDUE', 'VISIT_CONVERSION_LOW', 'PURCHASE_DECLINE_MILD', 'BASKET_SHRINK'].indexOf(signal.category) >= 0);
+    } catch (e) { return false; }
+  }
+
   function calculateCustomerAction(cid, precomputedPriority, opts, skipMemo) {
     opts = opts || {};
     var ctx = opts.ctx || null;
@@ -485,12 +672,27 @@
     );
 
     const actionCandidates = _applyCurrentContextFilter(cid, priority.signals, ctx);
-    let winner = _pickActionSignal(actionCandidates);
-    // Action Eligibility: the winner is chosen first; if it is no longer needed
-    // given a recent related visit, the existing NO_ACTION path is used. The next
-    // candidate is deliberately NOT promoted, and the signal itself is untouched.
-    if (winner && !_isActionEligible(winner, cid, ctx)) {
-      winner = null;
+    // Filter before choosing: removing a stale winner must not hide a valid
+    // next candidate.
+    const eligibleCandidates = actionCandidates.filter(function (candidate) {
+      if (!candidate || !ACTION_RULES[candidate.category]) return false;
+      if (candidate.status === 'pending' || candidate.seasonallySuppressed === true) return false;
+      if (_isGenericRepeatedAction(cid, candidate, ctx)) return false;
+      return true;
+    });
+    // Select in priority order, but validate every candidate independently.
+    // A candidate rejected by current context/eligibility must not block the
+    // first later candidate that has sufficient evidence and is due now.
+    let winner = null;
+    let remainingCandidates = eligibleCandidates.slice();
+    while (remainingCandidates.length) {
+      const candidate = _pickActionSignal(remainingCandidates);
+      if (!candidate) break;
+      if (_isActionEligible(candidate, cid, ctx)) {
+        winner = candidate;
+        break;
+      }
+      remainingCandidates = remainingCandidates.filter(function (item) { return item !== candidate; });
     }
 
     if (!winner) {
@@ -504,26 +706,40 @@
 
     const rule = ACTION_RULES[winner.category];
     var actionText = rule.action;
+    var productNames = _productNamesForSignal(winner);
     // SKU signals: include product name in action message when available.
-    if (winner.productName && (
+    if (productNames.length && (
       winner.category === 'SKU_DELAY' ||
       winner.category === 'SKU_QUANTITY_DROP' ||
       winner.category === 'SKU_FREQUENCY_DROP' ||
       winner.category === 'LINE_DROP' ||
       winner.category === 'COMBINED_SKU_DETERIORATION' ||
-      winner.category === 'MULTI_SKU_DECLINE'
+      winner.category === 'MULTI_SKU_DECLINE' ||
+      winner.category === 'KEY_PRODUCT_LOST'
     )) {
-      actionText = rule.action + ' («' + winner.productName + '»)';
+      actionText = rule.action + ' («' + productNames.join('»، «') + '»)';
     }
 
     // P-07: append real operational contexts only (short, non-duplicative).
     var contexts = [];
     var sc = stockContext(winner.productId, winner);
     var vc = visitContext(cid, ctx);
-    var fc = feedbackContext(winner);
+    var fc = feedbackContext(winner) || _watchReasonContext(cid, winner, ctx) || _latestVisitFeedback(cid, winner, ctx);
+    var pending = _pendingFollowUp(cid, winner, ctx);
+    // Financial and critical follow-ups keep their original operational action.
+    // A previously recorded follow-up is context, not a replacement for an
+    // overdue cheque or overdue payment action.
+    var protectedFromPendingOverride = [
+      'CHECK_BOUNCED',
+      'PAYMENT_OVERDUE'
+    ].indexOf(winner.category) !== -1;
+    var pendingOverride = pending && pending.generatedReason && !protectedFromPendingOverride;
+    var actionType = pendingOverride ? 'follow_up' : rule.actionType;
+    if (pendingOverride) actionText = 'پیگیری مورد ثبت‌شده برای این مشتری';
     if (sc) contexts.push(sc);
     if (vc) contexts.push(vc);
     if (fc) contexts.push(fc);
+    if (pendingOverride) contexts.push('پیگیری ثبت‌شده: ' + pending.generatedReason);
     // Avoid repeating the same phrase already present in actionText
     for (var ci = 0; ci < contexts.length; ci++) {
       if (actionText.indexOf(contexts[ci]) === -1) {
@@ -546,9 +762,9 @@
     return {
       customerId: cid,
       action: actionText,
-      actionType: rule.actionType,
+      actionType: actionType,
       urgency: rule.urgency,
-      reason: winner.reason,
+      reason: [winner.reason, fc, pendingOverride ? 'پیگیری ثبت‌شده: ' + pending.generatedReason : null].filter(Boolean).join(' — '),
       primarySignal: winner,
       priorityScore: priority.priorityScore,
       riskLevel: priority.riskLevel,
