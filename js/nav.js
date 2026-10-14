@@ -1430,7 +1430,7 @@ async function bootSpaShell() {
       if (path === '/checks') return 'checks';
       if (path === '/game') return 'game';
       if (path === '/settings') return 'settings';
-      if (path === '/more') return 'more';
+      if (path === '/more' || path === '/assistant') return 'more';
       return 'dashboard';
     }
 
@@ -1468,6 +1468,7 @@ async function bootSpaShell() {
       '/game': 'مرکز بازی فروش',
       '/settings': 'تنظیمات و پشتیبان',
       '/more': 'بیشتر',
+      '/assistant': 'دستیار فروش باقری',
       '/locations': 'مناطق و مسیرها',
       '/watches': 'واچ‌ها',
       '/watch': 'جزئیات واچ'
@@ -1508,6 +1509,7 @@ async function bootSpaShell() {
     AppRouter.registerRoute('/game', makeViewHandler(typeof GameCenterView !== 'undefined' ? GameCenterView : null, 'game', '/game'));
     AppRouter.registerRoute('/settings', makeViewHandler(typeof SettingsView !== 'undefined' ? SettingsView : null, 'settings', '/settings'));
     AppRouter.registerRoute('/more', makeViewHandler(typeof MoreView !== 'undefined' ? MoreView : null, 'more', '/more'));
+    AppRouter.registerRoute('/assistant', makeViewHandler(typeof AssistantView !== 'undefined' ? AssistantView : null, 'more', '/assistant'));
     AppRouter.registerRoute('/locations', makeViewHandler(typeof LocationsView !== 'undefined' ? LocationsView : null, 'settings', '/locations'));
     AppRouter.registerRoute('/watches', makeViewHandler(typeof WatchesView !== 'undefined' ? WatchesView : null, 'watches', '/watches'));
     AppRouter.registerRoute('/watch', makeViewHandler(typeof WatchDetailView !== 'undefined' ? WatchDetailView : null, 'watches', '/watch'));
