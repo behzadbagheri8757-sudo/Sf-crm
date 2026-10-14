@@ -1,1 +1,25 @@
-
+# Optional Render Blueprint. NOT validated against Render from the build environment.
+# The manual "New > Web Service" flow in README.md uses the same settings and is the recommended route.
+services:
+  - type: web
+    name: bagheri-ai-assistant
+    runtime: node
+    plan: free
+    # This file assumes the repository root IS this package (standalone repo).
+    # If you put the package in a sub-folder of another repo, add:  rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false            # you type it in the Render dashboard; never commit it
+      - key: ASSISTANT_ACCESS_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false            # e.g. https://YOUR-GITHUB-USERNAME.github.io
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile   # placeholder: verify at https://console.groq.com/docs/models
+      - key: TRUST_PROXY
+        value: "true"
+      - key: ENABLE_TEST_PAGE
+        value: "false"

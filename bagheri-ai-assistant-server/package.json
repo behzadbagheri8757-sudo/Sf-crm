@@ -1,0 +1,15 @@
+{
+  "name": "bagheri-ai-assistant-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone, read-only Persian sales-assistant backend for BAGHERI CRM (Groq chat completions). No CRM data access.",
+  "main": "ai-assistant-server.js",
+  "scripts": {
+    "start": "node ai-assistant-server.js",
+    "test": "node --test test/server.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
