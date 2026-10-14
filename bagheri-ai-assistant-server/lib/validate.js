@@ -3,7 +3,8 @@
    Strict allow-list: only { message, history }. Anything else (tools, actions, model, system,
    operations ...) is rejected, so no write / tool / prompt-override path exists. */
 
-const ALLOWED_BODY_KEYS = { message: true, history: true };
+const ALLOWED_BODY_KEYS = { message: true, history: true, context: true };
+const MAX_CONTEXT_CHARS = 3000;
 const ALLOWED_HISTORY_KEYS = { role: true, content: true };
 
 function fail(code, message, status) {
@@ -55,7 +56,13 @@ function validateChatBody(body, limits) {
       history.push({ role: m.role, content: c });
     }
   }
-  return { ok: true, value: { message: message, history: history } };
+  let context = '';
+  if (body.context !== undefined) {
+    if (typeof body.context !== 'string') return fail('invalid_context', 'فیلد context باید متن باشد.');
+    context = cleanText(body.context);
+    if (context.length > MAX_CONTEXT_CHARS) return fail('context_too_long', 'خلاصهٔ اطلاعات CRM بیش از حد طولانی است.');
+  }
+  return { ok: true, value: { message: message, history: history, context: context } };
 }
 
 module.exports = { validateChatBody };
