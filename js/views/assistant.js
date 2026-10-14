@@ -130,7 +130,7 @@
         <label class="baqeri-ai-label" for="baqeri-ai-token">توکن دسترسی سرور</label>
         <input id="baqeri-ai-token" class="baqeri-ai-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="توکن ASSISTANT_ACCESS_TOKEN را وارد کن">
         <label class="baqeri-ai-label" for="baqeri-ai-customer">زمینهٔ گفت‌وگو</label>
-        <select id="baqeri-ai-customer" class="baqeri-ai-input">
+        <select id="baqeri-ai-customer" class="baqeri-ai-input" data-chat-customer>
           <option value="">گفت‌وگوی عمومی، بدون ارسال اطلاعات CRM</option>
         </select>
         <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتری انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
