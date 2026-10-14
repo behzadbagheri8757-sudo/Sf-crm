@@ -31,6 +31,12 @@
       ],
     },
     {
+      title: 'دستیار هوشمند',
+      items: [
+        { label: 'دستیار فروش باقری', href: '#/assistant', iconKey: 'documentText' },
+      ],
+    },
+    {
       title: 'عملکرد فروش',
       items: [
         { label: 'مرکز بازی فروش', href: '#/game', iconKey: 'trophy' },
