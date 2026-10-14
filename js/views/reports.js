@@ -851,24 +851,16 @@
     if (ctx) ctx.textContent = contextText(reportPeriod, now, !!cmp);
 
     body.innerHTML =
-      '<div class="rp-lead-grid">' +
       heroHtml(periodSales, periodCount, periodAvg, cmp) +
-      snapshotHtml(periodCount, periodAvg, periodGrossProfit, returnsTotal) +
-      '</div>' +
       (periodCount ? trendHtml(trend) : '') +
-      '<div class="rp-insight-grid">' +
+      snapshotHtml(periodCount, periodAvg, periodGrossProfit, returnsTotal) +
       (periodCount ? topProductsHtml(topProd) : '') +
       customersHtml(periodCount ? topCust : [], netSales, debtors.length, g.customerDebt) +
-      '</div>' +
-      '<div class="rp-operations-grid">' +
       collectionsHtml(received, byMethod, debtors.length, g.customerDebt, topDebtors) +
       inventoryHtml(inventoryValue(), low, zero, negative) +
       fieldHtml(vs) +
-      '</div>' +
-      '<div class="rp-details-stack">' +
       financialHtml(g, received, topSuppliers) +
-      linksHtml() +
-      '</div>';
+      linksHtml();
 
     if (!periodCount) chartState = null;
   }
@@ -910,7 +902,6 @@
   function drawPage(root) {
     root.innerHTML =
       '<div class="rp-page">' +
-      '<div class="rp-page-intro"><span class="rp-page-kicker">مرکز تصمیم‌گیری</span><strong>عملکرد کسب‌وکار را در یک نگاه ببینید</strong><span class="rp-page-note">فروش، وصول و عملیات فروش در بازه انتخابی</span></div>' +
       '<div class="rp-top">' +
       segHtml() +
       '<div class="rp-context" id="rp-context"></div>' +
