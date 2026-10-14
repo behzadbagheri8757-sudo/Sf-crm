@@ -57,7 +57,7 @@ function createApp(config, deps) {
       authConfigured: !!config.auth.token || config.auth.allowUnauthenticated,
       model: config.groq.model,
       modelSource: config.groq.modelFromEnv ? 'env' : 'default-unverified',
-      capabilities: { chat: true, crmTools: false, writes: false },
+      capabilities: { chat: true, crmContext: true, crmTools: false, writes: false },
       uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
     };
     if (req.method === 'HEAD') {
@@ -134,8 +134,8 @@ function createApp(config, deps) {
     daily.count++;
     inflight++;
     try {
-      const out = await groq.chat(buildMessages(v.value.history, v.value.message));
-      const body = { ok: true, reply: out.reply, model: out.model, mode: 'standalone', crmData: false };
+      const out = await groq.chat(buildMessages(v.value.history, v.value.message, v.value.context));
+      const body = { ok: true, reply: out.reply, model: out.model, mode: v.value.context ? 'crm-context' : 'standalone', crmData: !!v.value.context };
       if (out.usage) body.usage = out.usage;
       reply(200, body);
     } catch (e) {
