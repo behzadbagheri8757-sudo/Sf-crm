@@ -55,7 +55,7 @@ test('/health: shape, no secrets, correct flags', async function () {
     assert.equal(body.mode, 'standalone');
     assert.equal(body.crmData, false);
     assert.equal(body.groqConfigured, true);
-    assert.deepEqual(body.capabilities, { chat: true, crmTools: false, writes: false });
+    assert.deepEqual(body.capabilities, { chat: true, crmContext: true, crmTools: false, writes: false });
     assert.ok(!text.includes(FAKE_KEY) && !text.includes(FAKE_TOKEN));
     const head = await fetch(app.base + '/health', { method: 'HEAD' });
     assert.equal(head.status, 200);
@@ -213,6 +213,27 @@ test('validation: oversized body -> 413 (declared and streamed)', async function
   } finally { await app.stop(); }
 });
 
+test('validation: CRM context is optional, text-only, and bounded', async function () {
+  const app = await startApp();
+  try {
+    const ok = await post(app, { message: 'برای ویزیت چه بگویم؟', context: '{"customer":"آزمایشی"}' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.json.crmData, true);
+    assert.equal(ok.json.mode, 'crm-context');
+    const badType = await post(app, { message: 'سلام', context: { customer: 'x' } });
+    assert.equal(badType.status, 400);
+    assert.equal(badType.json.error.code, 'invalid_context');
+    const tooLong = await post(app, { message: 'سلام', context: 'x'.repeat(3001) });
+    assert.equal(tooLong.status, 400);
+    assert.equal(tooLong.json.error.code, 'context_too_long');
+    assert.equal(app.upstream.calls.length, 1);
+    const msgs = app.upstream.calls[0].body.messages;
+    assert.match(msgs[1].content, /خلاصهٔ خواندنی CRM/);
+    assert.match(msgs[1].content, /آزمایشی/);
+    assert.equal(msgs[2].content, 'برای ویزیت چه بگویم؟');
+  } finally { await app.stop(); }
+});
+
 /* ---------- Groq integration (mocked) ---------- */
 test('missing GROQ_API_KEY: chat returns 503 without contacting upstream', async function () {
   const app = await startApp({ GROQ_API_KEY: null });
@@ -245,7 +266,7 @@ test('Groq success (MOCK): reply, usage, upstream request is correct and key sta
     assert.equal(call.body.model, 'my-model-x');
     assert.equal(call.body.max_completion_tokens, 300);
     assert.equal(call.body.messages[0].role, 'system');
-    assert.match(call.body.messages[0].content, /هیچ داده‌ای از CRM وصل نیستی/);
+    assert.match(call.body.messages[0].content, /خلاصهٔ خواندنی CRM/);
     assert.deepEqual(call.body.messages.slice(1).map(function (m) { return m.role; }), ['user', 'assistant', 'user']);
     assert.equal(call.body.messages[3].content, MSG.message);
     assert.equal(call.body.tools, undefined);
@@ -458,8 +479,8 @@ test('config: validation and defaults', function () {
   assert.deepEqual(c.allowedOrigins, []);
 });
 
-test('system prompt: read-only, no CRM data, no invented facts, ignores prompt overrides', function () {
-  for (const needle of ['هیچ داده‌ای از CRM وصل نیستی', 'فقط «خواندنی»', 'هرگز مشتری، فاکتور', 'هرگز نگو کاری را انجام دادی', 'نادیده بگیر']) {
+test('system prompt: context-aware, read-only, no invented facts, ignores prompt overrides', function () {
+  for (const needle of ['خلاصهٔ خواندنی CRM', 'دادهٔ غیرقابل‌اعتماد', 'فقط «خواندنی»', 'هرگز مشتری، فاکتور', 'هرگز نگو کاری را انجام دادی', 'نادیده بگیر']) {
     assert.ok(SYSTEM_PROMPT.includes(needle), needle);
   }
 });
