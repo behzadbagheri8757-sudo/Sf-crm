@@ -130,7 +130,7 @@
         <label class="baqeri-ai-label" for="baqeri-ai-token">توکن دسترسی سرور</label>
         <input id="baqeri-ai-token" class="baqeri-ai-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="توکن ASSISTANT_ACCESS_TOKEN را وارد کن">
         <label class="baqeri-ai-label" for="baqeri-ai-customer">زمینهٔ گفت‌وگو</label>
-        <select id="baqeri-ai-customer" class="baqeri-ai-input" data-chat-customer>
+        <select id="baqeri-ai-customer" class="baqeri-ai-input">
           <option value="">گفت‌وگوی عمومی، بدون ارسال اطلاعات CRM</option>
         </select>
         <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتری انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
@@ -143,17 +143,20 @@
         <button class="btn secondary" type="button" data-chat-clear>شروع گفت‌وگوی تازه</button>
       </section>
       <style>
-        .baqeri-ai-page{max-width:760px;margin:0 auto;padding:16px 14px 30px;color:var(--ink);display:flex;flex-direction:column;gap:12px}
-        .baqeri-ai-heading{display:flex;align-items:center;gap:12px}.baqeri-ai-heading h2{margin:0;font-size:1.12rem;font-weight:800}.baqeri-ai-heading p{margin:4px 0 0;font-size:.78rem;color:var(--ink-soft)}
-        .baqeri-ai-mark{width:42px;height:42px;border-radius:14px;background:var(--surface-raised,#eef5ff);display:grid;place-items:center;color:#0070D2;font-size:1.4rem}
-        .baqeri-ai-notice{font-size:.78rem;line-height:1.8;padding:12px;border-radius:14px;background:var(--surface-secondary,#f5f6f8);color:var(--ink-soft)}
-        .baqeri-ai-label{font-size:.82rem;font-weight:700;margin-bottom:-7px}.baqeri-ai-input{width:100%;box-sizing:border-box;border:1px solid var(--line,#d9dce2);border-radius:12px;padding:12px;font:inherit;background:var(--surface,#fff);color:var(--ink)}
-        .baqeri-ai-consent{display:flex;gap:8px;align-items:flex-start;font-size:.78rem;line-height:1.7;color:var(--ink-soft)}.baqeri-ai-consent input{margin-top:5px;flex-shrink:0}
-        .baqeri-ai-messages{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto;padding:4px 1px}
-        .baqeri-ai-message{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;font-size:.88rem;padding:11px 13px;border-radius:15px;max-width:94%}
-        .baqeri-ai-message.is-assistant{align-self:flex-start;background:var(--surface-secondary,#f3f4f6)}.baqeri-ai-message.is-user{align-self:flex-end;background:#e7f1ff;color:#12375b}
-        .baqeri-ai-composer{display:flex;flex-direction:column;gap:8px}.baqeri-ai-textarea{resize:vertical;min-height:76px}.baqeri-ai-composer .btn{min-height:46px}
-        .baqeri-ai-status{font-size:.78rem;color:var(--ink-soft);margin:0;min-height:1.2em}.baqeri-ai-status.is-error{color:#c43d35}
+        .baqeri-ai-page{width:100%;max-width:760px;min-width:0;box-sizing:border-box;margin:0 auto;padding:14px 14px calc(32px + env(safe-area-inset-bottom));color:var(--ink);display:flex;flex-direction:column;gap:14px;overflow-wrap:anywhere}
+        .baqeri-ai-heading{display:flex;align-items:center;gap:12px;min-width:0}.baqeri-ai-heading>div:last-child{min-width:0}.baqeri-ai-heading h2{margin:0;font-size:1.12rem;line-height:1.5;font-weight:800}.baqeri-ai-heading p{margin:4px 0 0;font-size:.82rem;line-height:1.7;color:var(--ink-soft)}
+        .baqeri-ai-mark{flex:0 0 42px;width:42px;height:42px;border-radius:14px;background:var(--surface-raised,#eef5ff);display:grid;place-items:center;color:#0070D2;font-size:1.4rem}
+        .baqeri-ai-notice{font-size:.82rem;line-height:1.9;padding:12px 14px;border-radius:14px;background:var(--surface-secondary,#f5f6f8);color:var(--ink-soft)}
+        .baqeri-ai-label{font-size:.86rem;font-weight:700;margin-bottom:-7px}.baqeri-ai-input{display:block;width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--line,#d9dce2);border-radius:13px;padding:12px 13px;font:inherit;font-size:16px;line-height:1.65;background:var(--surface,#fff);color:var(--ink)}
+        .baqeri-ai-consent{display:flex;gap:9px;align-items:flex-start;font-size:.82rem;line-height:1.8;color:var(--ink-soft)}.baqeri-ai-consent input{margin-top:6px;flex-shrink:0}
+        .baqeri-ai-messages{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;min-width:0;min-height:180px;max-height: min(58dvh, 620px);overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;padding:8px 2px 12px;box-sizing:border-box;border:1px solid var(--line,#e0e3e8);border-radius:16px;background:var(--surface,#fff)}
+        .baqeri-ai-message{display:block;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;line-height:1.9;font-size:1rem;padding:13px 14px;border-radius:14px;width:100%;max-width:100%;min-width:0;margin:0}
+        .baqeri-ai-message.is-assistant{align-self:stretch;background:var(--surface-secondary,#f3f4f6);color:var(--ink)}.baqeri-ai-message.is-user{align-self:flex-end;width:auto;max-width:92%;background:#e7f1ff;color:#12375b}
+        .baqeri-ai-composer{display:flex;flex-direction:column;gap:9px;min-width:0}.baqeri-ai-textarea{resize:vertical;min-height:88px;max-height:32vh}.baqeri-ai-composer .btn{min-height:48px;font-size:.95rem}
+        .baqeri-ai-status{font-size:.82rem;line-height:1.7;color:var(--ink-soft);margin:0;min-height:1.2em}.baqeri-ai-status.is-error{color:#c43d35}
+        .baqeri-ai-page button,.baqeri-ai-page select,.baqeri-ai-page textarea,.baqeri-ai-page input{touch-action:manipulation}
+        @media(max-width:480px){.baqeri-ai-page{padding-inline:10px;gap:12px}.baqeri-ai-message{font-size:.98rem;padding:12px 12px;line-height:1.9}.baqeri-ai-messages{max-height:56dvh}.baqeri-ai-notice{padding:11px 12px}}
+        @media(prefers-reduced-motion:reduce){.baqeri-ai-messages{scroll-behavior:auto}}
       </style>`;
     const customerSelect = root.querySelector('[data-chat-customer]');
     (data.customers || []).filter(function (c) { return c && c.id != null; }).slice().sort(function (a, b) {
