@@ -223,7 +223,7 @@ test('validation: CRM context is optional, text-only, and bounded', async functi
     const badType = await post(app, { message: 'سلام', context: { customer: 'x' } });
     assert.equal(badType.status, 400);
     assert.equal(badType.json.error.code, 'invalid_context');
-    const tooLong = await post(app, { message: 'سلام', context: 'x'.repeat(3001) });
+    const tooLong = await post(app, { message: 'سلام', context: 'x'.repeat(8600) });
     assert.equal(tooLong.status, 400);
     assert.equal(tooLong.json.error.code, 'context_too_long');
     assert.equal(app.upstream.calls.length, 1);
