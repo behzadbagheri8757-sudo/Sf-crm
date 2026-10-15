@@ -4,7 +4,7 @@
    operations ...) is rejected, so no write / tool / prompt-override path exists. */
 
 const ALLOWED_BODY_KEYS = { message: true, history: true, context: true };
-const MAX_CONTEXT_CHARS = 3000;
+const MAX_CONTEXT_CHARS = 8500;
 const ALLOWED_HISTORY_KEYS = { role: true, content: true };
 
 function fail(code, message, status) {
