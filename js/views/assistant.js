@@ -40,7 +40,7 @@
     const products = Object.create(null);
     (data.products || []).forEach(function (p) { if (p && p.id != null) products[String(p.id)] = p.name || p.title || 'کالای بدون نام'; });
     const customerInvoicesAll = (data.invoices || []).filter(function (i) { return i && String(i.customerId) === String(c.id); });
-    const invoices = customerInvoicesAll.slice().sort(byDateDesc).slice(0, 5).map(function (inv) {
+    const invoices = customerInvoicesAll.slice().sort(byDateDesc).slice(0, 8).map(function (inv) {
       return {
         date: safeText(inv.date, 20),
         total: Number(inv.total) || 0,
@@ -49,7 +49,7 @@
         })
       };
     });
-    const visits = (Array.isArray(c.visits) ? c.visits : []).slice().sort(byDateDesc).slice(0, 4).map(function (v) {
+    const visits = (Array.isArray(c.visits) ? c.visits : []).slice().sort(byDateDesc).slice(0, 8).map(function (v) {
       return {
         date: safeText(v.date, 20),
         result: safeText(v.result, 80),
@@ -59,6 +59,17 @@
         note: safeText(v.note || v.notes, 180)
       };
     });
+    const payments = (data.payments || [])
+      .filter(function (p) { return p && String(p.customerId) === String(c.id); })
+      .slice().sort(byDateDesc).slice(0, 8)
+      .map(function (p) {
+        return {
+          date: safeText(p.date, 20),
+          amount: Number(p.amount) || 0,
+          method: safeText(p.method, 20),
+          note: safeText(p.note, 120)
+        };
+      });
     let action = null;
     try {
       const priority = typeof calculateCustomerPriority === 'function' ? calculateCustomerPriority(c.id) : null;
@@ -71,6 +82,8 @@
       invoiceCount: customerInvoicesAll.length,
       recentInvoices: invoices,
       recentVisits: visits,
+      recentPayments: payments,
+      note: 'همهٔ مبالغ به تومان است. تاریخها میلادی (YYYY-MM-DD).',
       existingCrmRecommendation: action ? {
         action: safeText(action.action, 240),
         reason: safeText(action.reason, 240),
@@ -79,15 +92,15 @@
       } : null
     };
     let serialized = JSON.stringify(snapshot, null, 2);
-    while (serialized.length > 2800 && snapshot.recentVisits.length) {
+    while (serialized.length > 7000 && snapshot.recentVisits.length) {
       snapshot.recentVisits.pop();
       serialized = JSON.stringify(snapshot, null, 2);
     }
-    while (serialized.length > 2800 && snapshot.recentInvoices.length) {
+    while (serialized.length > 7000 && snapshot.recentInvoices.length) {
       snapshot.recentInvoices.pop();
       serialized = JSON.stringify(snapshot, null, 2);
     }
-    if (serialized.length > 2800) {
+    if (serialized.length > 7000) {
       snapshot.existingCrmRecommendation = null;
       serialized = JSON.stringify(snapshot, null, 2);
     }
@@ -130,7 +143,7 @@
         <label class="baqeri-ai-label" for="baqeri-ai-token">توکن دسترسی سرور</label>
         <input id="baqeri-ai-token" class="baqeri-ai-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="توکن ASSISTANT_ACCESS_TOKEN را وارد کن">
         <label class="baqeri-ai-label" for="baqeri-ai-customer">زمینهٔ گفت‌وگو</label>
-   <select id="baqeri-ai-customer" class="baqeri-ai-input" data-chat-customer>
+        <select id="baqeri-ai-customer" class="baqeri-ai-input">
           <option value="">گفت‌وگوی عمومی، بدون ارسال اطلاعات CRM</option>
         </select>
         <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتری انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
