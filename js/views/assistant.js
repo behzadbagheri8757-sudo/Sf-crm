@@ -120,10 +120,13 @@
     return serialized;
   }
 
-  function buildAllCustomersContext() {
+  function buildSelectedCustomersContext(ids) {
     if (typeof data === 'undefined' || !data || !Array.isArray(data.customers)) return '';
+    if (!Array.isArray(ids) || ids.length === 0) return '';
+    const idSet = Object.create(null);
+    ids.forEach(function (id) { idSet[String(id)] = true; });
     const customers = data.customers
-      .filter(function (c) { return c && c.id != null; })
+      .filter(function (c) { return c && c.id != null && idSet[String(c.id)]; })
       .map(function (c) {
         const totals = typeof customerTotals === 'function' ? customerTotals(c.id) : null;
         const invoices = (data.invoices || [])
@@ -158,7 +161,7 @@
         };
       });
     return JSON.stringify({
-      note: 'همهٔ مبالغ به تومان است. تاریخ‌ها میلادی (YYYY-MM-DD). هر بخش حداکثر ۵ مورد آخر.',
+      note: 'همهٔ مبالغ به تومان است. تاریخ‌ها میلادی (YYYY-MM-DD). فقط مشتریان انتخاب‌شده. هر بخش حداکثر ۵ مورد آخر.',
       customers: customers
     });
   }
@@ -198,12 +201,12 @@
         <div class="baqeri-ai-notice"><strong>حریم خصوصی:</strong> توکن فقط در حافظهٔ همین صفحه می‌ماند. اگر مشتری انتخاب کنی و رضایت ارسال را فعال کنی، خلاصهٔ محدود او برای تحلیل به سرور و سرویس Groq ارسال می‌شود. هیچ داده‌ای در CRM ثبت یا تغییر نمی‌کند.</div>
         <label class="baqeri-ai-label" for="baqeri-ai-token">توکن دسترسی سرور</label>
         <input id="baqeri-ai-token" class="baqeri-ai-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="توکن ASSISTANT_ACCESS_TOKEN را وارد کن">
-        <label class="baqeri-ai-label" for="baqeri-ai-customer">زمینهٔ گفت‌وگو</label>
-        <select id="baqeri-ai-customer" class="baqeri-ai-input">
-          <option value="">گفت‌وگوی عمومی، بدون ارسال اطلاعات CRM</option>
-          <option value="__ALL__">تحلیل همهٔ مشتری‌ها (ارسال خلاصهٔ همگی)</option>
-        </select>
-        <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتری انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
+        <label class="baqeri-ai-label">انتخاب مشتری‌ها (حداکثر ۵ نفر برای هر پیام)</label>
+        <div class="baqeri-ai-picker">
+          <div class="baqeri-ai-picker-list" data-customer-list></div>
+          <p class="baqeri-ai-counter" data-customer-counter>هیچ مشتری انتخاب نشده — پیام عمومی ارسال می‌شود</p>
+        </div>
+        <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتریان انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
         <div class="baqeri-ai-messages" data-chat-messages aria-live="polite"><div class="baqeri-ai-message is-assistant">برای شروع، توکن سرور را وارد کن. می‌توانی گفت‌وگوی عمومی داشته باشی یا مشتری مشخصی را انتخاب کنی.</div></div>
         <div class="baqeri-ai-composer">
           <textarea class="baqeri-ai-input baqeri-ai-textarea" data-chat-input rows="3" maxlength="2000" placeholder="مثلاً برای ویزیت بعدی این مشتری چه پیشنهادی بدهم؟"></textarea>
@@ -213,48 +216,161 @@
         <button class="btn secondary" type="button" data-chat-clear>شروع گفت‌وگوی تازه</button>
       </section>
       <style>
-        .baqeri-ai-page{width:100%;max-width:760px;min-width:0;box-sizing:border-box;margin:0 auto;padding:14px 14px calc(32px + env(safe-area-inset-bottom));color:var(--ink);display:flex;flex-direction:column;gap:14px;overflow-wrap:anywhere}
-        .baqeri-ai-heading{display:flex;align-items:center;gap:12px;min-width:0}.baqeri-ai-heading>div:last-child{min-width:0}.baqeri-ai-heading h2{margin:0;font-size:1.12rem;line-height:1.5;font-weight:800}.baqeri-ai-heading p{margin:4px 0 0;font-size:.82rem;line-height:1.7;color:var(--ink-soft)}
-        .baqeri-ai-mark{flex:0 0 42px;width:42px;height:42px;border-radius:14px;background:var(--surface-raised,#eef5ff);display:grid;place-items:center;color:#0070D2;font-size:1.4rem}
-        .baqeri-ai-notice{font-size:.82rem;line-height:1.9;padding:12px 14px;border-radius:14px;background:var(--surface-secondary,#f5f6f8);color:var(--ink-soft)}
-        .baqeri-ai-label{font-size:.86rem;font-weight:700;margin-bottom:-7px}.baqeri-ai-input{display:block;width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--line,#d9dce2);border-radius:13px;padding:12px 13px;font:inherit;font-size:16px;line-height:1.65;background:var(--surface,#fff);color:var(--ink)}
-        .baqeri-ai-consent{display:flex;gap:9px;align-items:flex-start;font-size:.82rem;line-height:1.8;color:var(--ink-soft)}.baqeri-ai-consent input{margin-top:6px;flex-shrink:0}
-        .baqeri-ai-messages{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;min-width:0;min-height:180px;max-height: min(58dvh, 620px);overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;padding:8px 2px 12px;box-sizing:border-box;border:1px solid var(--line,#e0e3e8);border-radius:16px;background:var(--surface,#fff)}
-        .baqeri-ai-message{display:block;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;line-height:1.9;font-size:1rem;padding:13px 14px;border-radius:14px;width:100%;max-width:100%;min-width:0;margin:0}
-        .baqeri-ai-message.is-assistant{align-self:stretch;background:var(--surface-secondary,#f3f4f6);color:var(--ink)}.baqeri-ai-message.is-user{align-self:flex-end;width:auto;max-width:92%;background:#e7f1ff;color:#12375b}
+        .baqeri-ai-page{width:100%;max-width:760px;min-width:0;box-sizing:border-box;margin:0 auto;padding:14px 14px calc(32px + env(safe-area-inset-bottom));color:var(--vg-color-text);display:flex;flex-direction:column;gap:14px;overflow-wrap:anywhere}
+        .baqeri-ai-heading{display:flex;align-items:center;gap:12px;min-width:0}.baqeri-ai-heading>div:last-child{min-width:0}.baqeri-ai-heading h2{margin:0;font-size:1.12rem;line-height:1.5;font-weight:800;color:var(--vg-color-text)}.baqeri-ai-heading p{margin:4px 0 0;font-size:.82rem;line-height:1.7;color:var(--vg-color-text-muted)}
+        .baqeri-ai-mark{flex:0 0 42px;width:42px;height:42px;border-radius:var(--vg-radius-soft);background:var(--vg-color-primary-soft);display:grid;place-items:center;color:var(--vg-color-primary);font-size:1.4rem}
+        .baqeri-ai-notice{font-size:.82rem;line-height:1.9;padding:12px 14px;border-radius:var(--vg-radius-soft);background:var(--vg-color-surface-soft);color:var(--vg-color-text-muted);border:1px solid var(--vg-color-divider)}
+        .baqeri-ai-label{font-size:.86rem;font-weight:var(--vg-weight-title);margin-bottom:-7px;color:var(--vg-color-text)}
+        .baqeri-ai-input{display:block;width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-soft);padding:12px 13px;font:inherit;font-size:16px;line-height:1.65;background:var(--vg-color-surface);color:var(--vg-color-text)}
+        .baqeri-ai-consent{display:flex;gap:9px;align-items:flex-start;font-size:.82rem;line-height:1.8;color:var(--vg-color-text-muted)}.baqeri-ai-consent input{margin-top:6px;flex-shrink:0}
+        .baqeri-ai-messages{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;min-width:0;min-height:180px;max-height:min(58dvh, 620px);overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;padding:8px 2px 12px;box-sizing:border-box;border:1px solid var(--vg-color-border);border-radius:var(--vg-radius-raised);background:var(--vg-color-surface)}
+        .baqeri-ai-message{display:block;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;line-height:1.9;font-size:1rem;padding:13px 14px;border-radius:var(--vg-radius-soft);width:100%;max-width:100%;min-width:0;margin:0}
+        .baqeri-ai-message.is-assistant{align-self:stretch;background:var(--vg-color-surface-soft);color:var(--vg-color-text)}.baqeri-ai-message.is-user{align-self:flex-end;width:auto;max-width:92%;background:var(--vg-color-primary-soft);color:var(--vg-color-text)}
         .baqeri-ai-composer{display:flex;flex-direction:column;gap:9px;min-width:0}.baqeri-ai-textarea{resize:vertical;min-height:88px;max-height:32vh}.baqeri-ai-composer .btn{min-height:48px;font-size:.95rem}
-        .baqeri-ai-status{font-size:.82rem;line-height:1.7;color:var(--ink-soft);margin:0;min-height:1.2em}.baqeri-ai-status.is-error{color:#c43d35}
+        .baqeri-ai-status{font-size:.82rem;line-height:1.7;color:var(--vg-color-text-muted);margin:0;min-height:1.2em}.baqeri-ai-status.is-error{color:var(--vg-color-danger)}
         .baqeri-ai-page button,.baqeri-ai-page select,.baqeri-ai-page textarea,.baqeri-ai-page input{touch-action:manipulation}
         @media(max-width:480px){.baqeri-ai-page{padding-inline:10px;gap:12px}.baqeri-ai-message{font-size:.98rem;padding:12px 12px;line-height:1.9}.baqeri-ai-messages{max-height:56dvh}.baqeri-ai-notice{padding:11px 12px}}
         @media(prefers-reduced-motion:reduce){.baqeri-ai-messages{scroll-behavior:auto}}
+        .baqeri-ai-picker{
+          background:var(--vg-color-surface);
+          border:1px solid var(--vg-color-border);
+          border-radius:var(--vg-radius-raised);
+          box-shadow:var(--vg-shadow-group);
+          overflow:hidden;
+          min-width:0;
+        }
+        .baqeri-ai-picker-list{
+          display:flex;
+          flex-direction:column;
+          max-height:260px;
+          overflow-y:auto;
+          overflow-x:hidden;
+          -webkit-overflow-scrolling:touch;
+          overscroll-behavior:contain;
+          min-width:0;
+        }
+        .baqeri-ai-picker-row{
+          position:relative;
+          display:flex;
+          align-items:flex-start;
+          gap:10px;
+          min-height:48px;
+          padding:11px 14px;
+          font-size:.9rem;
+          line-height:1.55;
+          color:var(--vg-color-text);
+          cursor:pointer;
+          box-sizing:border-box;
+          min-width:0;
+          -webkit-tap-highlight-color:transparent;
+          transition:background-color 120ms ease;
+        }
+        .baqeri-ai-picker-row + .baqeri-ai-picker-row::before{
+          content:'';
+          position:absolute;
+          top:0;
+          inset-inline-start:14px;
+          inset-inline-end:14px;
+          height:1px;
+          background:var(--vg-color-divider);
+          pointer-events:none;
+        }
+        .baqeri-ai-picker-row:active{background:var(--vg-color-surface-soft);}
+        .baqeri-ai-picker-row.is-selected{background:var(--vg-color-primary-soft);}
+        .baqeri-ai-picker-row input[type=checkbox]{
+          flex:0 0 auto;
+          margin:3px 0 0 0;
+          accent-color:var(--vg-color-primary);
+          cursor:pointer;
+        }
+        .baqeri-ai-picker-row > span{
+          flex:1 1 auto;
+          min-width:0;
+          overflow-wrap:anywhere;
+          word-break:break-word;
+        }
+        .baqeri-ai-picker-row.is-disabled{
+          opacity:.45;
+          cursor:not-allowed;
+        }
+        .baqeri-ai-picker-row.is-disabled input[type=checkbox]{cursor:not-allowed;}
+        .baqeri-ai-counter{
+          margin:0;
+          padding:9px 14px;
+          border-top:1px solid var(--vg-color-divider);
+          background:var(--vg-color-surface-soft);
+          font-size:var(--vg-type-meta);
+          line-height:1.5;
+          color:var(--vg-color-text-muted);
+          text-align:center;
+        }
       </style>`;
-    const customerSelect = root.querySelector('#baqeri-ai-customer');
-    (data.customers || []).filter(function (c) { return c && c.id != null; }).slice().sort(function (a, b) {
-      return String(a.name || '').localeCompare(String(b.name || ''), 'fa');
-    }).forEach(function (c) {
-      const option = document.createElement('option');
-      option.value = String(c.id);
-      option.textContent = safeText(c.name || 'مشتری بدون نام', 100);
-      customerSelect.appendChild(option);
+    const MAX_SELECTED = 5;
+    const listEl = root.querySelector('[data-customer-list]');
+    const counterEl = root.querySelector('[data-customer-counter]');
+    const customerCheckboxes = [];
+    (data.customers || [])
+      .filter(function (c) { return c && c.id != null && c.active !== false; })
+      .slice()
+      .sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'fa'); })
+      .forEach(function (c) {
+        const row = document.createElement('label');
+        row.className = 'baqeri-ai-picker-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = String(c.id);
+        const span = document.createElement('span');
+        span.textContent = safeText(c.name || 'مشتری بدون نام', 100);
+        row.appendChild(cb);
+        row.appendChild(span);
+        listEl.appendChild(row);
+        customerCheckboxes.push({ cb: cb, row: row });
+      });
+
+    function selectedIds() {
+      return customerCheckboxes
+        .filter(function (x) { return x.cb.checked; })
+        .map(function (x) { return x.cb.value; });
+    }
+
+    function updateCounter() {
+      const n = selectedIds().length;
+      counterEl.textContent = n === 0
+        ? 'هیچ مشتری انتخاب نشده — پیام عمومی ارسال می‌شود'
+        : (n === 1
+            ? 'یک مشتری انتخاب شده — تحلیل تک‌مشتری'
+            : (n + ' از ' + MAX_SELECTED + ' مشتری انتخاب شده'));
+      customerCheckboxes.forEach(function (x) {
+        const atLimit = !x.cb.checked && n >= MAX_SELECTED;
+        x.cb.disabled = atLimit;
+        x.row.classList.toggle('is-disabled', atLimit);
+        x.row.classList.toggle('is-selected', x.cb.checked);
+      });
+    }
+
+    customerCheckboxes.forEach(function (x) {
+      x.cb.addEventListener('change', updateCounter);
     });
+    updateCounter();
 
     async function send() {
       if (busy) return;
       const tokenInput = root.querySelector('#baqeri-ai-token');
       const messageInput = root.querySelector('[data-chat-input]');
-      const customerValue = customerSelect.value;
-      const isAll = customerValue === '__ALL__';
-      const customerId = isAll ? null : customerValue;
+      const ids = selectedIds();
+      const hasSelection = ids.length > 0;
+      const isSingle = ids.length === 1;
       const message = String(messageInput.value || '').trim();
       const token = String(tokenInput.value || '').trim();
       if (!token) { setStatus('توکن دسترسی سرور را وارد کن.', true); tokenInput.focus(); return; }
       if (!message) { setStatus('پیام خالی است.', true); messageInput.focus(); return; }
-      if ((customerId || isAll) && !root.querySelector('[data-chat-consent]').checked) {
-        setStatus('برای ارسال خلاصهٔ مشتری/مشتریان، ابتدا رضایت ارسال را فعال کن.', true); return;
+      if (hasSelection && !root.querySelector('[data-chat-consent]').checked) {
+        setStatus('برای ارسال خلاصهٔ مشتری، ابتدا رضایت ارسال را فعال کن.', true); return;
       }
-      const context = isAll ? buildAllCustomersContext()
-                    : (customerId ? buildCustomerContext(customerId) : '');
-      if ((customerId || isAll) && !context) {
+      const context = isSingle
+        ? buildCustomerContext(ids[0])
+        : (hasSelection ? buildSelectedCustomersContext(ids) : '');
+      if (hasSelection && !context) {
         setStatus('خلاصهٔ CRM ساخته نشد؛ دوباره صفحه را باز کن.', true); return;
       }
       appendMessage('user', message);
@@ -268,9 +384,9 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
             message: message,
-            history: trimHistory(history.slice(0, -1), isAll ? 800 : (context ? 1500 : 3000)),
+            history: trimHistory(history.slice(0, -1), context ? 1500 : 3000),
             context: context || undefined,
-            scope: isAll ? 'all' : 'single'
+            scope: isSingle ? 'single' : (hasSelection ? 'all' : 'single')
           })
         });
         let body;
@@ -291,9 +407,9 @@
         history.push({ role: 'assistant', content: body.reply });
         if (history.length > 10) history = history.slice(-10);
         setStatus(
-          isAll ? 'پاسخ بر اساس خلاصهٔ همهٔ مشتری‌ها تولید شد؛ توصیه‌ها را با داده‌های CRM تطبیق بده.'
-                : (context ? 'پاسخ بر اساس خلاصهٔ انتخابی CRM تولید شد؛ صحت توصیه را با داده‌ها تطبیق بده.'
-                           : 'پاسخ دریافت شد.'),
+          isSingle ? 'پاسخ بر اساس خلاصهٔ مشتری انتخاب‌شده تولید شد؛ صحت توصیه را با داده‌ها تطبیق بده.'
+                  : (hasSelection ? 'پاسخ بر اساس ' + ids.length + ' مشتری انتخاب‌شده تولید شد؛ صحت توصیه را با داده‌ها تطبیق بده.'
+                                  : 'پاسخ دریافت شد.'),
           false
         );
       } catch (e) {
@@ -313,8 +429,10 @@
       history = [];
       const messages = root.querySelector('[data-chat-messages]');
       messages.textContent = '';
-      appendMessage('assistant', 'گفت‌وگوی تازه شروع شد. اگر لازم است، دوباره مشتری را انتخاب و ارسال اطلاعات را تأیید کن.');
+      appendMessage('assistant', 'گفت‌وگوی تازه شروع شد. اگر لازم است، دوباره مشتری‌ها را انتخاب و ارسال اطلاعات را تأیید کن.');
       setStatus('', false);
+      customerCheckboxes.forEach(function (x) { x.cb.checked = false; });
+      updateCounter();
     });
     return function unmount() {
       history = [];
