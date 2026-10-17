@@ -134,8 +134,9 @@ function createApp(config, deps) {
     daily.count++;
     inflight++;
     try {
-      const out = await groq.chat(buildMessages(v.value.history, v.value.message, v.value.context));
-      const body = { ok: true, reply: out.reply, model: out.model, mode: v.value.context ? 'crm-context' : 'standalone', crmData: !!v.value.context };
+      const out = await groq.chat(buildMessages(v.value.history, v.value.message, v.value.context, v.value.scope));
+      const body = { ok: true, reply: out.reply, model: out.model, mode: !v.value.context ? 'standalone'
+          : (v.value.scope === 'all' ? 'all-customers' : 'crm-context'), crmData: !!v.value.context };
       if (out.usage) body.usage = out.usage;
       reply(200, body);
     } catch (e) {
