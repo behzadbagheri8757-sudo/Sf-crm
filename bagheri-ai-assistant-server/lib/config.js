@@ -52,7 +52,7 @@ function loadConfig(env) {
       modelFromEnv: modelFromEnv,
       baseUrl: baseUrl.replace(/\/+$/, ''),
       timeoutMs: intEnv(env, 'GROQ_TIMEOUT_MS', 20000, 100, 120000),
-      maxCompletionTokens: intEnv(env, 'GROQ_MAX_COMPLETION_TOKENS', 800, 16, 4096),
+      maxCompletionTokens: intEnv(env, 'GROQ_MAX_COMPLETION_TOKENS', 2000, 16, 4096),
     },
     auth: {
       token: token,
@@ -70,7 +70,8 @@ function loadConfig(env) {
     limits: {
       maxMessageChars: intEnv(env, 'MAX_MESSAGE_CHARS', 2000, 1, 20000),
       maxHistoryMessages: intEnv(env, 'MAX_HISTORY_MESSAGES', 10, 0, 50),
-      maxBodyBytes: intEnv(env, 'MAX_BODY_BYTES', 16384, 512, 1048576),
+      maxBodyBytes: intEnv(env, 'MAX_BODY_BYTES', 100000, 512, 2097152),
+      maxContextChars: intEnv(env, 'MAX_CONTEXT_CHARS', 80000, 1000, 500000),
       maxConcurrentUpstream: intEnv(env, 'MAX_CONCURRENT_UPSTREAM', 4, 1, 100),
       maxReplyChars: 6000,
     },

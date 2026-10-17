@@ -3,8 +3,7 @@
    Strict allow-list: only { message, history }. Anything else (tools, actions, model, system,
    operations ...) is rejected, so no write / tool / prompt-override path exists. */
 
-const ALLOWED_BODY_KEYS = { message: true, history: true, context: true };
-const MAX_CONTEXT_CHARS = 8500;
+const ALLOWED_BODY_KEYS = { message: true, history: true, context: true, scope: true };
 const ALLOWED_HISTORY_KEYS = { role: true, content: true };
 
 function fail(code, message, status) {
@@ -60,9 +59,16 @@ function validateChatBody(body, limits) {
   if (body.context !== undefined) {
     if (typeof body.context !== 'string') return fail('invalid_context', 'فیلد context باید متن باشد.');
     context = cleanText(body.context);
-    if (context.length > MAX_CONTEXT_CHARS) return fail('context_too_long', 'خلاصهٔ اطلاعات CRM بیش از حد طولانی است.');
+    if (context.length > limits.maxContextChars) return fail('context_too_long', 'خلاصهٔ اطلاعات CRM بیش از حد طولانی است.');
   }
-  return { ok: true, value: { message: message, history: history, context: context } };
+  let scope = 'single';
+  if (body.scope !== undefined) {
+    if (body.scope !== 'single' && body.scope !== 'all') {
+      return fail('invalid_scope', 'فیلد scope باید single یا all باشد.');
+    }
+    scope = body.scope;
+  }
+  return { ok: true, value: { message: message, history: history, context: context, scope: scope } };
 }
 
 module.exports = { validateChatBody };
