@@ -11,6 +11,19 @@
   function safeText(v, max) {
     return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max || 240);
   }
+  function cleanReply(text) {
+    return String(text == null ? '' : text)
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/(^|[^\*])\*([^\*\n]+)\*(?!\*)/g, '$1$2')
+      .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1$2')
+      .replace(/^\s*(?:---|___|\*\*\*)\s*$/gm, '')
+      .replace(/`([^`\n]+)`/g, '$1')
+      .replace(/^\s*[-*]\s+/gm, '• ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
   function money(v) {
     if (typeof toman === 'function') return safeText(toman(Math.abs(Number(v) || 0)), 40);
     return (Number(v) || 0).toLocaleString('fa-IR') + ' تومان';
@@ -107,6 +120,49 @@
     return serialized;
   }
 
+  function buildAllCustomersContext() {
+    if (typeof data === 'undefined' || !data || !Array.isArray(data.customers)) return '';
+    const customers = data.customers
+      .filter(function (c) { return c && c.id != null; })
+      .map(function (c) {
+        const totals = typeof customerTotals === 'function' ? customerTotals(c.id) : null;
+        const invoices = (data.invoices || [])
+          .filter(function (i) { return i && String(i.customerId) === String(c.id); })
+          .slice().sort(byDateDesc).slice(0, 5)
+          .map(function (inv) { return { date: safeText(inv.date, 20), total: Number(inv.total) || 0 }; });
+        const visits = (Array.isArray(c.visits) ? c.visits : []).slice().sort(byDateDesc).slice(0, 5).map(function (v) {
+          return {
+            date: safeText(v.date, 20),
+            result: safeText(v.result, 80),
+            reason: safeText(v.reason || v.obstacle, 100),
+            nextAction: safeText(v.nextAction, 120)
+          };
+        });
+        const payments = (data.payments || [])
+          .filter(function (p) { return p && String(p.customerId) === String(c.id); })
+          .slice().sort(byDateDesc).slice(0, 5)
+          .map(function (p) {
+            return {
+              date: safeText(p.date, 20),
+              amount: Number(p.amount) || 0,
+              method: safeText(p.method, 20)
+            };
+          });
+        return {
+          name: safeText(c.name, 100),
+          status: c.active === false ? 'inactive' : 'active',
+          balance: totals ? Number(totals.balance) || 0 : null,
+          recentInvoices: invoices,
+          recentVisits: visits,
+          recentPayments: payments
+        };
+      });
+    return JSON.stringify({
+      note: 'همهٔ مبالغ به تومان است. تاریخ‌ها میلادی (YYYY-MM-DD). هر بخش حداکثر ۵ مورد آخر.',
+      customers: customers
+    });
+  }
+
   function appendMessage(role, content) {
     const list = currentRoot && currentRoot.querySelector('[data-chat-messages]');
     if (!list) return;
@@ -143,8 +199,9 @@
         <label class="baqeri-ai-label" for="baqeri-ai-token">توکن دسترسی سرور</label>
         <input id="baqeri-ai-token" class="baqeri-ai-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="توکن ASSISTANT_ACCESS_TOKEN را وارد کن">
         <label class="baqeri-ai-label" for="baqeri-ai-customer">زمینهٔ گفت‌وگو</label>
-    <select id="baqeri-ai-customer" class="baqeri-ai-input" data-chat-customer>
+        <select id="baqeri-ai-customer" class="baqeri-ai-input">
           <option value="">گفت‌وگوی عمومی، بدون ارسال اطلاعات CRM</option>
+          <option value="__ALL__">تحلیل همهٔ مشتری‌ها (ارسال خلاصهٔ همگی)</option>
         </select>
         <label class="baqeri-ai-consent"><input type="checkbox" data-chat-consent> اجازه می‌دهم خلاصهٔ محدود مشتری انتخاب‌شده برای این گفت‌وگو ارسال شود.</label>
         <div class="baqeri-ai-messages" data-chat-messages aria-live="polite"><div class="baqeri-ai-message is-assistant">برای شروع، توکن سرور را وارد کن. می‌توانی گفت‌وگوی عمومی داشته باشی یا مشتری مشخصی را انتخاب کنی.</div></div>
@@ -171,7 +228,7 @@
         @media(max-width:480px){.baqeri-ai-page{padding-inline:10px;gap:12px}.baqeri-ai-message{font-size:.98rem;padding:12px 12px;line-height:1.9}.baqeri-ai-messages{max-height:56dvh}.baqeri-ai-notice{padding:11px 12px}}
         @media(prefers-reduced-motion:reduce){.baqeri-ai-messages{scroll-behavior:auto}}
       </style>`;
-    const customerSelect = root.querySelector('[data-chat-customer]');
+    const customerSelect = root.querySelector('#baqeri-ai-customer');
     (data.customers || []).filter(function (c) { return c && c.id != null; }).slice().sort(function (a, b) {
       return String(a.name || '').localeCompare(String(b.name || ''), 'fa');
     }).forEach(function (c) {
@@ -185,16 +242,21 @@
       if (busy) return;
       const tokenInput = root.querySelector('#baqeri-ai-token');
       const messageInput = root.querySelector('[data-chat-input]');
-      const customerId = customerSelect.value;
+      const customerValue = customerSelect.value;
+      const isAll = customerValue === '__ALL__';
+      const customerId = isAll ? null : customerValue;
       const message = String(messageInput.value || '').trim();
       const token = String(tokenInput.value || '').trim();
       if (!token) { setStatus('توکن دسترسی سرور را وارد کن.', true); tokenInput.focus(); return; }
       if (!message) { setStatus('پیام خالی است.', true); messageInput.focus(); return; }
-      if (customerId && !root.querySelector('[data-chat-consent]').checked) {
-        setStatus('برای ارسال خلاصهٔ مشتری، ابتدا رضایت ارسال را فعال کن.', true); return;
+      if ((customerId || isAll) && !root.querySelector('[data-chat-consent]').checked) {
+        setStatus('برای ارسال خلاصهٔ مشتری/مشتریان، ابتدا رضایت ارسال را فعال کن.', true); return;
       }
-      const context = customerId ? buildCustomerContext(customerId) : '';
-      if (customerId && !context) { setStatus('خلاصهٔ مشتری ساخته نشد؛ دوباره صفحه را باز کن.', true); return; }
+      const context = isAll ? buildAllCustomersContext()
+                    : (customerId ? buildCustomerContext(customerId) : '');
+      if ((customerId || isAll) && !context) {
+        setStatus('خلاصهٔ CRM ساخته نشد؛ دوباره صفحه را باز کن.', true); return;
+      }
       appendMessage('user', message);
       history.push({ role: 'user', content: message });
       messageInput.value = '';
@@ -204,7 +266,12 @@
         const response = await fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ message: message, history: trimHistory(history.slice(0, -1), context ? 1500 : 3000), context: context || undefined })
+          body: JSON.stringify({
+            message: message,
+            history: trimHistory(history.slice(0, -1), isAll ? 800 : (context ? 1500 : 3000)),
+            context: context || undefined,
+            scope: isAll ? 'all' : 'single'
+          })
         });
         let body;
         try { body = await response.json(); } catch (_e) { body = null; }
@@ -220,10 +287,15 @@
           };
           throw new Error(messages[code] || ('پاسخ سرور ناموفق بود' + (code ? ' (' + code + ')' : '') + '.'));
         }
-        appendMessage('assistant', body.reply);
+        appendMessage('assistant', cleanReply(body.reply));
         history.push({ role: 'assistant', content: body.reply });
         if (history.length > 10) history = history.slice(-10);
-        setStatus(context ? 'پاسخ بر اساس خلاصهٔ انتخابی CRM تولید شد؛ صحت توصیه را با داده‌ها تطبیق بده.' : 'پاسخ دریافت شد.', false);
+        setStatus(
+          isAll ? 'پاسخ بر اساس خلاصهٔ همهٔ مشتری‌ها تولید شد؛ توصیه‌ها را با داده‌های CRM تطبیق بده.'
+                : (context ? 'پاسخ بر اساس خلاصهٔ انتخابی CRM تولید شد؛ صحت توصیه را با داده‌ها تطبیق بده.'
+                           : 'پاسخ دریافت شد.'),
+          false
+        );
       } catch (e) {
         // Do not log token, payload, or customer context.
         history.pop();
